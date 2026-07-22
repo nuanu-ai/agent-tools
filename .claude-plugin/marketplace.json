@@ -1,0 +1,13 @@
+{
+  "name": "nuanu",
+  "owner": { "name": "Nuanu", "email": "albert@nuanu.com" },
+  "plugins": [
+    {
+      "name": "nuanu-flow",
+      "source": "./plugins/nuanu-flow",
+      "description": "Nuanu Flow for coding agents: MCP tools, domain skills (work items, BPMN processes, artifacts, project setup), and a remote agent worker runtime.",
+      "category": "productivity",
+      "tags": ["project-management", "bpmn", "agents", "mcp"]
+    }
+  ]
+}

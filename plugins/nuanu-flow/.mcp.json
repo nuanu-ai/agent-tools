@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "mcp": {
+      "type": "http",
+      "url": "${NUANU_MCP_URL:-https://flow.nuanu.com/mcp-server/mcp}",
+      "headers": {
+        "X-Plane-User-Token": "${NUANU_TOKEN:-}",
+        "X-Agent-Key": "${NUANU_AGENT_KEY:-}",
+        "X-Plane-Workspace": "${NUANU_WORKSPACE:-}"
+      }
+    }
+  }
+}
