@@ -21,6 +21,22 @@ function bool(name, def = false) {
   return /^(1|true|yes|on)$/i.test(v);
 }
 
+/** Gateway WS endpoint derived from the API base URL: in a deployed stack the
+ *  proxy serves both under one host (`https://host/api` →
+ *  `wss://host/live/agent-gateway`); a localhost API means the Live server runs
+ *  standalone on its own port. NUANU_GATEWAY_URL always wins when set. */
+function deriveGatewayUrl(baseUrl) {
+  const local = "ws://localhost:3100/live/agent-gateway";
+  try {
+    const u = new URL(baseUrl);
+    if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return local;
+    const proto = u.protocol === "https:" ? "wss:" : "ws:";
+    return `${proto}//${u.host}/live/agent-gateway`;
+  } catch {
+    return local;
+  }
+}
+
 /**
  * Worker configuration, entirely from env. The base URL must include `/api`.
  * Adapter "claude" wraps `claude -p`; "command" runs an arbitrary shell command
@@ -35,22 +51,18 @@ export function loadConfig() {
     maxConcurrency: Math.max(1, int("NUANU_MAX_CONCURRENCY", 1)),
     // "poll" (HTTP long/short-poll, zero infra) | "gateway" (WS wake + HTTP claim).
     transport: (process.env.NUANU_TRANSPORT || "poll").toLowerCase(),
-    gatewayUrl: process.env.NUANU_GATEWAY_URL || "ws://localhost:3100/live/agent-gateway",
+    gatewayUrl: process.env.NUANU_GATEWAY_URL || deriveGatewayUrl(baseUrl),
     pollIntervalMs: Math.max(500, int("NUANU_POLL_INTERVAL_MS", 2000)),
     heartbeatIntervalMs: Math.max(5000, int("NUANU_HEARTBEAT_INTERVAL_MS", 15000)),
     lockSeconds: Math.max(30, int("NUANU_LOCK_SECONDS", 300)),
     adapter: {
       type: (process.env.NUANU_ADAPTER || "claude").toLowerCase(),
       claudeBin: process.env.NUANU_CLAUDE_BIN || "claude",
-      claudeArgs: (process.env.NUANU_CLAUDE_ARGS || "-p --output-format json")
-        .split(/\s+/)
-        .filter(Boolean),
+      claudeArgs: (process.env.NUANU_CLAUDE_ARGS || "-p --output-format json").split(/\s+/).filter(Boolean),
       claudeSkipPermissions: bool("NUANU_CLAUDE_SKIP_PERMISSIONS", false),
       claudeCwd: process.env.NUANU_CLAUDE_CWD || os.tmpdir(),
       codexBin: process.env.NUANU_CODEX_BIN || "codex",
-      codexArgs: (process.env.NUANU_CODEX_ARGS || "exec --skip-git-repo-check")
-        .split(/\s+/)
-        .filter(Boolean),
+      codexArgs: (process.env.NUANU_CODEX_ARGS || "exec --skip-git-repo-check").split(/\s+/).filter(Boolean),
       codexCwd: process.env.NUANU_CODEX_CWD || os.tmpdir(),
       command: process.env.NUANU_ADAPTER_CMD || "",
       timeoutMs: Math.max(10000, int("NUANU_ADAPTER_TIMEOUT_MS", 300000)),
