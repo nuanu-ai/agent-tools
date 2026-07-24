@@ -10,7 +10,7 @@ import { loadConfig } from "./config.mjs";
 import { NuanuClient } from "./client.mjs";
 import { makeAdapter } from "./adapter.mjs";
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const log = (...a) => console.log(`[${new Date().toISOString()}]`, ...a);
 
 const cfg = loadConfig();
@@ -76,7 +76,10 @@ async function pumpOnce() {
         });
         tasks = res.tasks || [];
       } catch (e) {
-        log("fetch-and-lock failed:", e.message);
+        // 401 is expected while the agent's token isn't live yet (the create
+        // form pregenerates it) or was revoked — keep polling either way.
+        if (e.status === 401) log("fetch-and-lock unauthorized — token not active yet or revoked; retrying");
+        else log("fetch-and-lock failed:", e.message);
         break;
       }
       if (!tasks.length) break;
@@ -183,7 +186,9 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 log("nuanu-worker starting");
 log(`  url=${cfg.baseUrl}  worker_id=${cfg.workerId}`);
-log(`  adapter=${adapter.name}  transport=${cfg.transport}  maxConcurrency=${cfg.maxConcurrency}  lock=${cfg.lockSeconds}s`);
+log(
+  `  adapter=${adapter.name}  transport=${cfg.transport}  maxConcurrency=${cfg.maxConcurrency}  lock=${cfg.lockSeconds}s`
+);
 if (cfg.transport === "gateway") log(`  gateway=${cfg.gatewayUrl}`);
 heartbeatLoop();
 pollLoop();
