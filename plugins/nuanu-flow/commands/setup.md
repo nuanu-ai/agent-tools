@@ -6,6 +6,7 @@ Walk the user through verifying their Nuanu Flow plugin setup. Do each step,
 then print one compact status report at the end.
 
 **Auth modes** (detect from the env check in step 1 and tailor the report):
+
 - **Ambient agent** — `NUANU_AGENT_KEY` is set (automatic inside worker-run
   sessions): MCP calls authenticate as the agent employee. Verify via step 3.
 - **Manual token** — `NUANU_TOKEN` is set: acts as the user with a pasted
@@ -37,7 +38,7 @@ then print one compact status report at the end.
    Meaning of each:
    - `NUANU_TOKEN` — optional. Personal API token (`plane_api_…`) for manual
      mode; leave unset to use the browser OAuth flow instead.
-   - `NUANU_AGENT_KEY` — ambient mode only (`plane_agent_…`); set
+   - `NUANU_AGENT_KEY` — ambient mode only (`nuanu_flow_…`); set
      automatically inside worker-run sessions.
    - `NUANU_WORKSPACE` — optional default workspace slug (OAuth users pick a
      workspace at consent; this env overrides it).
@@ -54,7 +55,7 @@ then print one compact status report at the end.
      (`pnpm --filter @plane/mcp dev:http`).
 
 3. **Worker env (only if the user wants to run as a remote agent)**: check
-   `NUANU_URL` (must end in `/api`) and `NUANU_AGENT_KEY` (`plane_agent_…`).
+   `NUANU_URL` (must end in `/api`) and `NUANU_AGENT_KEY` (`nuanu_flow_…`).
    If both set, verify with:
    `curl -s "$NUANU_URL/agent-worker/whoami/" -H "X-Agent-Key: $NUANU_AGENT_KEY"`
    and report the resolved agent name. If absent, note that `/nuanu-flow:worker`

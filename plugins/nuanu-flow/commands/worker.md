@@ -8,7 +8,7 @@ skill for protocol details if anything below is unclear.
 1. **Validate prerequisites** (fail fast with a clear message, do not start a
    broken daemon):
    - `NUANU_URL` set and ends with `/api`; `NUANU_AGENT_KEY` set
-     (`plane_agent_…`). If either is missing, tell the user to run
+     (`nuanu_flow_…`). If either is missing, tell the user to run
      `/nuanu-flow:setup` first.
    - `node --version` ≥ 20.6 (the worker uses built-in fetch/WebSocket).
    - Verify the key:
@@ -17,9 +17,11 @@ skill for protocol details if anything below is unclear.
      `is_active: false`.
 
 2. **Start the daemon in the background** (Bash with run_in_background):
+
    ```bash
    node "${CLAUDE_PLUGIN_ROOT}/scripts/worker/worker.mjs"
    ```
+
    Respect any worker env the user already exported (`NUANU_WORKER_ID`,
    `NUANU_MAX_CONCURRENCY`, `NUANU_ADAPTER`, `NUANU_TRANSPORT`,
    `NUANU_CLAUDE_SKIP_PERMISSIONS`, …). Defaults: poll transport, concurrency
@@ -35,6 +37,7 @@ skill for protocol details if anything below is unclear.
    or requeues in-flight tasks within ~30 s).
 
 Notes:
+
 - The daemon spawns `claude -p --output-format json` per task and pipes the
   task prompt on stdin; the per-task `agent_key` is injected as
   `NUANU_AGENT_KEY` in the child env so the spawned session's Flow calls are

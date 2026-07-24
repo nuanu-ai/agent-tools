@@ -20,11 +20,21 @@ const adapter = makeAdapter(cfg.adapter);
 let running = true;
 let inFlight = 0;
 
+let heartbeatOk = false;
+
 async function heartbeatLoop() {
   while (running) {
     try {
       await client.heartbeat(cfg.workerId);
+      if (!heartbeatOk) {
+        heartbeatOk = true;
+        // Positive signal for launchers (e.g. /nuanu-flow:launch-remote-agent)
+        // and for humans watching the log: the token is live and the platform
+        // now shows this agent as online.
+        log("remote agent connected — heartbeat OK");
+      }
     } catch (e) {
+      heartbeatOk = false;
       log("heartbeat failed:", e.message);
     }
     await sleep(cfg.heartbeatIntervalMs);

@@ -33,7 +33,7 @@ the same names are directly callable as regular MCP tools.
    approves. You then act **as that user**, and your actions are attributed
    "via <client>" (junction avatar in the app). Re-auth: `/mcp` → mcp →
    authenticate.
-2. **Ambient agent (headless)** — `NUANU_AGENT_KEY` (`plane_agent_…`) is set;
+2. **Ambient agent (headless)** — `NUANU_AGENT_KEY` (`nuanu_flow_…`) is set;
    automatic inside worker-run task sessions. You act **as the agent
    employee** itself.
 3. **Manual token (CI/scripts)** — `NUANU_TOKEN` (`plane_api_…` from

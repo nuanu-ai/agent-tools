@@ -18,17 +18,17 @@ advances the run exactly like a local agent would.
    with runtime "remote").
 2. An **agent key** for it. Keys are minted once via the app or
    `POST /api/workspaces/<slug>/agent-employees/<agent_id>/keys/` — the
-   plaintext `plane_agent_…` token is shown **only at creation**.
+   plaintext `nuanu_flow_…` token is shown **only at creation**.
 3. Env:
 
-| Var | Meaning |
-|---|---|
-| `NUANU_URL` | Django API base — **must include `/api`**, e.g. `https://flow.nuanu.com/api` or `http://localhost:8000/api` |
-| `NUANU_AGENT_KEY` | The durable `plane_agent_…` key |
-| `NUANU_WORKER_ID` | Optional stable worker name (default `worker-<host>-<pid>`) |
-| `NUANU_MAX_CONCURRENCY` | Parallel tasks (default 1) |
-| `NUANU_ADAPTER` | `claude` (default) \| `codex` \| `command` |
-| `NUANU_TRANSPORT` | `poll` (default) \| `gateway` (WS wake-ups) |
+| Var                     | Meaning                                                                                                     |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `NUANU_URL`             | Django API base — **must include `/api`**, e.g. `https://flow.nuanu.com/api` or `http://localhost:8000/api` |
+| `NUANU_AGENT_KEY`       | The durable `nuanu_flow_…` key                                                                              |
+| `NUANU_WORKER_ID`       | Optional stable worker name (default `worker-<host>-<pid>`)                                                 |
+| `NUANU_MAX_CONCURRENCY` | Parallel tasks (default 1)                                                                                  |
+| `NUANU_ADAPTER`         | `claude` (default) \| `codex` \| `command`                                                                  |
+| `NUANU_TRANSPORT`       | `poll` (default) \| `gateway` (WS wake-ups)                                                                 |
 
 ## Quick start — the bundled daemon
 
@@ -55,14 +55,14 @@ executions.
 
 All endpoints authenticate with header **`X-Agent-Key: <key>`**.
 
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/agent-worker/tasks/fetch-and-lock/` | Claim up to `max_tasks` pending tasks with a lease |
-| POST | `/agent-worker/tasks/<task_id>/complete/` | Report the result; advances the run |
-| POST | `/agent-worker/tasks/<task_id>/fail/` | Requeue (default) or give up |
-| POST | `/agent-worker/heartbeat/` | Presence (drives the online/offline dashboard) |
-| POST | `/agent-worker/ws-ticket/` | Mint a 60 s single-use WebSocket ticket |
-| GET | `/agent-worker/whoami/` | Resolve the key → agent identity (use to verify setup) |
+| Method | Path                                      | Purpose                                                |
+| ------ | ----------------------------------------- | ------------------------------------------------------ |
+| POST   | `/agent-worker/tasks/fetch-and-lock/`     | Claim up to `max_tasks` pending tasks with a lease     |
+| POST   | `/agent-worker/tasks/<task_id>/complete/` | Report the result; advances the run                    |
+| POST   | `/agent-worker/tasks/<task_id>/fail/`     | Requeue (default) or give up                           |
+| POST   | `/agent-worker/heartbeat/`                | Presence (drives the online/offline dashboard)         |
+| POST   | `/agent-worker/ws-ticket/`                | Mint a 60 s single-use WebSocket ticket                |
+| GET    | `/agent-worker/whoami/`                   | Resolve the key → agent identity (use to verify setup) |
 
 **Claim**: `{"worker_id":"me-1","max_tasks":1,"lock_seconds":300}` → an array
 of task envelopes:
@@ -74,7 +74,7 @@ of task envelopes:
 - `options_request` — when present, the task wants decision options proposed
 - `system_prompt` — the agent employee's configured system prompt
 - `agent_key` — **short-lived per-task key (30 min)**: use it for any Flow
-  API/MCP calls made *while doing the task* so writes attribute to the agent
+  API/MCP calls made _while doing the task_ so writes attribute to the agent
 - `locked_until` — your lease deadline
 
 **Complete**: `{"worker_id":"me-1","status":"ok","output":…}` (or

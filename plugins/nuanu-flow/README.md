@@ -34,13 +34,13 @@ plugins/nuanu-flow --strict`.
 3. **Manual token (CI)** — `NUANU_TOKEN` (`plane_api_…` from Workspace
    Settings → API tokens).
 
-| Env var | Used for | Meaning |
-|---|---|---|
-| `NUANU_TOKEN` | manual mode | Personal API token (leave unset for OAuth) |
-| `NUANU_AGENT_KEY` | ambient mode + worker | `plane_agent_…` key of a remote agent employee |
-| `NUANU_WORKSPACE` | all (optional) | Default workspace slug; overrides the consent choice |
-| `NUANU_MCP_URL` | all (optional) | MCP endpoint override (default: hosted `https://flow.nuanu.com/mcp-server/mcp`; local dev: `http://localhost:3001/mcp` via `pnpm --filter @plane/mcp dev:http`) |
-| `NUANU_URL` | worker + renderer | Django API base **including `/api`** |
+| Env var           | Used for              | Meaning                                                                                                                                                         |
+| ----------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NUANU_TOKEN`     | manual mode           | Personal API token (leave unset for OAuth)                                                                                                                      |
+| `NUANU_AGENT_KEY` | ambient mode + worker | `nuanu_flow_…` key of a remote agent employee                                                                                                                   |
+| `NUANU_WORKSPACE` | all (optional)        | Default workspace slug; overrides the consent choice                                                                                                            |
+| `NUANU_MCP_URL`   | all (optional)        | MCP endpoint override (default: hosted `https://flow.nuanu.com/mcp-server/mcp`; local dev: `http://localhost:3001/mcp` via `pnpm --filter @plane/mcp dev:http`) |
+| `NUANU_URL`       | worker + renderer     | Django API base **including `/api`**                                                                                                                            |
 
 Then run `/nuanu-flow:setup` for a guided verification.
 
@@ -50,7 +50,9 @@ Then run `/nuanu-flow:setup` for a guided verification.
   routing), `work-items`, `project-setup`, `bpmn-processes`, `artifacts`,
   `remote-worker`.
 - **`commands/`** — `/nuanu-flow:setup` (env + connectivity check),
-  `/nuanu-flow:worker` (start the remote-agent daemon),
+  `/nuanu-flow:launch-remote-agent <token>` (zero-config: resolve URL, start
+  the worker, confirm connection), `/nuanu-flow:worker` (start the
+  remote-agent daemon from pre-exported env),
   `/nuanu-flow:decisions` (terminal decision inbox — resolve pending
   approvals without opening the app), `/nuanu-flow:run` (terminal diagram of
   a process run, optionally followed live).
@@ -87,11 +89,14 @@ Optional but recommended — clickable footer badges for work-item IDs
 
 ## Run as a remote agent
 
-1. In the app, create an agent employee with runtime **remote** and mint a
-   key (shown once).
-2. `export NUANU_URL=…/api NUANU_AGENT_KEY=plane_agent_…`
-3. `/nuanu-flow:worker` — or headless:
-   `node plugins/nuanu-flow/scripts/worker/worker.mjs`
+1. In the app, create an agent employee with runtime **remote** — the create
+   form shows the worker token and connect snippets up front.
+2. `/nuanu-flow:launch-remote-agent nuanu_flow_…` — resolves the API URL,
+   starts the worker, and prints "remote agent connected" once live.
+
+Manual alternative: `export NUANU_URL=…/api NUANU_AGENT_KEY=nuanu_flow_…`
+then `/nuanu-flow:worker` — or headless:
+`node plugins/nuanu-flow/scripts/worker/worker.mjs`
 
 Docs: `docs/PLUGIN.md` (architecture), `docs/REMOTE_AGENTS.md` (worker
 protocol spec).
