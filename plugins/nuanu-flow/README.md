@@ -47,7 +47,7 @@ Then run `/nuanu-flow:setup` for a guided verification.
 ## What's inside
 
 - **`skills/`** — open-standard Agent Skills: `nuanu-flow` (orientation +
-  routing), `work-items`, `project-setup`, `bpmn-processes`, `artifacts`,
+  routing), `work-items`, `workspace-setup`, `project-setup`, `bpmn-processes`, `artifacts`,
   `remote-worker`.
 - **`commands/`** — `/nuanu-flow:setup` (env + connectivity check),
   `/nuanu-flow:launch-remote-agent <token>` (zero-config: resolve URL, start
