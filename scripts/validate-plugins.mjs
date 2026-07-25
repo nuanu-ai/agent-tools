@@ -1,0 +1,353 @@
+#!/usr/bin/env node
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const errors = [];
+
+const CODEX_TOP_LEVEL_FIELDS = new Set([
+  "name",
+  "version",
+  "description",
+  "author",
+  "homepage",
+  "repository",
+  "license",
+  "keywords",
+  "skills",
+  "mcpServers",
+  "apps",
+  "interface",
+]);
+
+const CODEX_INTERFACE_FIELDS = new Set([
+  "displayName",
+  "shortDescription",
+  "longDescription",
+  "developerName",
+  "category",
+  "capabilities",
+  "websiteURL",
+  "privacyPolicyURL",
+  "termsOfServiceURL",
+  "defaultPrompt",
+  "brandColor",
+  "composerIcon",
+  "logo",
+  "logoDark",
+  "screenshots",
+]);
+
+function parseArgs(argv) {
+  const options = {};
+  for (let index = 0; index < argv.length; index++) {
+    const arg = argv[index];
+    if (arg === "--codex-plugin") {
+      options.codexPlugin = argv[++index];
+      if (!options.codexPlugin) {
+        throw new Error("--codex-plugin requires a path");
+      }
+    } else if (arg === "--codex-marketplace") {
+      options.codexMarketplace = argv[++index];
+      if (!options.codexMarketplace) {
+        throw new Error("--codex-marketplace requires a path");
+      }
+    } else if (arg === "-h" || arg === "--help") {
+      options.help = true;
+    } else {
+      throw new Error(`Unknown argument: ${arg}`);
+    }
+  }
+  return options;
+}
+
+function add(message) {
+  errors.push(message);
+}
+
+async function exists(file) {
+  try {
+    await fs.access(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readJson(file, label) {
+  try {
+    return JSON.parse(await fs.readFile(file, "utf8"));
+  } catch (e) {
+    add(`${label} must contain valid JSON: ${e.message}`);
+    return null;
+  }
+}
+
+function requireString(obj, key, label) {
+  if (typeof obj?.[key] !== "string" || !obj[key].trim()) {
+    add(`${label} field ${key} must be a non-empty string`);
+    return "";
+  }
+  return obj[key];
+}
+
+function requireHttpsUrl(value, label) {
+  if (value == null) return;
+  if (typeof value !== "string" || !value.startsWith("https://")) {
+    add(`${label} must be an absolute https:// URL`);
+  }
+}
+
+function requireRelativePath(value, label) {
+  if (typeof value !== "string" || !value.startsWith("./") || path.isAbsolute(value)) {
+    add(`${label} must be a relative path beginning with ./`);
+  }
+}
+
+function isObject(value) {
+  return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
+function validateNoUnknownFields(obj, allowed, label) {
+  for (const key of Object.keys(obj || {})) {
+    if (!allowed.has(key)) add(`${label} field ${key} is not supported`);
+  }
+}
+
+function validateMcpServers(servers, label) {
+  if (!isObject(servers)) {
+    add(`${label} must be an object`);
+    return;
+  }
+  for (const [name, server] of Object.entries(servers)) {
+    if (!name.trim()) add(`${label} server names must be non-empty`);
+    if (!isObject(server)) {
+      add(`${label} server ${name} must be an object`);
+      continue;
+    }
+    if (server.type && !["http", "streamable_http", "sse", "stdio"].includes(server.type)) {
+      add(`${label} server ${name} has unsupported type ${server.type}`);
+    }
+    if ((server.type === "http" || server.type === "streamable_http" || server.type === "sse") && !server.url) {
+      add(`${label} server ${name} must declare url`);
+    }
+    if (server.url && !/^https?:\/\//.test(server.url) && !server.url.includes("${")) {
+      add(`${label} server ${name} url must be http(s) or host interpolation syntax`);
+    }
+    if (server.default_tools_approval_mode && !["auto", "prompt", "writes", "approve"].includes(server.default_tools_approval_mode)) {
+      add(`${label} server ${name} default_tools_approval_mode is invalid`);
+    }
+    if (server.env_http_headers && !isObject(server.env_http_headers)) {
+      add(`${label} server ${name} env_http_headers must be an object`);
+    }
+    if (server.headers && !isObject(server.headers)) {
+      add(`${label} server ${name} headers must be an object`);
+    }
+  }
+}
+
+async function validateSkills(pluginRoot, skillsPath) {
+  requireRelativePath(skillsPath, "Codex plugin skills path");
+  const root = path.resolve(pluginRoot, skillsPath || "./skills");
+  if (!(await exists(root))) {
+    add(`skills directory does not exist: ${path.relative(repoRoot, root)}`);
+    return;
+  }
+  const entries = await fs.readdir(root, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    const skillFile = path.join(root, entry.name, "SKILL.md");
+    if (!(await exists(skillFile))) {
+      add(`skill ${entry.name} is missing SKILL.md`);
+      continue;
+    }
+    const body = await fs.readFile(skillFile, "utf8");
+    if (!body.startsWith("---\n") || body.indexOf("\n---", 4) === -1) {
+      add(`skill ${entry.name} must start with closed YAML frontmatter`);
+    }
+    if (!/^name:\s*\S+/m.test(body)) add(`skill ${entry.name} frontmatter must include name`);
+    if (!/^description:\s*\S+/m.test(body)) add(`skill ${entry.name} frontmatter must include description`);
+  }
+}
+
+async function validateCodexPlugin(pluginRoot) {
+  const manifestPath = path.join(pluginRoot, ".codex-plugin/plugin.json");
+  const manifest = await readJson(manifestPath, "Codex plugin manifest");
+  if (!manifest) return null;
+
+  validateNoUnknownFields(manifest, CODEX_TOP_LEVEL_FIELDS, "Codex plugin manifest");
+  requireString(manifest, "name", "Codex plugin manifest");
+  const version = requireString(manifest, "version", "Codex plugin manifest");
+  if (version && !/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/.test(version)) {
+    add("Codex plugin manifest version must be semver");
+  }
+  requireString(manifest, "description", "Codex plugin manifest");
+  if (!isObject(manifest.author)) add("Codex plugin manifest author must be an object");
+  else requireString(manifest.author, "name", "Codex plugin manifest author");
+  requireHttpsUrl(manifest.homepage, "Codex plugin homepage");
+  requireHttpsUrl(manifest.repository, "Codex plugin repository");
+
+  if (manifest.skills) await validateSkills(pluginRoot, manifest.skills);
+
+  if (typeof manifest.mcpServers === "string") {
+    if (manifest.mcpServers.replace(/^\.\//, "") !== ".mcp.json") {
+      add("Codex plugin string mcpServers path must resolve to .mcp.json");
+    }
+    const mcp = await readJson(path.join(pluginRoot, ".mcp.json"), "Codex MCP companion");
+    validateMcpServers(mcp?.mcpServers, "Codex MCP companion mcpServers");
+  } else {
+    validateMcpServers(manifest.mcpServers, "Codex plugin manifest mcpServers");
+  }
+
+  if (!isObject(manifest.interface)) {
+    add("Codex plugin manifest interface must be an object");
+    return manifest;
+  }
+  validateNoUnknownFields(manifest.interface, CODEX_INTERFACE_FIELDS, "Codex plugin interface");
+  for (const key of ["displayName", "shortDescription", "longDescription", "developerName", "category"]) {
+    requireString(manifest.interface, key, "Codex plugin interface");
+  }
+  if (!Array.isArray(manifest.interface.capabilities) || manifest.interface.capabilities.length === 0) {
+    add("Codex plugin interface capabilities must be a non-empty array");
+  }
+  if (manifest.interface.defaultPrompt) {
+    if (!Array.isArray(manifest.interface.defaultPrompt)) add("Codex plugin interface defaultPrompt must be an array");
+    else if (manifest.interface.defaultPrompt.length > 3) add("Codex plugin interface defaultPrompt may include at most 3 entries");
+  }
+  for (const key of ["websiteURL", "privacyPolicyURL", "termsOfServiceURL"]) {
+    requireHttpsUrl(manifest.interface[key], `Codex plugin interface ${key}`);
+  }
+  return manifest;
+}
+
+async function validateCodexMarketplace(marketplacePath) {
+  const marketplace = await readJson(marketplacePath, "Codex marketplace");
+  if (!marketplace) return null;
+  const marketplaceRoot = path.resolve(path.dirname(marketplacePath), "../..");
+  requireString(marketplace, "name", "Codex marketplace");
+  if (!Array.isArray(marketplace.plugins) || marketplace.plugins.length === 0) {
+    add("Codex marketplace plugins must be a non-empty array");
+    return marketplace;
+  }
+  for (const plugin of marketplace.plugins) {
+    requireString(plugin, "name", "Codex marketplace plugin");
+    if (!isObject(plugin.source)) add(`Codex marketplace plugin ${plugin.name} source must be an object`);
+    else {
+      if (plugin.source.source !== "local") add(`Codex marketplace plugin ${plugin.name} source.source must be local`);
+      requireRelativePath(plugin.source.path, `Codex marketplace plugin ${plugin.name} source.path`);
+      if (!(await exists(path.resolve(marketplaceRoot, plugin.source.path)))) {
+        add(`Codex marketplace plugin ${plugin.name} source path does not exist`);
+      }
+    }
+    if (!isObject(plugin.policy)) add(`Codex marketplace plugin ${plugin.name} policy must be an object`);
+    else {
+      if (!["NOT_AVAILABLE", "AVAILABLE", "INSTALLED_BY_DEFAULT"].includes(plugin.policy.installation)) {
+        add(`Codex marketplace plugin ${plugin.name} policy.installation is invalid`);
+      }
+      if (!["ON_INSTALL", "ON_USE"].includes(plugin.policy.authentication)) {
+        add(`Codex marketplace plugin ${plugin.name} policy.authentication is invalid`);
+      }
+    }
+  }
+  return marketplace;
+}
+
+function validateDevelopmentPackage(manifest, marketplace) {
+  if (manifest?.name !== "nuanu-flow-dev") return;
+  if (!manifest.interface?.displayName?.includes("[DEV]")) {
+    add("Codex development plugin displayName must contain [DEV]");
+  }
+  if (marketplace?.name !== "nuanu-dev") {
+    add("Codex development marketplace name must be nuanu-dev");
+  }
+  const serverNames = Object.keys(manifest.mcpServers || {});
+  if (serverNames.length !== 1 || serverNames[0] !== "flow_dev") {
+    add("Codex development plugin must define only MCP server flow_dev");
+    return;
+  }
+  const server = manifest.mcpServers.flow_dev;
+  try {
+    const hostname = new URL(server.url).hostname;
+    if (!["localhost", "127.0.0.1", "::1"].includes(hostname)) {
+      add("Codex development MCP URL must use localhost or loopback");
+    }
+  } catch {
+    add("Codex development MCP URL must be a valid localhost URL");
+  }
+  for (const variable of Object.values(server.env_http_headers || {})) {
+    if (!String(variable).startsWith("NUANU_DEV_")) {
+      add(
+        "Codex development MCP env header variables must start with NUANU_DEV_",
+      );
+    }
+  }
+}
+
+async function validateClaudePlugin(pluginRoot) {
+  const manifest = await readJson(path.join(pluginRoot, ".claude-plugin/plugin.json"), "Claude plugin manifest");
+  if (!manifest) return;
+  for (const key of ["name", "displayName", "description", "repository", "license"]) {
+    requireString(manifest, key, "Claude plugin manifest");
+  }
+  if (!isObject(manifest.author)) add("Claude plugin manifest author must be an object");
+  else requireString(manifest.author, "name", "Claude plugin manifest author");
+
+  const mcp = await readJson(path.join(pluginRoot, ".mcp.json"), "Claude MCP config");
+  validateMcpServers(mcp?.mcpServers, "Claude MCP config mcpServers");
+}
+
+async function validateClaudeMarketplace() {
+  const marketplace = await readJson(path.join(repoRoot, ".claude-plugin/marketplace.json"), "Claude marketplace");
+  if (!marketplace) return;
+  requireString(marketplace, "name", "Claude marketplace");
+  if (!Array.isArray(marketplace.plugins) || marketplace.plugins.length === 0) {
+    add("Claude marketplace plugins must be a non-empty array");
+    return;
+  }
+  for (const plugin of marketplace.plugins) {
+    requireString(plugin, "name", "Claude marketplace plugin");
+    requireString(plugin, "source", `Claude marketplace plugin ${plugin.name}`);
+    if (!(await exists(path.resolve(repoRoot, plugin.source)))) {
+      add(`Claude marketplace plugin ${plugin.name} source path does not exist`);
+    }
+  }
+}
+
+async function main() {
+  const options = parseArgs(process.argv.slice(2));
+  if (options.help) {
+    console.log(`Usage: node scripts/validate-plugins.mjs [options]
+
+Options:
+  --codex-plugin PATH       Validate this Codex plugin root.
+  --codex-marketplace PATH  Validate this Codex marketplace JSON.
+  -h, --help                Show this help.
+`);
+    return;
+  }
+  const pluginRoot = path.resolve(
+    options.codexPlugin || path.join(repoRoot, "plugins/nuanu-flow"),
+  );
+  const marketplacePath = path.resolve(
+    options.codexMarketplace ||
+      path.join(repoRoot, ".agents/plugins/marketplace.json"),
+  );
+  const manifest = await validateCodexPlugin(pluginRoot);
+  const marketplace = await validateCodexMarketplace(marketplacePath);
+  validateDevelopmentPackage(manifest, marketplace);
+  await validateClaudePlugin(pluginRoot);
+  await validateClaudeMarketplace();
+
+  if (errors.length) {
+    console.error("Plugin validation failed:");
+    for (const error of errors) console.error(`- ${error}`);
+    process.exit(1);
+  }
+  console.log("Plugin validation passed.");
+}
+
+main().catch((e) => {
+  console.error(`[validate-plugins] ${e.stack || e.message}`);
+  process.exit(1);
+});

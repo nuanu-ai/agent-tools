@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import readline from "node:readline";
 import { fileURLToPath } from "node:url";
 
 import { MODES, modeConfig, runCodex } from "./modes.mjs";

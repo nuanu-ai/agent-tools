@@ -1,0 +1,20 @@
+{
+  "name": "nuanu",
+  "interface": {
+    "displayName": "Nuanu"
+  },
+  "plugins": [
+    {
+      "name": "nuanu-flow",
+      "source": {
+        "source": "local",
+        "path": "./plugins/nuanu-flow"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -27,7 +27,7 @@ advances the run exactly like a local agent would.
 | `NUANU_AGENT_KEY`       | The durable `nuanu_flow_…` key                                                                              |
 | `NUANU_WORKER_ID`       | Optional stable worker name (default `worker-<host>-<pid>`)                                                 |
 | `NUANU_MAX_CONCURRENCY` | Parallel tasks (default 1)                                                                                  |
-| `NUANU_ADAPTER`         | `claude` (default) \| `codex` \| `command`                                                                  |
+| `NUANU_ADAPTER`         | `claude` (default) \| `codex-exec` \| `codex-app-server` \| `command`                                      |
 | `NUANU_TRANSPORT`       | `poll` (default) \| `gateway` (WS wake-ups)                                                                 |
 
 ## Quick start — the bundled daemon
@@ -50,6 +50,10 @@ Because the plugin's MCP config forwards `NUANU_AGENT_KEY` as `X-Agent-Key`,
 a worker-spawned Claude session with this plugin installed is **already
 authenticated as the ambient agent** — no OAuth prompt, no setup inside task
 executions.
+
+For Codex, use `NUANU_ADAPTER=codex-app-server` when the worker should run on
+Codex's App Server protocol with streamed turns and approval handling. Use
+`NUANU_ADAPTER=codex-exec` for one-shot `codex exec` task execution.
 
 ## The REST protocol (for self-polling without the daemon)
 

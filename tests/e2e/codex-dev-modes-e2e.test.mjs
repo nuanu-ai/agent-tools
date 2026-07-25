@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
@@ -1099,5 +1100,60 @@ test("updateProduction refuses a local production marketplace before mutation", 
     );
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("generated development validation rejects any production MCP endpoint", async () => {
+  const fixture = await makeTempPlugin();
+  try {
+    const result = await buildDevPackage({
+      pluginRoot: fixture.pluginRoot,
+      buildRoot: fixture.buildRoot,
+      env: {},
+      now: () => new Date("2026-07-25T12:00:00.000Z"),
+    });
+    const marketplacePath = path.join(
+      result.marketplaceRoot,
+      ".agents/plugins/marketplace.json",
+    );
+    const validate = () =>
+      spawnSync(
+        process.execPath,
+        [
+          "scripts/validate-plugins.mjs",
+          "--codex-plugin",
+          result.pluginRoot,
+          "--codex-marketplace",
+          marketplacePath,
+        ],
+        {
+          cwd: repoRoot,
+          encoding: "utf8",
+        },
+      );
+
+    const valid = validate();
+    assert.equal(valid.status, 0, valid.stderr);
+
+    const manifestPath = path.join(
+      result.pluginRoot,
+      ".codex-plugin/plugin.json",
+    );
+    const manifest = await readJson(manifestPath);
+    manifest.mcpServers.flow_dev.url =
+      "https://flow.nuanu.com/mcp-server/mcp";
+    await fs.writeFile(
+      manifestPath,
+      `${JSON.stringify(manifest, null, 2)}\n`,
+    );
+
+    const invalid = validate();
+    assert.notEqual(invalid.status, 0);
+    assert.match(
+      invalid.stderr,
+      /development MCP.*localhost|loopback/i,
+    );
+  } finally {
+    await fixture.cleanup();
   }
 });
