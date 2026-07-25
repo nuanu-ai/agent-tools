@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { runCodexAppServerTask } from "./app_server_client.mjs";
 
 /**
  * Compose the task envelope into a single prompt for a text-in/text-out agent.
@@ -20,6 +21,13 @@ export function buildPrompt(task) {
     );
   }
   return parts.join("\n\n");
+}
+
+export function buildCodexPrompt(task) {
+  return [
+    "Codex defers MCP tools. When the task needs an MCP tool, use tool_search to find and load it before calling it.",
+    buildPrompt(task),
+  ].join("\n\n");
 }
 
 function runProcess(cmd, args, { input, env, cwd, timeoutMs }) {
@@ -47,21 +55,52 @@ function runProcess(cmd, args, { input, env, cwd, timeoutMs }) {
   });
 }
 
+export function modelTaskEnv(
+  task,
+  selectedName = "NUANU_AGENT_KEY",
+  sourceEnv = process.env,
+) {
+  if (!/^NUANU_(?:DEV_)?AGENT_KEY$/.test(selectedName)) {
+    throw new Error(`Unsupported agent-key environment variable: ${selectedName}`);
+  }
+  if (!task.agent_key) {
+    throw new Error("Remote task is missing its short-lived agent_key");
+  }
+  const env = { ...sourceEnv };
+  for (const name of [
+    "NUANU_TOKEN",
+    "NUANU_DEV_TOKEN",
+    "NUANU_AGENT_KEY",
+    "NUANU_DEV_AGENT_KEY",
+  ]) {
+    delete env[name];
+  }
+  env[selectedName] = task.agent_key;
+  return env;
+}
+
+function codexTaskEnv(task, cfg) {
+  return modelTaskEnv(
+    task,
+    cfg.codexAgentKeyEnv || "NUANU_AGENT_KEY",
+  );
+}
+
 /**
  * Build the configured adapter. An adapter is anything with
  * `handle(task) -> {status:"ok", output, options?, meta?} | {status:"error", error}`.
  */
 export function makeAdapter(cfg) {
-  if (cfg.type === "claude") {
+  const type = String(cfg.type || "claude").replace(/_/g, "-");
+
+  if (type === "claude") {
     return {
       name: "claude",
       async handle(task) {
         const prompt = buildPrompt(task);
         const args = [...cfg.claudeArgs];
         if (cfg.claudeSkipPermissions) args.push("--dangerously-skip-permissions");
-        const env = { ...process.env };
-        // The per-task key lets the agent's own MCP/API writes attribute to it.
-        if (task.agent_key) env.NUANU_AGENT_KEY = task.agent_key;
+        const env = modelTaskEnv(task);
         const { code, stdout, stderr } = await runProcess(cfg.claudeBin, args, {
           input: prompt,
           env,
@@ -85,11 +124,11 @@ export function makeAdapter(cfg) {
     };
   }
 
-  if (cfg.type === "codex") {
+  if (type === "codex" || type === "codex-exec") {
     return {
-      name: "codex",
+      name: "codex-exec",
       async handle(task) {
-        const prompt = buildPrompt(task);
+        const prompt = buildCodexPrompt(task);
         // Codex writes only the FINAL message to --output-last-message; its stdout
         // is a noisy event log. Read the file for a clean answer.
         const outFile = path.join(
@@ -97,8 +136,7 @@ export function makeAdapter(cfg) {
           `nuanu-codex-${process.pid}-${Date.now()}-${Math.floor(Math.random() * 1e6)}.txt`
         );
         const args = [...cfg.codexArgs, "--output-last-message", outFile, "-"];
-        const env = { ...process.env };
-        if (task.agent_key) env.NUANU_AGENT_KEY = task.agent_key;
+        const env = codexTaskEnv(task, cfg);
         const { code, stdout, stderr } = await runProcess(cfg.codexBin, args, {
           input: prompt,
           env,
@@ -125,14 +163,27 @@ export function makeAdapter(cfg) {
     };
   }
 
+  if (type === "codex-app-server" || type === "app-server") {
+    return {
+      name: "codex-app-server",
+      async handle(task) {
+        return runCodexAppServerTask(
+          task,
+          cfg,
+          buildCodexPrompt(task),
+          codexTaskEnv(task, cfg),
+        );
+      },
+    };
+  }
+
   // Generic escape hatch: prompt on stdin, answer on stdout.
   return {
     name: "command",
     async handle(task) {
       if (!cfg.command) return { status: "error", error: "NUANU_ADAPTER_CMD not set for the command adapter" };
       const prompt = buildPrompt(task);
-      const env = { ...process.env };
-      if (task.agent_key) env.NUANU_AGENT_KEY = task.agent_key;
+      const env = modelTaskEnv(task);
       const { code, stdout, stderr } = await runProcess("/bin/sh", ["-c", cfg.command], {
         input: prompt,
         env,

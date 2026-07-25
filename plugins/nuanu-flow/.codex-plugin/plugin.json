@@ -1,0 +1,58 @@
+{
+  "name": "nuanu-flow",
+  "version": "0.1.0",
+  "description": "Work with Nuanu Flow from Codex: projects, work items, BPMN processes, artifacts, decisions, and remote agent workers.",
+  "author": {
+    "name": "Nuanu",
+    "email": "albert@nuanu.com",
+    "url": "https://flow.nuanu.com"
+  },
+  "homepage": "https://flow.nuanu.com",
+  "repository": "https://github.com/nuanu-ai/agent-tools",
+  "license": "AGPL-3.0",
+  "keywords": [
+    "nuanu-flow",
+    "plane",
+    "project-management",
+    "bpmn",
+    "artifacts",
+    "mcp",
+    "codex"
+  ],
+  "skills": "./skills",
+  "mcpServers": {
+    "flow": {
+      "type": "http",
+      "url": "https://flow.nuanu.com/mcp-server/mcp",
+      "auth": "oauth",
+      "env_http_headers": {
+        "X-Plane-User-Token": "NUANU_TOKEN",
+        "X-Agent-Key": "NUANU_AGENT_KEY",
+        "X-Plane-Workspace": "NUANU_WORKSPACE"
+      },
+      "startup_timeout_sec": 20,
+      "tool_timeout_sec": 120,
+      "default_tools_approval_mode": "writes"
+    }
+  },
+  "interface": {
+    "displayName": "Nuanu Flow",
+    "shortDescription": "Nuanu Flow MCP tools, domain skills, and remote agent worker support for Codex.",
+    "longDescription": "Work with Nuanu Flow from Codex using OAuth-ready hosted MCP configuration, environment-token auth for headless workers, domain skills for work items and BPMN processes, and a bundled worker daemon with Codex App Server support.",
+    "developerName": "Nuanu",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://flow.nuanu.com",
+    "privacyPolicyURL": "https://flow.nuanu.com/privacy",
+    "termsOfServiceURL": "https://flow.nuanu.com/terms",
+    "defaultPrompt": [
+      "Show my Nuanu Flow work items and suggest my next action.",
+      "Create a Nuanu Flow work item from this bug report.",
+      "Run a Nuanu Flow process and summarize the result."
+    ]
+  }
+}

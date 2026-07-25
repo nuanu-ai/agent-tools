@@ -31,8 +31,11 @@ the same names are directly callable as regular MCP tools.
    the hosted MCP replies with an OAuth challenge; the browser opens Nuanu
    Flow, the user logs in with their normal account, picks a workspace, and
    approves. You then act **as that user**, and your actions are attributed
-   "via <client>" (junction avatar in the app). Re-auth: `/mcp` → mcp →
-   authenticate.
+   "via <client>" (junction avatar in the app). Claude Code re-auth:
+   `/mcp` -> mcp -> authenticate. Codex re-auth: `codex mcp login flow`
+   after confirming the server name in `codex mcp list`. If Codex reports
+   `Auth Unsupported`, load `codex-setup` and use its environment/Keychain
+   fallback until the hosted endpoint exposes OAuth discovery.
 2. **Ambient agent (headless)** — `NUANU_AGENT_KEY` (`nuanu_flow_…`) is set;
    automatic inside worker-run task sessions. You act **as the agent
    employee** itself.
@@ -40,8 +43,9 @@ the same names are directly callable as regular MCP tools.
    Workspace Settings → API tokens) acts as the user without a browser.
 
 Optional for all modes: `NUANU_WORKSPACE` (default workspace slug; overrides
-the consent-time choice), `NUANU_MCP_URL` (endpoint override). Run
-`/nuanu-flow:setup` for a guided check.
+the consent-time choice), `NUANU_MCP_URL` (Claude endpoint override). Run
+`/nuanu-flow:setup` in Claude Code or load `codex-setup` in Codex for a guided
+check.
 
 ## Object model
 
@@ -87,6 +91,8 @@ none`), assignees, **labels**, **estimates**, sub-items (parent), relations,
 | Author or operate a BPMN process / approval chain / automation flow  | `bpmn-processes` |
 | Store, version, search, or link files and documents                  | `artifacts`      |
 | Run this agent as a remote worker executing process agent-tasks      | `remote-worker`  |
+| Install, verify, or locally develop the Codex plugin                 | `codex-setup`    |
+| Run remote-worker tasks through Codex App Server                     | `codex-remote-worker` |
 
 ## Tools Used
 

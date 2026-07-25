@@ -1,0 +1,57 @@
+name: Plugin CI
+
+on:
+  pull_request:
+    paths:
+      - ".agents/**"
+      - ".claude-plugin/**"
+      - "docs/plans/**"
+      - ".github/workflows/plugin-ci.yml"
+      - "package.json"
+      - "plugins/**"
+      - "scripts/**"
+      - "tests/**"
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - ".agents/**"
+      - ".claude-plugin/**"
+      - "docs/plans/**"
+      - ".github/workflows/plugin-ci.yml"
+      - "package.json"
+      - "plugins/**"
+      - "scripts/**"
+      - "tests/**"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate plugins
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate plugin manifests
+        run: npm run validate:plugins
+
+      - name: Build and validate Codex development plugin
+        run: npm run validate:dev
+
+      - name: Run e2e tests
+        run: npm test
+
+      - name: Install tested Codex CLI
+        run: npm install --global @openai/codex@0.145.0
+
+      - name: Run real Codex CLI acceptance
+        run: npm run test:acceptance:codex
