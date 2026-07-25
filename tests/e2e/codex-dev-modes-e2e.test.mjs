@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -20,6 +21,18 @@ import {
   setup,
   writeOwnedProfile,
 } from "../../scripts/codex/setup.mjs";
+import {
+  classifyOAuthProbes,
+  keychainAccount,
+  metadataCandidates,
+  probeEndpoint,
+  readMcpAuthStatus,
+  resolveModeCredentials,
+} from "../../scripts/codex/auth.mjs";
+import {
+  collectStatus,
+  preflight,
+} from "../../scripts/codex/status.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const sourcePluginRoot = path.join(repoRoot, "plugins/nuanu-flow");
@@ -53,6 +66,21 @@ async function readCommandLog(file) {
     if (error.code === "ENOENT") return [];
     throw error;
   }
+}
+
+async function startHttpFixture(handler) {
+  const requests = [];
+  const server = http.createServer((req, res) => {
+    requests.push(req.url);
+    handler(req, res);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  return {
+    origin: `http://127.0.0.1:${port}`,
+    requests,
+    close: () => new Promise((resolve) => server.close(resolve)),
+  };
 }
 
 test("modeConfig isolates production and development endpoints and credentials", () => {
@@ -521,6 +549,239 @@ test("setup dry-run reports actions without changing fake state or profiles", as
         "profile-write",
         "profile-write",
       ],
+    );
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("resolveModeCredentials keeps production and development secrets isolated and redacted", async () => {
+  const keychain = {
+    async get({ account }) {
+      return account === "nuanu-flow-codex-dev" ? "keychain-dev-secret" : null;
+    },
+  };
+  const dev = await resolveModeCredentials(
+    "dev",
+    {
+      PATH: "/usr/bin",
+      NUANU_TOKEN: "prod-secret",
+      NUANU_AGENT_KEY: "prod-agent-secret",
+      NUANU_DEV_TOKEN: "dev-secret",
+      NUANU_DEV_AGENT_KEY: "dev-agent-secret",
+    },
+    keychain,
+  );
+  assert.equal(dev.env.PATH, "/usr/bin");
+  assert.equal(dev.env.NUANU_DEV_TOKEN, "dev-secret");
+  assert.equal(dev.env.NUANU_DEV_AGENT_KEY, "dev-agent-secret");
+  assert.equal(dev.env.NUANU_TOKEN, undefined);
+  assert.equal(dev.env.NUANU_AGENT_KEY, undefined);
+  assert.equal(dev.report.source, "environment-token");
+  assert.doesNotMatch(JSON.stringify(dev.report), /secret/);
+
+  const prod = await resolveModeCredentials(
+    "prod",
+    {
+      NUANU_TOKEN: "prod-secret",
+      NUANU_DEV_TOKEN: "dev-secret",
+    },
+    keychain,
+  );
+  assert.equal(prod.env.NUANU_TOKEN, "prod-secret");
+  assert.equal(prod.env.NUANU_DEV_TOKEN, undefined);
+  assert.equal(prod.report.source, "environment-token");
+  assert.doesNotMatch(JSON.stringify(prod.report), /secret/);
+
+  const keychainOnly = await resolveModeCredentials("dev", {}, keychain);
+  assert.equal(keychainOnly.env.NUANU_DEV_TOKEN, "keychain-dev-secret");
+  assert.equal(keychainOnly.report.source, "keychain");
+  assert.doesNotMatch(JSON.stringify(keychainOnly.report), /keychain-dev-secret/);
+  assert.equal(keychainAccount("prod"), "nuanu-flow-codex-prod");
+  assert.equal(keychainAccount("dev"), "nuanu-flow-codex-dev");
+});
+
+test("OAuth metadata classification preserves the existing auth-doctor contract", () => {
+  const candidates = metadataCandidates("https://flow.example/mcp-server/mcp");
+  assert.deepEqual(candidates, [
+    "https://flow.example/.well-known/oauth-protected-resource",
+    "https://flow.example/.well-known/oauth-authorization-server",
+    "https://flow.example/mcp-server/.well-known/oauth-protected-resource",
+    "https://flow.example/mcp-server/.well-known/oauth-authorization-server",
+  ]);
+  assert.deepEqual(
+    classifyOAuthProbes([
+      {
+        url: candidates[2],
+        status: 404,
+        json: { error: "oauth_disabled" },
+      },
+    ]),
+    { status: "oauth-disabled", probe: candidates[2] },
+  );
+});
+
+test("readMcpAuthStatus reads the selected profile and server only", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-auth-status-"));
+  const statePath = path.join(tempRoot, "state.json");
+  const logPath = path.join(tempRoot, "log.jsonl");
+  await fs.writeFile(
+    statePath,
+    `${JSON.stringify({
+      marketplaces: [],
+      installed: [],
+      mcpAuth: { flow: "o_auth", flow_dev: "not_logged_in" },
+    })}\n`,
+  );
+  try {
+    const env = {
+      ...process.env,
+      FAKE_CODEX_STATE: statePath,
+      FAKE_CODEX_LOG: logPath,
+    };
+    assert.equal(
+      await readMcpAuthStatus("prod", { codexBin: fakeCodexBin, env }),
+      "o_auth",
+    );
+    assert.equal(
+      await readMcpAuthStatus("dev", { codexBin: fakeCodexBin, env }),
+      "not_logged_in",
+    );
+    assert.deepEqual(await readCommandLog(logPath), [
+      ["--profile", "nuanu-flow-prod", "mcp", "list", "--json"],
+      ["--profile", "nuanu-flow-dev", "mcp", "list", "--json"],
+    ]);
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("probeEndpoint distinguishes reachable, timeout, and unreachable endpoints", async () => {
+  const fixture = await startHttpFixture((req, res) => {
+    if (req.url === "/slow") {
+      setTimeout(() => {
+        res.writeHead(200);
+        res.end("late");
+      }, 100);
+      return;
+    }
+    res.writeHead(401);
+    res.end("auth required");
+  });
+  try {
+    const reachable = await probeEndpoint(`${fixture.origin}/mcp`, 100);
+    assert.equal(reachable.status, "reachable");
+    assert.equal(reachable.httpStatus, 401);
+
+    const timeout = await probeEndpoint(`${fixture.origin}/slow`, 10);
+    assert.equal(timeout.status, "timeout");
+    assert.equal(timeout.url, `${fixture.origin}/slow`);
+  } finally {
+    await fixture.close();
+  }
+  const unreachable = await probeEndpoint(`${fixture.origin}/mcp`, 50);
+  assert.equal(unreachable.status, "unreachable");
+  assert.equal(unreachable.url, `${fixture.origin}/mcp`);
+});
+
+test("collectStatus reports selected mode health and auth without exposing credentials", async () => {
+  const fixture = await startHttpFixture((req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    if (req.url.includes(".well-known")) {
+      res.writeHead(404);
+      res.end(JSON.stringify({ error: "oauth_disabled" }));
+      return;
+    }
+    res.writeHead(200);
+    res.end(JSON.stringify({ status: "ok" }));
+  });
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-status-"));
+  const statePath = path.join(tempRoot, "state.json");
+  const logPath = path.join(tempRoot, "log.jsonl");
+  const codexHome = path.join(tempRoot, "codex-home");
+  const buildRoot = path.join(tempRoot, "codex-dev");
+  const env = {
+    ...process.env,
+    FAKE_CODEX_STATE: statePath,
+    FAKE_CODEX_LOG: logPath,
+    NUANU_DEV_MCP_URL: `${fixture.origin}/mcp`,
+    NUANU_DEV_URL: `${fixture.origin}/api`,
+    NUANU_DEV_TOKEN: "status-dev-secret",
+    NUANU_TOKEN: "status-prod-secret",
+  };
+  await fs.writeFile(
+    statePath,
+    `${JSON.stringify({ marketplaces: [], installed: [], mcpAuth: {} })}\n`,
+  );
+  try {
+    await setup({
+      repoRoot,
+      codexHome,
+      buildRoot,
+      codexBin: fakeCodexBin,
+      env,
+      now: () => new Date("2026-07-25T12:00:00.000Z"),
+    });
+    const report = await collectStatus({
+      mode: "dev",
+      repoRoot,
+      codexHome,
+      buildRoot,
+      codexBin: fakeCodexBin,
+      env,
+      endpointTimeoutMs: 1000,
+    });
+    assert.equal(report.mode, "dev");
+    assert.equal(report.pluginId, "nuanu-flow-dev@nuanu-dev");
+    assert.equal(report.mcpUrl, `${fixture.origin}/mcp`);
+    assert.equal(report.apiUrl, `${fixture.origin}/api`);
+    assert.equal(report.profile.owned, true);
+    assert.equal(report.endpoints.mcp.status, "reachable");
+    assert.equal(report.endpoints.api.status, "reachable");
+    assert.equal(report.auth.source, "environment-token");
+    assert.equal(report.oauth.status, "oauth-disabled");
+    assert.match(report.installedVersion, /^0\.1\.0\+codex\.local-/);
+    assert.doesNotMatch(JSON.stringify(report), /status-(?:dev|prod)-secret/);
+  } finally {
+    await fixture.close();
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("development preflight fails on its configured endpoint and never falls back to production", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-preflight-"));
+  const statePath = path.join(tempRoot, "state.json");
+  const logPath = path.join(tempRoot, "log.jsonl");
+  const codexHome = path.join(tempRoot, "codex-home");
+  const buildRoot = path.join(tempRoot, "codex-dev");
+  const env = {
+    ...process.env,
+    FAKE_CODEX_STATE: statePath,
+    FAKE_CODEX_LOG: logPath,
+    NUANU_DEV_MCP_URL: "http://127.0.0.1:1/mcp",
+  };
+  await fs.writeFile(
+    statePath,
+    `${JSON.stringify({ marketplaces: [], installed: [], mcpAuth: {} })}\n`,
+  );
+  try {
+    await setup({
+      repoRoot,
+      codexHome,
+      buildRoot,
+      codexBin: fakeCodexBin,
+      env,
+    });
+    await assert.rejects(
+      preflight("dev", {
+        repoRoot,
+        codexHome,
+        buildRoot,
+        codexBin: fakeCodexBin,
+        env,
+        endpointTimeoutMs: 20,
+      }),
+      /http:\/\/127\.0\.0\.1:1\/mcp/,
     );
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
