@@ -33,6 +33,11 @@ import {
   collectStatus,
   preflight,
 } from "../../scripts/codex/status.mjs";
+import {
+  buildCodexLaunch,
+  parseRunModeArgs,
+} from "../../scripts/codex/run-mode.mjs";
+import { buildWorkerLaunch } from "../../scripts/codex/run-worker.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const sourcePluginRoot = path.join(repoRoot, "plugins/nuanu-flow");
@@ -786,4 +791,135 @@ test("development preflight fails on its configured endpoint and never falls bac
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
+});
+
+test("buildCodexLaunch selects one profile, one credential namespace, and a visible banner", async () => {
+  const dev = await buildCodexLaunch("dev", {
+    cwd: "/tmp/nuanu-dev-work",
+    codexArgs: ["--no-alt-screen"],
+    env: {
+      PATH: "/usr/bin",
+      NUANU_TOKEN: "prod-token",
+      NUANU_DEV_TOKEN: "dev-token",
+      NUANU_DEV_MCP_URL: "http://localhost:3001/mcp",
+    },
+  });
+  assert.deepEqual(dev.args, [
+    "--profile",
+    "nuanu-flow-dev",
+    "--no-alt-screen",
+  ]);
+  assert.equal(dev.cwd, "/tmp/nuanu-dev-work");
+  assert.match(dev.banner, /NUANU FLOW LOCAL DEVELOPMENT/);
+  assert.match(dev.banner, /http:\/\/localhost:3001\/mcp/);
+  assert.equal(dev.env.NUANU_DEV_TOKEN, "dev-token");
+  assert.equal(dev.env.NUANU_TOKEN, undefined);
+
+  const prod = await buildCodexLaunch("prod", {
+    cwd: "/tmp/nuanu-prod-work",
+    env: {
+      NUANU_TOKEN: "prod-token",
+      NUANU_DEV_TOKEN: "dev-token",
+    },
+  });
+  assert.deepEqual(prod.args, ["--profile", "nuanu-flow-prod"]);
+  assert.match(prod.banner, /NUANU FLOW PRODUCTION/);
+  assert.match(prod.banner, /https:\/\/flow\.nuanu\.com\/mcp-server\/mcp/);
+  assert.equal(prod.env.NUANU_TOKEN, "prod-token");
+  assert.equal(prod.env.NUANU_DEV_TOKEN, undefined);
+  assert.doesNotMatch(dev.banner + prod.banner, /prod-token|dev-token/);
+});
+
+test("parseRunModeArgs preserves Codex args and forced refresh behavior", () => {
+  assert.deepEqual(
+    parseRunModeArgs([
+      "dev",
+      "--force-refresh",
+      "--no-launch",
+      "--cwd",
+      "/tmp/project",
+      "--",
+      "exec",
+      "--ephemeral",
+      "hello",
+    ]),
+    {
+      mode: "dev",
+      forceRefresh: true,
+      noLaunch: true,
+      dryRun: false,
+      cwd: "/tmp/project",
+      codexArgs: ["exec", "--ephemeral", "hello"],
+      codexBin: "codex",
+    },
+  );
+});
+
+test("buildWorkerLaunch maps development credentials into a child-only App Server environment", () => {
+  const parentEnv = {
+    PATH: "/usr/bin",
+    NUANU_TOKEN: "prod-token",
+    NUANU_AGENT_KEY: "prod-agent-key",
+    NUANU_DEV_TOKEN: "dev-token",
+    NUANU_DEV_AGENT_KEY: "local-agent-key",
+    NUANU_DEV_WORKSPACE: "local-workspace",
+  };
+  const dev = buildWorkerLaunch("dev", {
+    cwd: "/tmp/nuanu-worker",
+    env: parentEnv,
+  });
+  assert.equal(
+    dev.script,
+    path.join(repoRoot, "plugins/nuanu-flow/scripts/worker/worker.mjs"),
+  );
+  assert.equal(dev.env.NUANU_URL, "http://localhost:8000/api");
+  assert.equal(
+    dev.env.NUANU_GATEWAY_URL,
+    "ws://localhost:3100/live/agent-gateway",
+  );
+  assert.equal(dev.env.NUANU_AGENT_KEY, "local-agent-key");
+  assert.equal(dev.env.NUANU_DEV_AGENT_KEY, "local-agent-key");
+  assert.equal(dev.env.NUANU_ADAPTER, "codex-app-server");
+  assert.equal(
+    dev.env.NUANU_CODEX_APP_SERVER_ARGS,
+    "--profile nuanu-flow-dev app-server --stdio",
+  );
+  assert.equal(dev.env.NUANU_CODEX_AGENT_KEY_ENV, "NUANU_DEV_AGENT_KEY");
+  assert.equal(dev.env.NUANU_TOKEN, undefined);
+  assert.match(dev.banner, /NUANU FLOW LOCAL DEVELOPMENT WORKER/);
+  assert.equal(parentEnv.NUANU_AGENT_KEY, "prod-agent-key");
+  assert.equal(parentEnv.NUANU_DEV_AGENT_KEY, "local-agent-key");
+
+  const prod = buildWorkerLaunch("prod", {
+    env: {
+      NUANU_AGENT_KEY: "prod-agent-key",
+      NUANU_DEV_AGENT_KEY: "local-agent-key",
+      NUANU_URL: "https://flow.nuanu.com/custom-api",
+    },
+  });
+  assert.equal(prod.env.NUANU_URL, "https://flow.nuanu.com/custom-api");
+  assert.equal(prod.env.NUANU_AGENT_KEY, "prod-agent-key");
+  assert.equal(prod.env.NUANU_DEV_AGENT_KEY, undefined);
+  assert.equal(
+    prod.env.NUANU_CODEX_APP_SERVER_ARGS,
+    "--profile nuanu-flow-prod app-server --stdio",
+  );
+  assert.match(prod.banner, /NUANU FLOW PRODUCTION WORKER/);
+});
+
+test("buildWorkerLaunch rejects missing keys and production endpoints in development", () => {
+  assert.throws(
+    () => buildWorkerLaunch("dev", { env: {} }),
+    /NUANU_DEV_AGENT_KEY/,
+  );
+  assert.throws(
+    () =>
+      buildWorkerLaunch("dev", {
+        env: {
+          NUANU_DEV_AGENT_KEY: "local-agent-key",
+          NUANU_URL: "https://flow.nuanu.com/api",
+        },
+      }),
+    /development worker URL must use localhost/i,
+  );
 });

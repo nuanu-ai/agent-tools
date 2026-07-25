@@ -39,8 +39,9 @@ function deriveGatewayUrl(baseUrl) {
 
 /**
  * Worker configuration, entirely from env. The base URL must include `/api`.
- * Adapter "claude" wraps `claude -p`; "command" runs an arbitrary shell command
- * (prompt on stdin, answer on stdout) — the universal escape hatch.
+ * Adapter "claude" wraps `claude -p`; "codex-exec" wraps `codex exec`;
+ * "codex-app-server" drives Codex App Server over JSON-RPC; "command" runs an
+ * arbitrary shell command (prompt on stdin, answer on stdout).
  */
 export function loadConfig() {
   const baseUrl = required("NUANU_URL").replace(/\/+$/, "");
@@ -64,6 +65,12 @@ export function loadConfig() {
       codexBin: process.env.NUANU_CODEX_BIN || "codex",
       codexArgs: (process.env.NUANU_CODEX_ARGS || "exec --skip-git-repo-check").split(/\s+/).filter(Boolean),
       codexCwd: process.env.NUANU_CODEX_CWD || os.tmpdir(),
+      codexAppServerArgs: (process.env.NUANU_CODEX_APP_SERVER_ARGS || "app-server --stdio")
+        .split(/\s+/)
+        .filter(Boolean),
+      codexAgentKeyEnv: process.env.NUANU_CODEX_AGENT_KEY_ENV || "NUANU_AGENT_KEY",
+      codexAppServerApprovalMode: (process.env.NUANU_CODEX_APP_SERVER_APPROVAL_MODE || "deny").toLowerCase(),
+      codexAppServerApprovalPolicy: process.env.NUANU_CODEX_APP_SERVER_APPROVAL_POLICY || "never",
       command: process.env.NUANU_ADAPTER_CMD || "",
       timeoutMs: Math.max(10000, int("NUANU_ADAPTER_TIMEOUT_MS", 300000)),
     },

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { runCodexAppServerTask } from "./app_server_client.mjs";
 
 /**
  * Compose the task envelope into a single prompt for a text-in/text-out agent.
@@ -47,12 +48,26 @@ function runProcess(cmd, args, { input, env, cwd, timeoutMs }) {
   });
 }
 
+function codexTaskEnv(task, cfg) {
+  const env = { ...process.env };
+  if (!task.agent_key) return env;
+  env.NUANU_AGENT_KEY = task.agent_key;
+  const selectedName = cfg.codexAgentKeyEnv || "NUANU_AGENT_KEY";
+  if (!/^NUANU_(?:DEV_)?AGENT_KEY$/.test(selectedName)) {
+    throw new Error(`Unsupported Codex agent-key environment variable: ${selectedName}`);
+  }
+  env[selectedName] = task.agent_key;
+  return env;
+}
+
 /**
  * Build the configured adapter. An adapter is anything with
  * `handle(task) -> {status:"ok", output, options?, meta?} | {status:"error", error}`.
  */
 export function makeAdapter(cfg) {
-  if (cfg.type === "claude") {
+  const type = String(cfg.type || "claude").replace(/_/g, "-");
+
+  if (type === "claude") {
     return {
       name: "claude",
       async handle(task) {
@@ -85,9 +100,9 @@ export function makeAdapter(cfg) {
     };
   }
 
-  if (cfg.type === "codex") {
+  if (type === "codex" || type === "codex-exec") {
     return {
-      name: "codex",
+      name: "codex-exec",
       async handle(task) {
         const prompt = buildPrompt(task);
         // Codex writes only the FINAL message to --output-last-message; its stdout
@@ -97,8 +112,7 @@ export function makeAdapter(cfg) {
           `nuanu-codex-${process.pid}-${Date.now()}-${Math.floor(Math.random() * 1e6)}.txt`
         );
         const args = [...cfg.codexArgs, "--output-last-message", outFile, "-"];
-        const env = { ...process.env };
-        if (task.agent_key) env.NUANU_AGENT_KEY = task.agent_key;
+        const env = codexTaskEnv(task, cfg);
         const { code, stdout, stderr } = await runProcess(cfg.codexBin, args, {
           input: prompt,
           env,
@@ -121,6 +135,15 @@ export function makeAdapter(cfg) {
           return { status: "ok", output: stdout.trim() };
         }
         return { status: "ok", output: last };
+      },
+    };
+  }
+
+  if (type === "codex-app-server" || type === "app-server") {
+    return {
+      name: "codex-app-server",
+      async handle(task) {
+        return runCodexAppServerTask(task, cfg, buildPrompt(task), codexTaskEnv(task, cfg));
       },
     };
   }

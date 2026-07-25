@@ -48,7 +48,8 @@ async function handleTask(task) {
     const result = await adapter.handle(task);
     if (result.status === "ok") {
       await client.complete(task.task_id, { output: result.output, options: result.options, workerId: cfg.workerId });
-      log("completed", label, result.meta?.session_id ? `(session ${String(result.meta.session_id).slice(0, 8)})` : "");
+      const runId = result.meta?.session_id || result.meta?.thread_id;
+      log("completed", label, runId ? `(session ${String(runId).slice(0, 8)})` : "");
     } else {
       // The agent ran but reported an error -> terminal error signal to the engine.
       await client.completeError(task.task_id, result.error, cfg.workerId);

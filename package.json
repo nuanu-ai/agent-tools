@@ -1,0 +1,21 @@
+{
+  "name": "nuanu-agent-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate:plugins": "node scripts/validate-plugins.mjs",
+    "test": "node --test tests/e2e/*.test.mjs",
+    "test:e2e": "node --test tests/e2e/*.test.mjs",
+    "codex:setup": "node scripts/codex/setup.mjs",
+    "codex:dev": "node scripts/codex/run-mode.mjs dev",
+    "codex:prod": "node scripts/codex/run-mode.mjs prod",
+    "codex:status": "node scripts/codex/status.mjs",
+    "codex:refresh": "node scripts/codex/run-mode.mjs dev --force-refresh --no-launch",
+    "codex:auth:prod": "node scripts/codex/auth.mjs prod",
+    "codex:auth:dev": "node scripts/codex/auth.mjs dev",
+    "worker:dev": "node scripts/codex/run-worker.mjs dev",
+    "worker:prod": "node scripts/codex/run-worker.mjs prod",
+    "codex:dev-install": "node scripts/codex/dev-install.mjs --cachebuster",
+    "codex:auth-doctor": "node scripts/codex/auth-doctor.mjs"
+  }
+}
