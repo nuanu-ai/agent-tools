@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
@@ -90,24 +90,6 @@ test("Codex plugin metadata points at skills and OAuth-ready Flow MCP config", a
 
   await fs.access(path.join(pluginRoot, manifest.skills));
   await fs.access(path.join(pluginRoot, ".mcp.json"));
-});
-
-test("local Codex dev installer targets only the isolated development plugin", async () => {
-  const before = await fs.readFile(manifestPath, "utf8");
-  const result = spawnSync(process.execPath, ["scripts/codex/dev-install.mjs", "--dry-run", "--cachebuster=fixed"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-  });
-  const after = await fs.readFile(manifestPath, "utf8");
-
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(after, before);
-  assert.match(result.stdout, /deprecated/i);
-  assert.match(result.stdout, /codex plugin marketplace add .*\.build\/codex-dev --json/);
-  assert.match(result.stdout, /codex plugin add nuanu-flow-dev@nuanu-dev --json/);
-  assert.doesNotMatch(result.stdout, /plugin remove/);
-  assert.doesNotMatch(result.stdout, /marketplace remove nuanu(?:\s|$)/);
-  assert.doesNotMatch(result.stdout, /nuanu-flow@nuanu(?:\s|$)/);
 });
 
 test("Codex auth doctor detects disabled OAuth metadata", async () => {

@@ -2,10 +2,28 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-const statePath = process.env.FAKE_CODEX_STATE;
+const statePath =
+  process.env.FAKE_CODEX_STATE ||
+  (process.env.FAKE_CODEX_STATE_DIR && process.env.CODEX_HOME
+    ? path.join(
+        process.env.FAKE_CODEX_STATE_DIR,
+        `${path.basename(process.env.CODEX_HOME)}.json`,
+      )
+    : "");
 const logPath = process.env.FAKE_CODEX_LOG;
 if (!statePath || !logPath) {
-  console.error("FAKE_CODEX_STATE and FAKE_CODEX_LOG are required");
+  console.error(
+    "FAKE_CODEX_STATE or FAKE_CODEX_STATE_DIR, plus FAKE_CODEX_LOG, are required",
+  );
+  process.exit(2);
+}
+if (
+  process.env.FAKE_EXPECT_CODEX_HOME &&
+  process.env.CODEX_HOME !== process.env.FAKE_EXPECT_CODEX_HOME
+) {
+  console.error(
+    `expected CODEX_HOME=${process.env.FAKE_EXPECT_CODEX_HOME}; received ${process.env.CODEX_HOME}`,
+  );
   process.exit(2);
 }
 
@@ -33,14 +51,6 @@ async function saveState(state) {
 
 function output(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
-}
-
-function profileAndCommand(args) {
-  if (args[0] !== "--profile") return { profile: "", args };
-  return {
-    profile: args[1] || "",
-    args: args.slice(2),
-  };
 }
 
 async function marketplaceFromSource(source, ref) {
@@ -100,8 +110,10 @@ async function pluginVersion(selector, state) {
   return manifest.version;
 }
 
-function mcpList(profile, state) {
-  const dev = profile === "nuanu-flow-dev";
+function mcpList(state) {
+  const dev = state.installed.some(
+    (plugin) => plugin.pluginId === "nuanu-flow-dev@nuanu-dev",
+  );
   const name = dev ? "flow_dev" : "flow";
   return [
     {
@@ -135,8 +147,7 @@ function mcpList(profile, state) {
 }
 
 try {
-  const parsed = profileAndCommand(rawArgs);
-  const args = parsed.args;
+  const args = rawArgs;
   if (args.length === 1 && (args[0] === "--version" || args[0] === "-V")) {
     console.log("codex-cli 0.145.0");
     process.exit(0);
@@ -204,7 +215,7 @@ try {
       throw new Error(`unsupported plugin command: ${command}`);
     }
   } else if (args[0] === "mcp" && args[1] === "list") {
-    output(mcpList(parsed.profile, state));
+    output(mcpList(state));
   } else if (args[0] === "mcp" && args[1] === "login") {
     const name = args[2];
     state.mcpAuth ||= {};

@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   assertCodexVersion,
+  codexModeHome,
   modeConfig,
 } from "../../scripts/codex/modes.mjs";
 import {
@@ -16,11 +17,10 @@ import {
   fingerprintPlugin,
 } from "../../scripts/codex/dev-package.mjs";
 import {
-  PROFILE_MARKER,
   classifyMarketplace,
-  profileText,
+  ensureSharedCodexAuth,
   setup,
-  writeOwnedProfile,
+  writeModeMcpConfig,
 } from "../../scripts/codex/setup.mjs";
 import {
   classifyOAuthProbes,
@@ -37,8 +37,14 @@ import {
 import {
   buildCodexLaunch,
   parseRunModeArgs,
+  runMode,
 } from "../../scripts/codex/run-mode.mjs";
 import { buildWorkerLaunch } from "../../scripts/codex/run-worker.mjs";
+import {
+  buildCodexPrompt,
+  buildPrompt,
+  modelTaskEnv,
+} from "../../plugins/nuanu-flow/scripts/worker/adapter.mjs";
 import {
   nextVersion,
   updateManifestVersion,
@@ -101,7 +107,6 @@ test("modeConfig isolates production and development endpoints and credentials",
     NUANU_DEV_GATEWAY_URL: "ws://127.0.0.1:4323/live/agent-gateway",
   });
   assert.equal(dev.pluginId, "nuanu-flow-dev@nuanu-dev");
-  assert.equal(dev.profile, "nuanu-flow-dev");
   assert.equal(dev.mcpName, "flow_dev");
   assert.equal(dev.mcpUrl, "http://127.0.0.1:4321/mcp");
   assert.equal(dev.apiUrl, "http://127.0.0.1:4322/api");
@@ -114,13 +119,45 @@ test("modeConfig isolates production and development endpoints and credentials",
     NUANU_DEV_MCP_URL: "http://127.0.0.1:9999/mcp",
   });
   assert.equal(prod.pluginId, "nuanu-flow@nuanu");
-  assert.equal(prod.profile, "nuanu-flow-prod");
   assert.equal(prod.mcpName, "flow");
   assert.equal(prod.mcpUrl, "https://flow.nuanu.com/mcp-server/mcp");
   assert.equal(prod.apiUrl, "https://flow.nuanu.com/api");
   assert.equal(prod.tokenEnv, "NUANU_TOKEN");
 
   assert.throws(() => modeConfig("staging", {}), /Unknown Nuanu Flow mode/);
+});
+
+test("codexModeHome gives production and development separate persistent homes", () => {
+  const base = "/tmp/nuanu-codex-base";
+  assert.equal(
+    codexModeHome("prod", { codexHome: base }),
+    path.join(base, "nuanu-flow", "prod"),
+  );
+  assert.equal(
+    codexModeHome("dev", { codexHome: base }),
+    path.join(base, "nuanu-flow", "dev"),
+  );
+  assert.equal(
+    codexModeHome("dev", {
+      env: {
+        CODEX_HOME: path.join(base, "nuanu-flow", "prod"),
+      },
+    }),
+    path.join(base, "nuanu-flow", "dev"),
+  );
+  assert.equal(
+    codexModeHome("prod", {
+      env: {
+        CODEX_HOME: path.join(base, "nuanu-flow", "dev"),
+        NUANU_CODEX_BASE_HOME: base,
+      },
+    }),
+    path.join(base, "nuanu-flow", "prod"),
+  );
+  assert.throws(
+    () => codexModeHome("staging", { codexHome: base }),
+    /Unknown Nuanu Flow mode/,
+  );
 });
 
 test("assertCodexVersion enforces the supported Codex baseline", () => {
@@ -181,6 +218,7 @@ test("buildDevPackage generates an isolated development marketplace without muta
     assert.match(manifest.interface.shortDescription, /local development/i);
     assert.deepEqual(Object.keys(manifest.mcpServers), ["flow_dev"]);
     assert.equal(manifest.mcpServers.flow_dev.url, "http://localhost:3001/mcp");
+    assert.equal(manifest.mcpServers.flow_dev.auth, undefined);
     assert.equal(
       manifest.mcpServers.flow_dev.env_http_headers["X-Plane-User-Token"],
       "NUANU_DEV_TOKEN",
@@ -204,11 +242,12 @@ test("buildDevPackage generates an isolated development marketplace without muta
       source: "local",
       path: "./plugins/nuanu-flow-dev",
     });
-    assert.equal(marketplace.plugins[0].policy.authentication, "ON_USE");
+    assert.equal(marketplace.plugins[0].policy.authentication, "ON_INSTALL");
 
     const state = await readJson(path.join(result.marketplaceRoot, "state.json"));
     assert.equal(state.fingerprint, result.fingerprint);
     assert.equal(state.version, result.version);
+    assert.equal(state.formatVersion, 2);
     assert.equal(state.mcpUrl, "http://localhost:3001/mcp");
     assert.equal(await fs.readFile(manifestPath, "utf8"), originalManifest);
   } finally {
@@ -274,44 +313,96 @@ test("buildDevPackage uses only the explicit development MCP override", async ()
   }
 });
 
-test("profileText activates exactly one persistent Nuanu Flow plugin", () => {
-  assert.equal(
-    profileText("dev"),
-    `${PROFILE_MARKER}
-[plugins."nuanu-flow@nuanu"]
-enabled = false
+test("ensureSharedCodexAuth links the normal Codex login without copying it", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-auth-link-"));
+  const baseHome = path.join(tempRoot, "base");
+  const modeHome = path.join(baseHome, "nuanu-flow", "dev");
+  const source = path.join(baseHome, "auth.json");
+  try {
+    await fs.mkdir(baseHome, { recursive: true });
+    await fs.writeFile(source, '{"token":"shared"}\n', { mode: 0o600 });
+    assert.equal(
+      await ensureSharedCodexAuth(baseHome, modeHome),
+      "created",
+    );
+    assert.equal(
+      await ensureSharedCodexAuth(baseHome, modeHome),
+      "unchanged",
+    );
+    assert.equal(
+      await fs.realpath(path.join(modeHome, "auth.json")),
+      await fs.realpath(source),
+    );
+    assert.equal((await fs.stat(modeHome)).mode & 0o777, 0o700);
 
-[plugins."nuanu-flow-dev@nuanu-dev"]
-enabled = true
-`,
-  );
-  assert.equal(
-    profileText("prod"),
-    `${PROFILE_MARKER}
-[plugins."nuanu-flow@nuanu"]
-enabled = true
-
-[plugins."nuanu-flow-dev@nuanu-dev"]
-enabled = false
-`,
-  );
+    const foreignHome = path.join(baseHome, "nuanu-flow", "foreign");
+    await fs.mkdir(foreignHome, { recursive: true });
+    await fs.writeFile(path.join(foreignHome, "auth.json"), "{}\n");
+    await assert.rejects(
+      ensureSharedCodexAuth(baseHome, foreignHome),
+      /refusing to replace.*auth\.json/i,
+    );
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
 });
 
-test("writeOwnedProfile creates private files, updates owned files, and rejects unowned files", async () => {
-  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-profiles-"));
-  const profile = path.join(tempRoot, "nested", "nuanu-flow-dev.config.toml");
-  const unowned = path.join(tempRoot, "unowned.config.toml");
+test("writeModeMcpConfig persists one managed direct MCP without replacing Codex config", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-mcp-config-"));
+  const home = path.join(tempRoot, "dev");
+  const config = path.join(home, "config.toml");
+  await fs.mkdir(home, { recursive: true });
+  await fs.writeFile(
+    config,
+    '[plugins."nuanu-flow-dev@nuanu-dev"]\nenabled = true\n',
+  );
   try {
-    assert.equal(await writeOwnedProfile(profile, profileText("dev")), "created");
-    assert.equal(await writeOwnedProfile(profile, profileText("dev")), "unchanged");
-    assert.equal(await writeOwnedProfile(profile, profileText("prod")), "updated");
-    assert.equal((await fs.stat(path.dirname(profile))).mode & 0o777, 0o700);
-    assert.equal((await fs.stat(profile)).mode & 0o777, 0o600);
+    assert.equal(
+      await writeModeMcpConfig("dev", home, {
+        NUANU_DEV_MCP_URL: "http://127.0.0.1:7654/mcp",
+      }),
+      "created",
+    );
+    assert.equal(
+      await writeModeMcpConfig("dev", home, {
+        NUANU_DEV_MCP_URL: "http://127.0.0.1:7654/mcp",
+      }),
+      "unchanged",
+    );
+    const text = await fs.readFile(config, "utf8");
+    assert.match(text, /\[plugins\."nuanu-flow-dev@nuanu-dev"\]/);
+    assert.match(text, /\[mcp_servers\.flow_dev\]/);
+    assert.match(text, /url = "http:\/\/127\.0\.0\.1:7654\/mcp"/);
+    assert.match(text, /required = true/);
+    assert.match(
+      text,
+      /"X-Plane-User-Token" = "NUANU_DEV_TOKEN"/,
+    );
+    assert.doesNotMatch(text, /flow\.nuanu\.com/);
+    assert.equal((text.match(/\[mcp_servers\.flow_dev\]/g) || []).length, 1);
+    assert.equal((await fs.stat(config)).mode & 0o777, 0o600);
 
-    await fs.writeFile(unowned, "[plugins]\n");
+    await fs.writeFile(
+      config,
+      `${text}\n[mcp_servers.other]\nurl = "http://localhost:9000/mcp"\n`,
+    );
+    assert.equal(
+      await writeModeMcpConfig("dev", home, {
+        NUANU_DEV_MCP_URL: "http://127.0.0.1:7655/mcp",
+      }),
+      "updated",
+    );
+    const updated = await fs.readFile(config, "utf8");
+    assert.match(updated, /http:\/\/127\.0\.0\.1:7655\/mcp/);
+    assert.match(updated, /\[mcp_servers\.other\]/);
+
+    await fs.writeFile(
+      config,
+      '[mcp_servers."flow_dev"]\nurl = "http://localhost:4000/mcp"\n',
+    );
     await assert.rejects(
-      writeOwnedProfile(unowned, profileText("dev")),
-      /refusing to overwrite unowned Codex profile/i,
+      writeModeMcpConfig("dev", home),
+      /refusing to replace unmanaged flow_dev MCP config/i,
     );
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
@@ -349,6 +440,21 @@ test("classifyMarketplace distinguishes this checkout, remote production, and fo
     classifyMarketplace(
       {
         name: "nuanu",
+        root: "/cache/nuanu-feature",
+        marketplaceSource: {
+          sourceType: "git",
+          source: "nuanu-ai/agent-tools",
+          ref: "feature/test",
+        },
+      },
+      repoRoot,
+    ),
+    "remote-other",
+  );
+  assert.equal(
+    classifyMarketplace(
+      {
+        name: "nuanu",
         root: "/tmp/someone-else",
         marketplaceSource: {
           sourceType: "local",
@@ -361,14 +467,15 @@ test("classifyMarketplace distinguishes this checkout, remote production, and fo
   );
 });
 
-test("setup migrates this checkout to remote production and installs both identities", async () => {
+test("setup installs production and development into isolated Codex homes", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-setup-"));
-  const statePath = path.join(tempRoot, "fake-state.json");
+  const stateDir = path.join(tempRoot, "fake-state");
   const logPath = path.join(tempRoot, "fake-log.jsonl");
   const codexHome = path.join(tempRoot, "codex-home");
   const buildRoot = path.join(tempRoot, "codex-dev");
+  await fs.mkdir(stateDir);
   await fs.writeFile(
-    statePath,
+    path.join(stateDir, "prod.json"),
     `${JSON.stringify({
       marketplaces: [
         {
@@ -381,6 +488,10 @@ test("setup migrates this checkout to remote production and installs both identi
       mcpAuth: {},
     })}\n`,
   );
+  await fs.writeFile(
+    path.join(stateDir, "dev.json"),
+    `${JSON.stringify({ marketplaces: [], installed: [], mcpAuth: {} })}\n`,
+  );
   try {
     const report = await setup({
       repoRoot,
@@ -389,7 +500,7 @@ test("setup migrates this checkout to remote production and installs both identi
       codexBin: fakeCodexBin,
       env: {
         ...process.env,
-        FAKE_CODEX_STATE: statePath,
+        FAKE_CODEX_STATE_DIR: stateDir,
         FAKE_CODEX_LOG: logPath,
       },
       now: () => new Date("2026-07-25T12:00:00.000Z"),
@@ -397,10 +508,7 @@ test("setup migrates this checkout to remote production and installs both identi
     assert.equal(report.dryRun, false);
 
     const commands = await readCommandLog(logPath);
-    assert.deepEqual(commands.slice(0, 2), [
-      ["--version"],
-      ["plugin", "marketplace", "list", "--json"],
-    ]);
+    assert.equal(commands.filter((args) => args[0] === "--version").length, 2);
     assert(
       commands.some((args) =>
         args.join(" ").includes("plugin marketplace remove nuanu --json"),
@@ -441,34 +549,84 @@ test("setup migrates this checkout to remote production and installs both identi
       false,
     );
 
-    const state = await readJson(statePath);
+    const prodState = await readJson(path.join(stateDir, "prod.json"));
+    const devState = await readJson(path.join(stateDir, "dev.json"));
     assert.equal(
-      state.marketplaces.find((entry) => entry.name === "nuanu")
+      prodState.marketplaces.find((entry) => entry.name === "nuanu")
         .marketplaceSource.sourceType,
       "git",
     );
     assert.equal(
-      state.marketplaces.find((entry) => entry.name === "nuanu-dev").root,
+      devState.marketplaces.find((entry) => entry.name === "nuanu-dev").root,
       buildRoot,
     );
     assert.deepEqual(
-      state.installed.map((plugin) => plugin.pluginId).sort(),
-      ["nuanu-flow-dev@nuanu-dev", "nuanu-flow@nuanu"],
+      prodState.installed.map((plugin) => plugin.pluginId),
+      ["nuanu-flow@nuanu"],
     );
-    assert.equal(
-      await fs.readFile(
-        path.join(codexHome, "nuanu-flow-prod.config.toml"),
-        "utf8",
-      ),
-      profileText("prod"),
+    assert.deepEqual(
+      devState.installed.map((plugin) => plugin.pluginId),
+      ["nuanu-flow-dev@nuanu-dev"],
     );
-    assert.equal(
-      await fs.readFile(
-        path.join(codexHome, "nuanu-flow-dev.config.toml"),
-        "utf8",
-      ),
-      profileText("dev"),
+    assert.equal(report.homes.prod, codexModeHome("prod", { codexHome }));
+    assert.equal(report.homes.dev, codexModeHome("dev", { codexHome }));
+    assert.equal((await fs.stat(report.homes.prod)).mode & 0o777, 0o700);
+    assert.equal((await fs.stat(report.homes.dev)).mode & 0o777, 0o700);
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("setup removes checkout-owned legacy registrations from the base Codex home", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-setup-migrate-"));
+  const stateDir = path.join(tempRoot, "fake-state");
+  const logPath = path.join(tempRoot, "fake-log.jsonl");
+  const codexHome = path.join(tempRoot, "codex-home");
+  const buildRoot = path.join(tempRoot, "codex-dev");
+  await fs.mkdir(stateDir);
+  await fs.writeFile(
+    path.join(stateDir, "codex-home.json"),
+    `${JSON.stringify({
+      marketplaces: [
+        {
+          name: "nuanu",
+          root: repoRoot,
+          marketplaceSource: { sourceType: "local", source: repoRoot },
+        },
+        {
+          name: "nuanu-dev",
+          root: buildRoot,
+          marketplaceSource: { sourceType: "local", source: buildRoot },
+        },
+      ],
+      installed: [
+        { pluginId: "nuanu-flow@nuanu" },
+        { pluginId: "nuanu-flow-dev@nuanu-dev" },
+      ],
+      mcpAuth: {},
+    })}\n`,
+  );
+  for (const mode of ["prod", "dev"]) {
+    await fs.writeFile(
+      path.join(stateDir, `${mode}.json`),
+      `${JSON.stringify({ marketplaces: [], installed: [], mcpAuth: {} })}\n`,
     );
+  }
+  try {
+    await setup({
+      repoRoot,
+      codexHome,
+      buildRoot,
+      codexBin: fakeCodexBin,
+      env: {
+        ...process.env,
+        FAKE_CODEX_STATE_DIR: stateDir,
+        FAKE_CODEX_LOG: logPath,
+      },
+    });
+    const baseState = await readJson(path.join(stateDir, "codex-home.json"));
+    assert.deepEqual(baseState.marketplaces, []);
+    assert.deepEqual(baseState.installed, []);
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
@@ -476,7 +634,7 @@ test("setup migrates this checkout to remote production and installs both identi
 
 test("setup refuses a foreign production marketplace before changing Codex state", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-setup-foreign-"));
-  const statePath = path.join(tempRoot, "fake-state.json");
+  const stateDir = path.join(tempRoot, "fake-state");
   const logPath = path.join(tempRoot, "fake-log.jsonl");
   const original = {
     marketplaces: [
@@ -492,7 +650,15 @@ test("setup refuses a foreign production marketplace before changing Codex state
     installed: [],
     mcpAuth: {},
   };
-  await fs.writeFile(statePath, `${JSON.stringify(original, null, 2)}\n`);
+  await fs.mkdir(stateDir);
+  await fs.writeFile(
+    path.join(stateDir, "prod.json"),
+    `${JSON.stringify(original, null, 2)}\n`,
+  );
+  await fs.writeFile(
+    path.join(stateDir, "dev.json"),
+    `${JSON.stringify({ marketplaces: [], installed: [], mcpAuth: {} })}\n`,
+  );
   try {
     await assert.rejects(
       setup({
@@ -502,26 +668,31 @@ test("setup refuses a foreign production marketplace before changing Codex state
         codexBin: fakeCodexBin,
         env: {
           ...process.env,
-          FAKE_CODEX_STATE: statePath,
+          FAKE_CODEX_STATE_DIR: stateDir,
           FAKE_CODEX_LOG: logPath,
         },
       }),
       /foreign marketplace named nuanu/i,
     );
-    assert.deepEqual(await readJson(statePath), original);
+    assert.deepEqual(await readJson(path.join(stateDir, "prod.json")), original);
     const commands = await readCommandLog(logPath);
-    assert.deepEqual(commands, [
-      ["--version"],
-      ["plugin", "marketplace", "list", "--json"],
-    ]);
+    assert.equal(
+      commands.some(
+        (args) =>
+          args.includes("add") ||
+          args.includes("remove") ||
+          args.includes("upgrade"),
+      ),
+      false,
+    );
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
 });
 
-test("setup dry-run reports actions without changing fake state or profiles", async () => {
+test("setup dry-run reports isolated mode actions without creating homes", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-setup-dry-"));
-  const statePath = path.join(tempRoot, "fake-state.json");
+  const stateDir = path.join(tempRoot, "fake-state");
   const logPath = path.join(tempRoot, "fake-log.jsonl");
   const codexHome = path.join(tempRoot, "codex-home");
   const original = {
@@ -529,7 +700,15 @@ test("setup dry-run reports actions without changing fake state or profiles", as
     installed: [],
     mcpAuth: {},
   };
-  await fs.writeFile(statePath, `${JSON.stringify(original, null, 2)}\n`);
+  await fs.mkdir(stateDir);
+  await fs.writeFile(
+    path.join(stateDir, "prod.json"),
+    `${JSON.stringify(original, null, 2)}\n`,
+  );
+  await fs.writeFile(
+    path.join(stateDir, "dev.json"),
+    `${JSON.stringify(original, null, 2)}\n`,
+  );
   try {
     const report = await setup({
       repoRoot,
@@ -539,26 +718,31 @@ test("setup dry-run reports actions without changing fake state or profiles", as
       dryRun: true,
       env: {
         ...process.env,
-        FAKE_CODEX_STATE: statePath,
+        FAKE_CODEX_STATE_DIR: stateDir,
         FAKE_CODEX_LOG: logPath,
       },
     });
     assert.equal(report.dryRun, true);
-    assert.deepEqual(await readJson(statePath), original);
+    assert.deepEqual(await readJson(path.join(stateDir, "prod.json")), original);
+    assert.deepEqual(await readJson(path.join(stateDir, "dev.json")), original);
     await assert.rejects(fs.access(codexHome), { code: "ENOENT" });
-    assert.deepEqual(await readCommandLog(logPath), [
-      ["--version"],
-      ["plugin", "marketplace", "list", "--json"],
-    ]);
+    const commands = await readCommandLog(logPath);
+    assert.equal(commands.filter((args) => args[0] === "--version").length, 2);
+    assert.equal(
+      commands.filter(
+        (args) => args.join(" ") === "plugin marketplace list --json",
+      ).length,
+      0,
+    );
     assert.deepEqual(
-      report.actions.map((action) => action.kind),
+      report.actions.map((action) => [action.mode, action.kind]),
       [
-        "marketplace-add",
-        "marketplace-add",
-        "plugin-add",
-        "plugin-add",
-        "profile-write",
-        "profile-write",
+        ["prod", "marketplace-add"],
+        ["prod", "plugin-add"],
+        ["prod", "mcp-config-write"],
+        ["dev", "marketplace-add"],
+        ["dev", "plugin-add"],
+        ["dev", "mcp-config-write"],
       ],
     );
   } finally {
@@ -632,35 +816,53 @@ test("OAuth metadata classification preserves the existing auth-doctor contract"
   );
 });
 
-test("readMcpAuthStatus reads the selected profile and server only", async () => {
+test("readMcpAuthStatus reads the selected isolated home and server only", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-auth-status-"));
-  const statePath = path.join(tempRoot, "state.json");
+  const stateDir = path.join(tempRoot, "state");
   const logPath = path.join(tempRoot, "log.jsonl");
+  const codexHome = path.join(tempRoot, "codex-home");
+  await fs.mkdir(stateDir);
   await fs.writeFile(
-    statePath,
+    path.join(stateDir, "prod.json"),
     `${JSON.stringify({
       marketplaces: [],
-      installed: [],
-      mcpAuth: { flow: "o_auth", flow_dev: "not_logged_in" },
+      installed: [{ pluginId: "nuanu-flow@nuanu" }],
+      mcpAuth: { flow: "o_auth" },
+    })}\n`,
+  );
+  await fs.writeFile(
+    path.join(stateDir, "dev.json"),
+    `${JSON.stringify({
+      marketplaces: [],
+      installed: [{ pluginId: "nuanu-flow-dev@nuanu-dev" }],
+      mcpAuth: { flow_dev: "not_logged_in" },
     })}\n`,
   );
   try {
     const env = {
       ...process.env,
-      FAKE_CODEX_STATE: statePath,
+      FAKE_CODEX_STATE_DIR: stateDir,
       FAKE_CODEX_LOG: logPath,
     };
     assert.equal(
-      await readMcpAuthStatus("prod", { codexBin: fakeCodexBin, env }),
+      await readMcpAuthStatus("prod", {
+        codexHome,
+        codexBin: fakeCodexBin,
+        env,
+      }),
       "o_auth",
     );
     assert.equal(
-      await readMcpAuthStatus("dev", { codexBin: fakeCodexBin, env }),
+      await readMcpAuthStatus("dev", {
+        codexHome,
+        codexBin: fakeCodexBin,
+        env,
+      }),
       "not_logged_in",
     );
     assert.deepEqual(await readCommandLog(logPath), [
-      ["--profile", "nuanu-flow-prod", "mcp", "list", "--json"],
-      ["--profile", "nuanu-flow-dev", "mcp", "list", "--json"],
+      ["mcp", "list", "--json"],
+      ["mcp", "list", "--json"],
     ]);
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
@@ -707,23 +909,26 @@ test("collectStatus reports selected mode health and auth without exposing crede
     res.end(JSON.stringify({ status: "ok" }));
   });
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-status-"));
-  const statePath = path.join(tempRoot, "state.json");
+  const stateDir = path.join(tempRoot, "state");
   const logPath = path.join(tempRoot, "log.jsonl");
   const codexHome = path.join(tempRoot, "codex-home");
   const buildRoot = path.join(tempRoot, "codex-dev");
   const env = {
     ...process.env,
-    FAKE_CODEX_STATE: statePath,
+    FAKE_CODEX_STATE_DIR: stateDir,
     FAKE_CODEX_LOG: logPath,
     NUANU_DEV_MCP_URL: `${fixture.origin}/mcp`,
     NUANU_DEV_URL: `${fixture.origin}/api`,
     NUANU_DEV_TOKEN: "status-dev-secret",
     NUANU_TOKEN: "status-prod-secret",
   };
-  await fs.writeFile(
-    statePath,
-    `${JSON.stringify({ marketplaces: [], installed: [], mcpAuth: {} })}\n`,
-  );
+  await fs.mkdir(stateDir);
+  for (const mode of ["prod", "dev"]) {
+    await fs.writeFile(
+      path.join(stateDir, `${mode}.json`),
+      `${JSON.stringify({ marketplaces: [], installed: [], mcpAuth: {} })}\n`,
+    );
+  }
   try {
     await setup({
       repoRoot,
@@ -746,7 +951,8 @@ test("collectStatus reports selected mode health and auth without exposing crede
     assert.equal(report.pluginId, "nuanu-flow-dev@nuanu-dev");
     assert.equal(report.mcpUrl, `${fixture.origin}/mcp`);
     assert.equal(report.apiUrl, `${fixture.origin}/api`);
-    assert.equal(report.profile.owned, true);
+    assert.equal(report.codexHome, codexModeHome("dev", { codexHome }));
+    assert.equal(report.isolated, true);
     assert.equal(report.endpoints.mcp.status, "reachable");
     assert.equal(report.endpoints.api.status, "reachable");
     assert.equal(report.auth.source, "environment-token");
@@ -761,20 +967,23 @@ test("collectStatus reports selected mode health and auth without exposing crede
 
 test("development preflight fails on its configured endpoint and never falls back to production", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-preflight-"));
-  const statePath = path.join(tempRoot, "state.json");
+  const stateDir = path.join(tempRoot, "state");
   const logPath = path.join(tempRoot, "log.jsonl");
   const codexHome = path.join(tempRoot, "codex-home");
   const buildRoot = path.join(tempRoot, "codex-dev");
   const env = {
     ...process.env,
-    FAKE_CODEX_STATE: statePath,
+    FAKE_CODEX_STATE_DIR: stateDir,
     FAKE_CODEX_LOG: logPath,
     NUANU_DEV_MCP_URL: "http://127.0.0.1:1/mcp",
   };
-  await fs.writeFile(
-    statePath,
-    `${JSON.stringify({ marketplaces: [], installed: [], mcpAuth: {} })}\n`,
-  );
+  await fs.mkdir(stateDir);
+  for (const mode of ["prod", "dev"]) {
+    await fs.writeFile(
+      path.join(stateDir, `${mode}.json`),
+      `${JSON.stringify({ marketplaces: [], installed: [], mcpAuth: {} })}\n`,
+    );
+  }
   try {
     await setup({
       repoRoot,
@@ -799,8 +1008,10 @@ test("development preflight fails on its configured endpoint and never falls bac
   }
 });
 
-test("buildCodexLaunch selects one profile, one credential namespace, and a visible banner", async () => {
+test("buildCodexLaunch selects one Codex home, one credential namespace, and a visible banner", async () => {
+  const codexHome = "/tmp/nuanu-codex-base";
   const dev = await buildCodexLaunch("dev", {
+    codexHome,
     cwd: "/tmp/nuanu-dev-work",
     codexArgs: ["--no-alt-screen"],
     env: {
@@ -810,29 +1021,36 @@ test("buildCodexLaunch selects one profile, one credential namespace, and a visi
       NUANU_DEV_MCP_URL: "http://localhost:3001/mcp",
     },
   });
-  assert.deepEqual(dev.args, [
-    "--profile",
-    "nuanu-flow-dev",
-    "--no-alt-screen",
-  ]);
+  assert.deepEqual(dev.args, ["--no-alt-screen"]);
   assert.equal(dev.cwd, "/tmp/nuanu-dev-work");
   assert.match(dev.banner, /NUANU FLOW LOCAL DEVELOPMENT/);
   assert.match(dev.banner, /http:\/\/localhost:3001\/mcp/);
   assert.equal(dev.env.NUANU_DEV_TOKEN, "dev-token");
   assert.equal(dev.env.NUANU_TOKEN, undefined);
+  assert.equal(
+    dev.env.CODEX_HOME,
+    path.join(codexHome, "nuanu-flow", "dev"),
+  );
+  assert.equal(dev.env.NUANU_CODEX_BASE_HOME, codexHome);
 
   const prod = await buildCodexLaunch("prod", {
+    codexHome,
     cwd: "/tmp/nuanu-prod-work",
     env: {
       NUANU_TOKEN: "prod-token",
       NUANU_DEV_TOKEN: "dev-token",
     },
   });
-  assert.deepEqual(prod.args, ["--profile", "nuanu-flow-prod"]);
+  assert.deepEqual(prod.args, []);
   assert.match(prod.banner, /NUANU FLOW PRODUCTION/);
   assert.match(prod.banner, /https:\/\/flow\.nuanu\.com\/mcp-server\/mcp/);
   assert.equal(prod.env.NUANU_TOKEN, "prod-token");
   assert.equal(prod.env.NUANU_DEV_TOKEN, undefined);
+  assert.equal(
+    prod.env.CODEX_HOME,
+    path.join(codexHome, "nuanu-flow", "prod"),
+  );
+  assert.equal(prod.env.NUANU_CODEX_BASE_HOME, codexHome);
   assert.doesNotMatch(dev.banner + prod.banner, /prod-token|dev-token/);
 });
 
@@ -861,6 +1079,70 @@ test("parseRunModeArgs preserves Codex args and forced refresh behavior", () => 
   );
 });
 
+test("runMode preflights the selected home without nesting it twice", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-run-mode-"));
+  const stateDir = path.join(tempRoot, "state");
+  const logPath = path.join(tempRoot, "log.jsonl");
+  const codexHome = path.join(tempRoot, "codex-home");
+  const buildRoot = path.join(tempRoot, "codex-dev");
+  const fixture = await startHttpFixture((req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    res.writeHead(req.url.includes(".well-known") ? 404 : 200);
+    res.end(
+      JSON.stringify(
+        req.url.includes(".well-known")
+          ? { error: "oauth_disabled" }
+          : { status: "ok" },
+      ),
+    );
+  });
+  const env = {
+    ...process.env,
+    FAKE_CODEX_STATE_DIR: stateDir,
+    FAKE_CODEX_LOG: logPath,
+    NUANU_DEV_MCP_URL: `${fixture.origin}/mcp`,
+    NUANU_DEV_URL: `${fixture.origin}/api`,
+  };
+  await fs.mkdir(stateDir);
+  for (const name of ["codex-home", "prod", "dev"]) {
+    await fs.writeFile(
+      path.join(stateDir, `${name}.json`),
+      `${JSON.stringify({ marketplaces: [], installed: [], mcpAuth: {} })}\n`,
+    );
+  }
+  try {
+    await setup({
+      repoRoot,
+      codexHome,
+      buildRoot,
+      codexBin: fakeCodexBin,
+      env,
+    });
+    assert.equal(
+      await runMode({
+        mode: "dev",
+        noLaunch: true,
+        forceRefresh: false,
+        dryRun: false,
+        cwd: repoRoot,
+        codexArgs: [],
+        codexBin: fakeCodexBin,
+        repoRoot,
+        codexHome,
+        buildRoot,
+        env: {
+          ...env,
+          FAKE_EXPECT_CODEX_HOME: codexModeHome("dev", { codexHome }),
+        },
+      }),
+      0,
+    );
+  } finally {
+    await fixture.close();
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("buildWorkerLaunch maps development credentials into a child-only App Server environment", () => {
   const parentEnv = {
     PATH: "/usr/bin",
@@ -871,6 +1153,7 @@ test("buildWorkerLaunch maps development credentials into a child-only App Serve
     NUANU_DEV_WORKSPACE: "local-workspace",
   };
   const dev = buildWorkerLaunch("dev", {
+    codexHome: "/tmp/codex-base",
     cwd: "/tmp/nuanu-worker",
     env: parentEnv,
   });
@@ -888,15 +1171,22 @@ test("buildWorkerLaunch maps development credentials into a child-only App Serve
   assert.equal(dev.env.NUANU_ADAPTER, "codex-app-server");
   assert.equal(
     dev.env.NUANU_CODEX_APP_SERVER_ARGS,
-    "--profile nuanu-flow-dev app-server --stdio",
+    "app-server --stdio",
   );
+  assert.equal(
+    dev.env.CODEX_HOME,
+    "/tmp/codex-base/nuanu-flow/dev",
+  );
+  assert.equal(dev.env.NUANU_CODEX_BASE_HOME, "/tmp/codex-base");
   assert.equal(dev.env.NUANU_CODEX_AGENT_KEY_ENV, "NUANU_DEV_AGENT_KEY");
   assert.equal(dev.env.NUANU_TOKEN, undefined);
+  assert.equal(dev.env.NUANU_DEV_TOKEN, undefined);
   assert.match(dev.banner, /NUANU FLOW LOCAL DEVELOPMENT WORKER/);
   assert.equal(parentEnv.NUANU_AGENT_KEY, "prod-agent-key");
   assert.equal(parentEnv.NUANU_DEV_AGENT_KEY, "local-agent-key");
 
   const prod = buildWorkerLaunch("prod", {
+    codexHome: "/tmp/codex-base",
     env: {
       NUANU_AGENT_KEY: "prod-agent-key",
       NUANU_DEV_AGENT_KEY: "local-agent-key",
@@ -908,7 +1198,11 @@ test("buildWorkerLaunch maps development credentials into a child-only App Serve
   assert.equal(prod.env.NUANU_DEV_AGENT_KEY, undefined);
   assert.equal(
     prod.env.NUANU_CODEX_APP_SERVER_ARGS,
-    "--profile nuanu-flow-prod app-server --stdio",
+    "app-server --stdio",
+  );
+  assert.equal(
+    prod.env.CODEX_HOME,
+    "/tmp/codex-base/nuanu-flow/prod",
   );
   assert.match(prod.banner, /NUANU FLOW PRODUCTION WORKER/);
 });
@@ -928,6 +1222,56 @@ test("buildWorkerLaunch rejects missing keys and production endpoints in develop
       }),
     /development worker URL must use localhost/i,
   );
+  assert.throws(
+    () =>
+      buildWorkerLaunch("prod", {
+        env: {
+          NUANU_AGENT_KEY: "prod-agent-key",
+          NUANU_URL: "https://example.com/api",
+        },
+      }),
+    /production worker URL must use https:\/\/flow\.nuanu\.com/i,
+  );
+  assert.throws(
+    () =>
+      buildWorkerLaunch("prod", {
+        env: {
+          NUANU_AGENT_KEY: "prod-agent-key",
+          NUANU_GATEWAY_URL: "wss://example.com/live/agent-gateway",
+        },
+      }),
+    /production worker gateway URL must use wss:\/\/flow\.nuanu\.com/i,
+  );
+});
+
+test("modelTaskEnv exposes only the short-lived task key to Codex", () => {
+  assert.throws(
+    () => modelTaskEnv({}, "NUANU_DEV_AGENT_KEY", {}),
+    /short-lived agent_key/,
+  );
+  const env = modelTaskEnv(
+    { agent_key: "per-task-key" },
+    "NUANU_DEV_AGENT_KEY",
+    {
+      PATH: "/usr/bin",
+      NUANU_TOKEN: "interactive-prod-token",
+      NUANU_DEV_TOKEN: "interactive-dev-token",
+      NUANU_AGENT_KEY: "durable-prod-key",
+      NUANU_DEV_AGENT_KEY: "durable-dev-key",
+    },
+  );
+  assert.equal(env.PATH, "/usr/bin");
+  assert.equal(env.NUANU_DEV_AGENT_KEY, "per-task-key");
+  assert.equal(env.NUANU_AGENT_KEY, undefined);
+  assert.equal(env.NUANU_TOKEN, undefined);
+  assert.equal(env.NUANU_DEV_TOKEN, undefined);
+});
+
+test("Codex worker prompts explain deferred MCP tool discovery", () => {
+  const task = { instruction: "Call flow_dev_identity." };
+  assert.doesNotMatch(buildPrompt(task), /tool_search/);
+  assert.match(buildCodexPrompt(task), /tool_search/);
+  assert.match(buildCodexPrompt(task), /Call flow_dev_identity/);
 });
 
 test("nextVersion supports release increments and rejects invalid requests", () => {
@@ -1097,6 +1441,47 @@ test("updateProduction refuses a local production marketplace before mutation", 
           args.includes("remove"),
       ),
       false,
+    );
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("updateProduction refuses a production marketplace not pinned to main", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-update-ref-"));
+  const statePath = path.join(tempRoot, "state.json");
+  const logPath = path.join(tempRoot, "log.jsonl");
+  await fs.writeFile(
+    statePath,
+    `${JSON.stringify({
+      marketplaces: [
+        {
+          name: "nuanu",
+          root: "/fake/git/nuanu-ai-agent-tools",
+          marketplaceSource: {
+            sourceType: "git",
+            source: "nuanu-ai/agent-tools",
+            ref: "feature/test",
+          },
+        },
+      ],
+      installed: [],
+      mcpAuth: {},
+    })}\n`,
+  );
+  try {
+    await assert.rejects(
+      updateProduction({
+        repoRoot,
+        codexHome: path.join(tempRoot, "codex-home"),
+        codexBin: fakeCodexBin,
+        env: {
+          ...process.env,
+          FAKE_CODEX_STATE: statePath,
+          FAKE_CODEX_LOG: logPath,
+        },
+      }),
+      /npm run codex:setup/,
     );
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });

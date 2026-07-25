@@ -43,8 +43,13 @@ npm run codex:dev
 
 Production remains `nuanu-flow@nuanu`. Local development is generated as
 `nuanu-flow-dev@nuanu-dev`, uses `flow_dev` at
-`http://localhost:3001/mcp`, and is labeled `Nuanu Flow [DEV]`. The two owned
-profiles activate only one variant per new session:
+`http://localhost:3001/mcp`, and is labeled `Nuanu Flow [DEV]`. Setup keeps
+the modes in separate persistent Codex homes:
+
+- `~/.codex/nuanu-flow/prod`
+- `~/.codex/nuanu-flow/dev`
+
+The wrappers select the matching home for every new session:
 
 ```bash
 npm run codex:prod
@@ -56,7 +61,8 @@ npm run codex:update
 `codex:dev` rebuilds and reinstalls when the source fingerprint changes.
 `codex:refresh` forces that update without launching. Development preflight
 fails if localhost is unavailable and never falls back to `flow.nuanu.com`.
-No Nuanu CLI or global package is installed.
+Both homes reuse the existing Codex/OpenAI login, while Flow MCP auth remains
+mode-local. No Nuanu CLI or global package is installed.
 
 ## Configure — three auth modes
 
@@ -153,9 +159,12 @@ npm run worker:prod
 npm run worker:dev
 ```
 
-The wrappers select the matching Codex profile and default to
-`codex-app-server`. Use `NUANU_ADAPTER=codex-exec` for simpler one-shot task
-execution.
+The wrappers select the matching Codex home and default to
+`codex-app-server` with inline task execution. Use
+`NUANU_ADAPTER=codex-exec` for simpler one-shot task execution.
+`worker:prod` rejects API or gateway overrides outside `flow.nuanu.com`;
+`worker:dev` rejects non-local endpoints. Only each task's short-lived agent
+key is exposed to the Codex subprocess.
 
 Docs: `docs/PLUGIN.md` (architecture), `docs/REMOTE_AGENTS.md` (worker
 protocol spec).

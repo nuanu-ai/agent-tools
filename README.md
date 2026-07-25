@@ -40,14 +40,19 @@ npm run codex:update
 ```
 
 `codex:setup` installs `nuanu-flow@nuanu` from Git and generates the isolated
-`nuanu-flow-dev@nuanu-dev` plugin under `.build/`. It writes two small,
-owned Codex profiles:
+`nuanu-flow-dev@nuanu-dev` plugin under `.build/`. It creates two private,
+persistent Codex homes below the normal Codex home:
 
-- `nuanu-flow-prod`: hosted `flow.nuanu.com` only.
-- `nuanu-flow-dev`: localhost only, displayed as `Nuanu Flow [DEV]`.
+- `~/.codex/nuanu-flow/prod`: hosted `flow.nuanu.com` only.
+- `~/.codex/nuanu-flow/dev`: localhost only, displayed as `Nuanu Flow [DEV]`.
 
-Each launch selects exactly one profile. `codex:dev` fingerprints the plugin,
-rebuilds it when content changes, verifies the local MCP endpoint, prints a
+Each home contains exactly one Nuanu Flow plugin and MCP server, so a new
+session cannot inherit the other mode. The wrappers set `CODEX_HOME`
+automatically. They reuse the existing Codex/OpenAI login through a symlink to
+the base `auth.json`; Flow OAuth and MCP state stay local to each mode.
+
+`codex:dev` fingerprints the plugin, rebuilds it when content changes, writes
+the current localhost MCP settings, verifies the local endpoint, prints a
 large development banner, and starts a fresh Codex session. It never falls
 back to production. Use `npm run codex:refresh` to force a new local version
 without launching.
@@ -78,7 +83,26 @@ npm run worker:prod
 ```
 
 Both default to Codex App Server. Set `NUANU_DEV_AGENT_KEY` for local work or
-`NUANU_AGENT_KEY` for production.
+`NUANU_AGENT_KEY` for production. The production wrapper accepts API and
+gateway overrides only on `flow.nuanu.com`; the development wrapper accepts
+only localhost/loopback endpoints. Model subprocesses receive the task's
+short-lived key, never the durable worker key or an interactive user token.
+
+Real Codex acceptance is explicit:
+
+```bash
+npm run test:acceptance:codex
+npm run test:acceptance:codex:model
+```
+
+The first command installs both variants into a temporary unauthenticated
+Codex home and verifies plugin/MCP isolation. The opt-in command symlinks the
+existing Codex login into temporary mode homes, then exercises the local MCP,
+a fresh second session, skill refresh, and a real App Server worker task. It
+never copies auth files or changes the normal production/development homes.
+CI runs the credential-free command against the pinned supported Codex CLI;
+the model-backed command remains explicit because it uses the developer's
+existing OpenAI login.
 
 ## What's inside
 

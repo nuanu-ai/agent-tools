@@ -2,7 +2,12 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { MODES, modeConfig, runCodex } from "./modes.mjs";
+import {
+  MODES,
+  codexModeHome,
+  modeConfig,
+  runCodex,
+} from "./modes.mjs";
 
 const KEYCHAIN_SERVICE = "nuanu-flow-codex";
 const AUTH_ENV_NAMES = Object.values(MODES).flatMap((mode) => [
@@ -216,12 +221,20 @@ export async function probeEndpoint(url, timeoutMs = 5000) {
 
 export async function readMcpAuthStatus(modeName, options = {}) {
   const mode = modeConfig(modeName, options.env || process.env);
+  const home = codexModeHome(modeName, {
+    codexHome: options.codexHome,
+    env: options.env,
+  });
   const result = runCodex(
-    ["--profile", mode.profile, "mcp", "list", "--json"],
+    ["mcp", "list", "--json"],
     {
       codexBin: options.codexBin,
       cwd: options.cwd,
-      env: options.env,
+      env: {
+        ...process.env,
+        ...options.env,
+        CODEX_HOME: home,
+      },
     },
   );
   let servers;
@@ -283,12 +296,20 @@ export async function authenticateMode(modeName, options = {}) {
       return { mode: modeName, ready: true, source: "oauth" };
     }
     if (oauthStatus === "not_logged_in" && !options.check) {
+      const home = codexModeHome(modeName, {
+        codexHome: options.codexHome,
+        env: options.env,
+      });
       runCodex(
-        ["--profile", mode.profile, "mcp", "login", mode.mcpName],
+        ["mcp", "login", mode.mcpName],
         {
           codexBin: options.codexBin,
           cwd: options.cwd,
-          env: options.env,
+          env: {
+            ...process.env,
+            ...options.env,
+            CODEX_HOME: home,
+          },
           stdio: "inherit",
         },
       );

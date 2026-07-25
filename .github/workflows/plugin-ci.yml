@@ -49,3 +49,9 @@ jobs:
 
       - name: Run e2e tests
         run: npm test
+
+      - name: Install tested Codex CLI
+        run: npm install --global @openai/codex@0.145.0
+
+      - name: Run real Codex CLI acceptance
+        run: npm run test:acceptance:codex

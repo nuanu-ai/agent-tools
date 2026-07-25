@@ -2,11 +2,24 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Implementation correction (2026-07-25):** Codex 0.145.0 does not scope
+> plugins, apps, or MCP servers through profiles. The completed implementation
+> uses persistent isolated homes at `~/.codex/nuanu-flow/{prod,dev}`, selected
+> via `CODEX_HOME`. Both link to the base Codex `auth.json`; Flow auth and
+> plugin state stay mode-local. Profile-specific steps below record the
+> original proposal and are superseded by the isolated-home implementation
+> and its real acceptance suite.
+
 **Goal:** Add persistent, clearly separated production and local-development Codex plugin modes using only repository-local npm scripts and the existing Codex installation.
 
-**Architecture:** Keep `nuanu-flow@nuanu` as the immutable production identity and generate `nuanu-flow-dev@nuanu-dev` into an ignored build directory. Persistent Codex profile files select exactly one identity per session, while focused repository scripts handle packaging, setup, authentication, status, launch, worker propagation, and updates.
+**Architecture:** Keep `nuanu-flow@nuanu` as the immutable production identity
+and generate `nuanu-flow-dev@nuanu-dev` into an ignored build directory.
+Persistent isolated Codex homes select exactly one identity per session, while
+repository scripts handle packaging, setup, authentication, status, launch,
+worker propagation, and updates.
 
-**Tech Stack:** Node.js 22 standard library, Codex CLI 0.145.0 or newer, `node:test`, JSON manifests, TOML profile text, GitHub Actions.
+**Tech Stack:** Node.js 22 standard library, Codex CLI 0.145.0 or newer,
+`node:test`, JSON manifests, managed TOML MCP blocks, GitHub Actions.
 
 ## Global Constraints
 

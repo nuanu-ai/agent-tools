@@ -16,16 +16,20 @@ npm run codex:setup
 npm run codex:status
 ```
 
-Setup keeps both identities installed:
+Setup keeps both identities installed in separate persistent homes:
 
-| Mode | Plugin | MCP | Profile |
+| Mode | Plugin | MCP | Codex home |
 | --- | --- | --- | --- |
-| Production | `nuanu-flow@nuanu` | `flow` at `flow.nuanu.com` | `nuanu-flow-prod` |
-| Development | `nuanu-flow-dev@nuanu-dev` | `flow_dev` at localhost | `nuanu-flow-dev` |
+| Production | `nuanu-flow@nuanu` | `flow` at `flow.nuanu.com` | `~/.codex/nuanu-flow/prod` |
+| Development | `nuanu-flow-dev@nuanu-dev` | `flow_dev` at localhost | `~/.codex/nuanu-flow/dev` |
 
 The generated development plugin is labeled `Nuanu Flow [DEV]`. Never replace
 the `nuanu` marketplace with the checkout manually; setup safely migrates that
-old configuration to the Git-backed production source.
+old configuration to the Git-backed production source. Each mode home links
+to the base Codex `auth.json`, so the existing OpenAI login is reused without
+copying credentials. Flow MCP OAuth and plugin state remain mode-local. Setup
+also removes checkout-owned legacy Nuanu registrations from the base home; it
+does not alter foreign marketplaces or a normal Git-backed production install.
 
 ## Start a session
 
@@ -34,10 +38,10 @@ npm run codex:dev
 npm run codex:prod
 ```
 
-Each command starts a new Codex session with exactly one profile. Development
-prints a large `NUANU FLOW LOCAL DEVELOPMENT` banner, rebuilds changed plugin
-content, and stops if localhost is unavailable. It never falls back to
-production.
+Each command sets `CODEX_HOME` to the selected isolated home and starts a new
+Codex session with exactly one Nuanu Flow plugin. Development prints a large
+`NUANU FLOW LOCAL DEVELOPMENT` banner, rebuilds changed plugin content, and
+stops if localhost is unavailable. It never falls back to production.
 
 After editing skills, metadata, MCP configuration, or worker code, start the
 next development session with `npm run codex:dev`. To force a new generated
@@ -78,7 +82,7 @@ Production never auto-updates during launch:
 npm run codex:update
 ```
 
-Workers default to Codex App Server and the matching profile:
+Workers default to inline Codex App Server execution and the matching home:
 
 ```bash
 npm run worker:dev
@@ -86,7 +90,8 @@ npm run worker:prod
 ```
 
 Local workers require `NUANU_DEV_AGENT_KEY`; production workers require
-`NUANU_AGENT_KEY`.
+`NUANU_AGENT_KEY`. The production wrapper is pinned to `flow.nuanu.com`; the
+development wrapper accepts only localhost/loopback endpoints.
 
 ## Tools Used
 

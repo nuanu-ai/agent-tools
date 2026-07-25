@@ -1,7 +1,16 @@
 # Codex Development and Production Modes
 
 Date: 2026-07-25
-Status: Design approved in conversation; written review pending
+Status: Implemented with the architecture correction below
+
+> **Architecture correction:** Real Codex 0.145.0 acceptance showed that
+> profile sections do not scope plugin, app, or MCP configuration. The
+> implementation therefore uses persistent isolated Codex homes at
+> `~/.codex/nuanu-flow/{prod,dev}`. Each contains one plugin and one MCP
+> server, links to the base Codex `auth.json`, and keeps Flow OAuth/plugin
+> state mode-local. Repository wrappers select the home through `CODEX_HOME`;
+> no `--profile` argument is used. The repository and plugin READMEs are the
+> canonical operating instructions.
 
 ## Goal
 

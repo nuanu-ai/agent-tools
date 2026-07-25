@@ -7,9 +7,15 @@ import { buildDevPackage } from "./dev-package.mjs";
 import {
   DEFAULT_BUILD_ROOT,
   REPO_ROOT,
+  codexModeHome,
+  codexHome as resolveCodexHome,
   modeConfig,
   runCodex,
 } from "./modes.mjs";
+import {
+  ensureSharedCodexAuth,
+  writeModeMcpConfig,
+} from "./setup.mjs";
 import { preflight } from "./status.mjs";
 
 export function parseRunModeArgs(argv) {
@@ -48,13 +54,14 @@ export function parseRunModeArgs(argv) {
   return options;
 }
 
-function modeBanner(mode, installedVersion = "") {
+function modeBanner(mode, installedVersion = "", home = "") {
   const rule = "=".repeat(72);
   return [
     rule,
     `NUANU FLOW ${mode.label}`,
     `Plugin: ${mode.pluginId}${installedVersion ? ` (${installedVersion})` : ""}`,
     `MCP: ${mode.mcpUrl}`,
+    `Codex home: ${home}`,
     rule,
   ].join("\n");
 }
@@ -67,11 +74,21 @@ export async function buildCodexLaunch(modeName, options = {}) {
     env,
     options.keychain,
   );
+  const home = codexModeHome(modeName, {
+    codexHome: options.codexHome,
+    env,
+  });
+  const baseHome = resolveCodexHome({
+    codexHome: options.codexHome,
+    env,
+  });
+  credentials.env.CODEX_HOME = home;
+  credentials.env.NUANU_CODEX_BASE_HOME = baseHome;
   return {
-    args: ["--profile", mode.profile, ...(options.codexArgs || [])],
+    args: [...(options.codexArgs || [])],
     env: credentials.env,
     cwd: options.cwd || process.cwd(),
-    banner: modeBanner(mode, options.installedVersion),
+    banner: modeBanner(mode, options.installedVersion, home),
     auth: credentials.report,
   };
 }
@@ -94,7 +111,10 @@ async function syncDevelopment(options) {
   const env = {
     ...process.env,
     ...options.env,
-    ...(options.codexHome ? { CODEX_HOME: options.codexHome } : {}),
+    CODEX_HOME: codexModeHome("dev", {
+      codexHome: options.codexHome,
+      env: options.env,
+    }),
   };
   const build = await buildDevPackage({
     pluginRoot: path.join(repoRoot, "plugins/nuanu-flow"),
@@ -133,6 +153,7 @@ async function syncDevelopment(options) {
       commandOptions,
     );
   }
+  await writeModeMcpConfig("dev", env.CODEX_HOME, env);
   return build;
 }
 
@@ -156,6 +177,17 @@ export async function runMode(options) {
 
   let build = null;
   if (options.mode === "dev") build = await syncDevelopment(options);
+  const baseHome = resolveCodexHome({
+    codexHome: options.codexHome,
+    env: options.env,
+  });
+  await ensureSharedCodexAuth(
+    baseHome,
+    codexModeHome(options.mode, {
+      codexHome: baseHome,
+      env: options.env,
+    }),
+  );
   const launch = await buildCodexLaunch(options.mode, {
     ...options,
     installedVersion: build?.version,
@@ -163,11 +195,15 @@ export async function runMode(options) {
   const status = await preflight(options.mode, {
     repoRoot: options.repoRoot,
     buildRoot: options.buildRoot,
-    codexHome: options.codexHome,
+    codexHome: baseHome,
     codexBin: options.codexBin,
     env: launch.env,
   });
-  launch.banner = modeBanner(mode, status.installedVersion || build?.version);
+  launch.banner = modeBanner(
+    mode,
+    status.installedVersion || build?.version,
+    status.codexHome,
+  );
   console.log(launch.banner);
   if (options.noLaunch) return 0;
 

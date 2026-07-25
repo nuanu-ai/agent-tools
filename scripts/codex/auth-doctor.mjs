@@ -85,7 +85,7 @@ async function main() {
     );
   } else {
     console.log(
-      `Next: run \`codex --profile ${modeConfig(result.mode).profile} mcp login ${result.mcpName}\` if Codex is not already logged in.`,
+      `Next: run \`npm run codex:auth:${result.mode}\` if Codex is not already logged in.`,
     );
   }
 }

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   REPO_ROOT,
   assertCodexVersion,
+  codexModeHome,
   codexHome as resolveCodexHome,
   runCodex,
 } from "./modes.mjs";
@@ -27,7 +28,14 @@ function installedVersion(body) {
 
 export async function updateProduction(options = {}) {
   const repoRoot = options.repoRoot || REPO_ROOT;
-  const home = resolveCodexHome({ codexHome: options.codexHome });
+  const baseHome = resolveCodexHome({
+    codexHome: options.codexHome,
+    env: options.env,
+  });
+  const home = codexModeHome("prod", {
+    codexHome: baseHome,
+    env: options.env,
+  });
   const env = {
     ...process.env,
     ...options.env,

@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,41 +10,21 @@ import {
 } from "./auth.mjs";
 import {
   DEFAULT_BUILD_ROOT,
+  MODES,
   REPO_ROOT,
   assertCodexVersion,
+  codexModeHome,
   codexHome as resolveCodexHome,
   modeConfig,
   readJson,
   runCodex,
 } from "./modes.mjs";
-import { PROFILE_MARKER, profileText } from "./setup.mjs";
 
 function parseJsonOutput(label, output) {
   try {
     return JSON.parse(output);
   } catch (error) {
     throw new Error(`${label} returned invalid JSON: ${error.message}`);
-  }
-}
-
-async function profileStatus(modeName, home) {
-  const file = path.join(home, `${modeConfig(modeName).profile}.config.toml`);
-  try {
-    const text = await fs.readFile(file, "utf8");
-    return {
-      path: file,
-      exists: true,
-      owned: text.startsWith(PROFILE_MARKER),
-      correct: text === profileText(modeName),
-    };
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-    return {
-      path: file,
-      exists: false,
-      owned: false,
-      correct: false,
-    };
   }
 }
 
@@ -58,7 +37,14 @@ export async function collectStatus(options = {}) {
   const mode = modeConfig(modeName, env);
   const repoRoot = options.repoRoot || REPO_ROOT;
   const buildRoot = options.buildRoot || DEFAULT_BUILD_ROOT;
-  const home = resolveCodexHome({ codexHome: options.codexHome });
+  const baseHome = resolveCodexHome({
+    codexHome: options.codexHome,
+    env,
+  });
+  const home = codexModeHome(modeName, {
+    codexHome: baseHome,
+    env,
+  });
   const childEnv = { ...env, CODEX_HOME: home };
   const codexOptions = {
     codexBin: options.codexBin,
@@ -84,12 +70,14 @@ export async function collectStatus(options = {}) {
   const installed = (plugins.installed || []).find(
     (plugin) => plugin.pluginId === mode.pluginId,
   );
+  const oppositeMode = modeName === "prod" ? MODES.dev : MODES.prod;
+  const oppositeInstalled = (plugins.installed || []).some(
+    (plugin) => plugin.pluginId === oppositeMode.pluginId,
+  );
   const state = await readJson(path.join(buildRoot, "state.json"), null);
   const canonical = await readJson(
     path.join(repoRoot, "plugins/nuanu-flow/.codex-plugin/plugin.json"),
   );
-  const profile = await profileStatus(modeName, home);
-
   const [mcpEndpoint, apiEndpoint, oauth, mcpAuthStatus, credentials] =
     await Promise.all([
       probeEndpoint(mode.mcpUrl, options.endpointTimeoutMs),
@@ -97,7 +85,12 @@ export async function collectStatus(options = {}) {
       probeOAuthMetadata(mode.mcpUrl, {
         timeoutMs: options.endpointTimeoutMs,
       }),
-      readMcpAuthStatus(modeName, codexOptions),
+      readMcpAuthStatus(modeName, {
+        codexHome: baseHome,
+        codexBin: options.codexBin,
+        cwd: repoRoot,
+        env,
+      }),
       resolveModeCredentials(modeName, env, options.keychain),
     ]);
   const authSource =
@@ -119,7 +112,10 @@ export async function collectStatus(options = {}) {
     marketplaceSource:
       marketplaces?.find((entry) => entry.name === mode.marketplace) || null,
     installed: Boolean(installed),
-    profile,
+    baseCodexHome: baseHome,
+    codexHome: home,
+    isolated: Boolean(installed) && !oppositeInstalled,
+    oppositeInstalled,
     endpoints: {
       mcp: mcpEndpoint,
       api: apiEndpoint,
@@ -144,9 +140,9 @@ export async function collectStatus(options = {}) {
 
 export async function preflight(modeName, options = {}) {
   const report = await collectStatus({ ...options, mode: modeName });
-  if (!report.profile.correct) {
+  if (!report.isolated) {
     throw new Error(
-      `${report.label} profile is missing or unmanaged: ${report.profile.path}. Run npm run codex:setup.`,
+      `${report.label} Codex home is not isolated at ${report.codexHome}. Run npm run codex:setup.`,
     );
   }
   if (!report.installed) {
@@ -176,7 +172,7 @@ export function formatStatus(report) {
     `Mode: ${report.label} (${report.mode})`,
     `Plugin: ${report.pluginId}`,
     `Versions: source=${report.sourceVersion} installed=${report.installedVersion || "missing"}${report.generatedVersion ? ` generated=${report.generatedVersion}` : ""}`,
-    `Profile: ${report.profile.path} (${report.profile.correct ? "ready" : "not ready"})`,
+    `Codex home: ${report.codexHome} (${report.isolated ? "isolated" : "not isolated"})`,
     `MCP: ${report.mcpUrl} (${report.endpoints.mcp.status})`,
     `API: ${report.apiUrl} (${report.endpoints.api.status})`,
     `Auth: ${report.auth.source}`,

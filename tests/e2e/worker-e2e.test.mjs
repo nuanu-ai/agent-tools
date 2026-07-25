@@ -113,13 +113,11 @@ if (args[0] === "exec") {
     process.exit(0);
   });
 } else if (args.includes("app-server")) {
-  const appServerIndex = args.indexOf("app-server");
-  if (process.env.FAKE_EXPECT_CODEX_PROFILE) {
-    const profileIndex = args.indexOf("--profile");
-    if (profileIndex === -1 || args[profileIndex + 1] !== process.env.FAKE_EXPECT_CODEX_PROFILE) {
-      process.exit(17);
-    }
-    if (profileIndex > appServerIndex) process.exit(18);
+  if (
+    process.env.FAKE_EXPECT_CODEX_HOME &&
+    process.env.CODEX_HOME !== process.env.FAKE_EXPECT_CODEX_HOME
+  ) {
+    process.exit(17);
   }
   const expected = new Map();
   let approvalsDone = 0;
@@ -274,9 +272,10 @@ async function runWorkerE2E(adapter) {
       ...(adapter === "codex-app-server"
         ? {
             NUANU_CODEX_APP_SERVER_ARGS:
-              "--profile nuanu-flow-dev app-server --stdio",
+              "app-server --stdio",
             NUANU_CODEX_AGENT_KEY_ENV: "NUANU_DEV_AGENT_KEY",
-            FAKE_EXPECT_CODEX_PROFILE: "nuanu-flow-dev",
+            CODEX_HOME: path.join(tmpDir, "codex-home", "dev"),
+            FAKE_EXPECT_CODEX_HOME: path.join(tmpDir, "codex-home", "dev"),
             FAKE_EXPECT_AGENT_KEY_ENV: "NUANU_DEV_AGENT_KEY",
           }
         : {}),

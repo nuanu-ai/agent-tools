@@ -11,7 +11,7 @@ Codex worker.
 ## Recommended worker mode
 
 Use the repository wrapper so the worker and App Server select the same
-production profile:
+production Codex home:
 
 ```bash
 export NUANU_AGENT_KEY=nuanu_flow_...
@@ -45,18 +45,21 @@ Codex's `--output-last-message` file.
 
 | Variable | Meaning |
 | --- | --- |
-| `NUANU_URL` | Optional explicit worker API base, including `/api`. |
+| `NUANU_URL` | Optional worker API base including `/api`; production wrapper overrides must remain on `https://flow.nuanu.com`. |
 | `NUANU_AGENT_KEY` | Durable production remote-agent key. |
 | `NUANU_DEV_AGENT_KEY` | Durable local development remote-agent key. |
 | `NUANU_ADAPTER` | `codex-app-server` recommended, `codex-exec` fallback. |
 | `NUANU_CODEX_BIN` | Codex binary, defaults to `codex`. |
 | `NUANU_CODEX_CWD` | Working directory for task execution, defaults to the OS temp directory. |
-| `NUANU_CODEX_APP_SERVER_ARGS` | Set by the wrapper to the selected profile before `app-server`. |
+| `NUANU_CODEX_APP_SERVER_ARGS` | App Server command, defaults to `app-server --stdio`. |
 | `NUANU_CODEX_APP_SERVER_APPROVAL_MODE` | `deny` by default; set `approve` only in controlled environments. |
 
 The worker exposes each task's short-lived `agent_key` as the selected
-profile's agent-key variable inside Codex, so MCP/API writes made while doing
-the task are attributed to the agent employee.
+mode's agent-key variable inside Codex, so MCP/API writes made while doing the
+task are attributed to the agent employee. `CODEX_HOME` selects the isolated
+production or development plugin and MCP configuration. The Codex subprocess
+receives only that task key; interactive tokens and the durable worker key are
+removed from its environment.
 
 ## Tools Used
 

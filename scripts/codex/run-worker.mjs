@@ -1,9 +1,16 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { MODES, REPO_ROOT, modeConfig } from "./modes.mjs";
+import {
+  MODES,
+  REPO_ROOT,
+  codexModeHome,
+  codexHome as resolveCodexHome,
+  modeConfig,
+} from "./modes.mjs";
+import { ensureSharedCodexAuth } from "./setup.mjs";
 import { preflight } from "./status.mjs";
 
 const WORKER_SCRIPT = path.join(
@@ -25,6 +32,27 @@ function assertLocalUrl(rawUrl, label) {
   }
 }
 
+function assertProductionUrl(rawUrl, label, protocol) {
+  let url;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    throw new Error(`Production worker ${label} is invalid: ${rawUrl}`);
+  }
+  const expectedOrigin = `${protocol}//flow.nuanu.com`;
+  if (
+    url.protocol !== protocol ||
+    url.hostname !== "flow.nuanu.com" ||
+    url.port ||
+    url.username ||
+    url.password
+  ) {
+    throw new Error(
+      `Production worker ${label} must use ${expectedOrigin}: ${rawUrl}`,
+    );
+  }
+}
+
 function workerBanner(mode, env) {
   return [
     "=".repeat(72),
@@ -32,7 +60,7 @@ function workerBanner(mode, env) {
     `API: ${env.NUANU_URL}`,
     `Gateway: ${env.NUANU_GATEWAY_URL}`,
     `Adapter: ${env.NUANU_ADAPTER}`,
-    `Codex profile: ${mode.profile}`,
+    `Codex home: ${env.CODEX_HOME}`,
     "=".repeat(72),
   ].join("\n");
 }
@@ -51,12 +79,16 @@ export function buildWorkerLaunch(modeName, options = {}) {
   delete env[opposite.tokenEnv];
   delete env[opposite.agentKeyEnv];
   delete env[opposite.workspaceEnv];
+  delete env[mode.tokenEnv];
 
   const apiUrl = sourceEnv.NUANU_URL || mode.apiUrl;
   const gatewayUrl = sourceEnv.NUANU_GATEWAY_URL || mode.gatewayUrl;
   if (modeName === "dev") {
     assertLocalUrl(apiUrl, "URL");
     assertLocalUrl(gatewayUrl, "gateway URL");
+  } else {
+    assertProductionUrl(apiUrl, "URL", "https:");
+    assertProductionUrl(gatewayUrl, "gateway URL", "wss:");
   }
 
   env.NUANU_URL = apiUrl;
@@ -65,8 +97,15 @@ export function buildWorkerLaunch(modeName, options = {}) {
   env[mode.agentKeyEnv] = agentKey;
   env.NUANU_ADAPTER = sourceEnv.NUANU_ADAPTER || "codex-app-server";
   env.NUANU_CODEX_APP_SERVER_ARGS =
-    sourceEnv.NUANU_CODEX_APP_SERVER_ARGS ||
-    `--profile ${mode.profile} app-server --stdio`;
+    sourceEnv.NUANU_CODEX_APP_SERVER_ARGS || "app-server --stdio";
+  env.CODEX_HOME = codexModeHome(modeName, {
+    codexHome: options.codexHome,
+    env: sourceEnv,
+  });
+  env.NUANU_CODEX_BASE_HOME = resolveCodexHome({
+    codexHome: options.codexHome,
+    env: sourceEnv,
+  });
   env.NUANU_CODEX_AGENT_KEY_ENV = mode.agentKeyEnv;
   env.NUANU_CODEX_CWD =
     sourceEnv.NUANU_CODEX_CWD || options.cwd || process.cwd();
@@ -113,10 +152,15 @@ export async function runWorker(options) {
   launch.env.NUANU_CODEX_BIN =
     options.codexBin || launch.env.NUANU_CODEX_BIN || "codex";
   if (!options.dryRun) {
+    const baseHome = resolveCodexHome({
+      codexHome: options.codexHome,
+      env: options.env,
+    });
+    await ensureSharedCodexAuth(baseHome, launch.env.CODEX_HOME);
     await preflight(options.mode, {
       repoRoot: options.repoRoot,
       buildRoot: options.buildRoot,
-      codexHome: options.codexHome,
+      codexHome: baseHome,
       codexBin: options.codexBin,
       env: launch.env,
       worker: true,
@@ -124,13 +168,29 @@ export async function runWorker(options) {
   }
   console.log(launch.banner);
   if (options.dryRun) return 0;
-  const result = spawnSync(process.execPath, [launch.script], {
+  const child = spawn(process.execPath, [launch.script], {
     cwd: launch.cwd,
     env: launch.env,
     stdio: "inherit",
   });
-  if (result.error) throw result.error;
-  return result.status ?? 1;
+  const forwardSignal = (signal) => {
+    if (child.exitCode == null) child.kill(signal);
+  };
+  const onSigint = () => forwardSignal("SIGINT");
+  const onSigterm = () => forwardSignal("SIGTERM");
+  process.once("SIGINT", onSigint);
+  process.once("SIGTERM", onSigterm);
+  try {
+    const result = await new Promise((resolve, reject) => {
+      child.once("error", reject);
+      child.once("close", (status, signal) => resolve({ status, signal }));
+    });
+    if (result.status != null) return result.status;
+    return result.signal === "SIGINT" ? 130 : 143;
+  } finally {
+    process.off("SIGINT", onSigint);
+    process.off("SIGTERM", onSigterm);
+  }
 }
 
 async function main() {

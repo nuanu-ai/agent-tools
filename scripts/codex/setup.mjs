@@ -8,49 +8,126 @@ import {
   DEFAULT_BUILD_ROOT,
   REPO_ROOT,
   assertCodexVersion,
+  codexModeHome,
   codexHome as resolveCodexHome,
+  modeConfig,
   runCodex,
 } from "./modes.mjs";
 
-export const PROFILE_MARKER =
-  "# Managed by nuanu-agent-tools codex setup. Do not edit.";
+const MCP_BLOCK_PREFIX = "# >>> nuanu-flow managed MCP:";
 
-export function profileText(mode) {
-  if (mode !== "prod" && mode !== "dev") {
-    throw new Error(`Unknown Nuanu Flow profile mode "${mode}"`);
-  }
-  const prodEnabled = mode === "prod";
-  return `${PROFILE_MARKER}
-[plugins."nuanu-flow@nuanu"]
-enabled = ${prodEnabled}
-
-[plugins."nuanu-flow-dev@nuanu-dev"]
-enabled = ${!prodEnabled}
-`;
+function hasMcpServerDeclaration(text, serverName) {
+  const escaped = serverName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const key = `(?:"${escaped}"|'${escaped}'|${escaped})`;
+  const table = new RegExp(
+    `^\\s*\\[\\s*(?:"mcp_servers"|'mcp_servers'|mcp_servers)\\s*\\.\\s*${key}(?:\\s*\\.|\\s*\\])`,
+    "m",
+  );
+  const dottedKey = new RegExp(
+    `^\\s*(?:"mcp_servers"|'mcp_servers'|mcp_servers)\\s*\\.\\s*${key}\\s*\\.`,
+    "m",
+  );
+  return table.test(text) || dottedKey.test(text);
 }
 
-export async function writeOwnedProfile(file, text) {
-  let current = null;
+function modeMcpBlock(modeName, env) {
+  const mode = modeConfig(modeName, env);
+  const begin = `${MCP_BLOCK_PREFIX}${modeName} >>>`;
+  const end = `# <<< nuanu-flow managed MCP:${modeName} <<<`;
+  return `${begin}
+[mcp_servers.${mode.mcpName}]
+url = ${JSON.stringify(mode.mcpUrl)}
+required = true
+startup_timeout_sec = 20
+tool_timeout_sec = 120
+default_tools_approval_mode = "writes"
+
+[mcp_servers.${mode.mcpName}.env_http_headers]
+"X-Plane-User-Token" = ${JSON.stringify(mode.tokenEnv)}
+"X-Agent-Key" = ${JSON.stringify(mode.agentKeyEnv)}
+"X-Plane-Workspace" = ${JSON.stringify(mode.workspaceEnv)}
+${end}`;
+}
+
+export async function writeModeMcpConfig(
+  modeName,
+  home,
+  env = process.env,
+) {
+  const mode = modeConfig(modeName, env);
+  const file = path.join(home, "config.toml");
+  const begin = `${MCP_BLOCK_PREFIX}${modeName} >>>`;
+  const end = `# <<< nuanu-flow managed MCP:${modeName} <<<`;
+  let current = "";
   try {
     current = await fs.readFile(file, "utf8");
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
-  if (current != null && !current.startsWith(PROFILE_MARKER)) {
-    throw new Error(`Refusing to overwrite unowned Codex profile: ${file}`);
+  const start = current.indexOf(begin);
+  const finish = start < 0 ? -1 : current.indexOf(end, start);
+  if (start >= 0 && finish < 0) {
+    throw new Error(`Managed MCP block is incomplete in ${file}`);
   }
-  if (current === text) {
+  let unmanaged =
+    start < 0
+      ? current
+      : `${current.slice(0, start)}${current.slice(finish + end.length)}`;
+  if (hasMcpServerDeclaration(unmanaged, mode.mcpName)) {
+    throw new Error(
+      `Refusing to replace unmanaged ${mode.mcpName} MCP config in ${file}`,
+    );
+  }
+  unmanaged = unmanaged.trimEnd();
+  const next = `${unmanaged ? `${unmanaged}\n\n` : ""}${modeMcpBlock(
+    modeName,
+    env,
+  )}\n`;
+  if (next === current) {
     await fs.chmod(file, 0o600);
     return "unchanged";
   }
 
-  const parent = path.dirname(file);
-  await fs.mkdir(parent, { recursive: true, mode: 0o700 });
+  await fs.mkdir(home, { recursive: true, mode: 0o700 });
+  await fs.chmod(home, 0o700);
   const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
-  await fs.writeFile(temp, text, { mode: 0o600 });
+  await fs.writeFile(temp, next, { mode: 0o600 });
   await fs.rename(temp, file);
   await fs.chmod(file, 0o600);
-  return current == null ? "created" : "updated";
+  return start < 0 ? "created" : "updated";
+}
+
+export async function ensureSharedCodexAuth(baseHome, modeHome) {
+  const source = path.join(baseHome, "auth.json");
+  const destination = path.join(modeHome, "auth.json");
+  try {
+    await fs.access(source);
+  } catch (error) {
+    if (error.code === "ENOENT") return "source-missing";
+    throw error;
+  }
+
+  await fs.mkdir(modeHome, { recursive: true, mode: 0o700 });
+  await fs.chmod(modeHome, 0o700);
+  try {
+    const stat = await fs.lstat(destination);
+    if (!stat.isSymbolicLink()) {
+      throw new Error(
+        `Refusing to replace existing Codex auth file: ${destination}`,
+      );
+    }
+    const existing = await fs.realpath(destination);
+    if (existing !== (await fs.realpath(source))) {
+      throw new Error(
+        `Refusing to replace foreign Codex auth link: ${destination}`,
+      );
+    }
+    return "unchanged";
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  await fs.symlink(source, destination);
+  return "created";
 }
 
 function normalized(value) {
@@ -75,7 +152,11 @@ export function classifyMarketplace(entry, repoRoot = REPO_ROOT) {
   ) {
     return "this-checkout";
   }
-  if (sourceType === "git" && isNuanuRemote(source)) return "remote";
+  if (sourceType === "git" && isNuanuRemote(source)) {
+    return entry.marketplaceSource?.ref === "main"
+      ? "remote"
+      : "remote-other";
+  }
   return "foreign";
 }
 
@@ -91,16 +172,16 @@ function classifyDevMarketplace(entry, buildRoot) {
   return "foreign";
 }
 
-function commandAction(args, label, kind) {
-  return { kind, args, label };
+function commandAction(mode, home, args, label, kind) {
+  return { mode, home, kind, args, label };
 }
 
-function profileAction(file, mode) {
+function mcpConfigAction(mode, home) {
   return {
-    kind: "profile-write",
-    file,
     mode,
-    label: `write ${mode} profile ${file}`,
+    home,
+    kind: "mcp-config-write",
+    label: `write managed ${mode} MCP config`,
   };
 }
 
@@ -117,48 +198,116 @@ function parseMarketplaceList(stdout) {
   return body.marketplaces;
 }
 
+async function directoryExists(directory) {
+  try {
+    return (await fs.stat(directory)).isDirectory();
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
 export async function setup(options = {}) {
   const repoRoot = options.repoRoot || REPO_ROOT;
   const buildRoot = options.buildRoot || DEFAULT_BUILD_ROOT;
-  const home = resolveCodexHome({ codexHome: options.codexHome });
-  const childEnv = {
+  const baseHome = resolveCodexHome({
+    codexHome: options.codexHome,
+    env: options.env,
+  });
+  const homes = {
+    prod: codexModeHome("prod", {
+      codexHome: baseHome,
+      env: options.env,
+    }),
+    dev: codexModeHome("dev", {
+      codexHome: baseHome,
+      env: options.env,
+    }),
+  };
+  const baseEnv = {
     ...process.env,
     ...options.env,
-    CODEX_HOME: home,
   };
-  const codexOptions = {
+  const codexOptionsForHome = (home) => ({
     codexBin: options.codexBin || "codex",
     cwd: repoRoot,
-    env: childEnv,
+    env: {
+      ...baseEnv,
+      CODEX_HOME: home,
+    },
+  });
+  const codexOptions = (mode) => codexOptionsForHome(homes[mode]);
+  if (!options.dryRun) {
+    await Promise.all(
+      Object.values(homes).map((home) =>
+        fs.mkdir(home, { recursive: true, mode: 0o700 }),
+      ),
+    );
+    await Promise.all(
+      Object.values(homes).map((home) => fs.chmod(home, 0o700)),
+    );
+  }
+  const versions = {
+    prod: runCodex(["--version"], codexOptions("prod")),
+    dev: runCodex(["--version"], codexOptions("dev")),
   };
-
-  const version = runCodex(["--version"], codexOptions);
-  assertCodexVersion(version.stdout);
+  assertCodexVersion(versions.prod.stdout);
+  assertCodexVersion(versions.dev.stdout);
   const build = await buildDevPackage({
     pluginRoot:
       options.pluginRoot || path.join(repoRoot, "plugins/nuanu-flow"),
     buildRoot,
-    env: childEnv,
+    env: baseEnv,
     now: options.now,
     force: options.force,
   });
-  const listed = runCodex(
-    ["plugin", "marketplace", "list", "--json"],
-    codexOptions,
-  );
-  const marketplaces = parseMarketplaceList(listed.stdout);
-  const production = marketplaces.find((entry) => entry.name === "nuanu");
-  const development = marketplaces.find((entry) => entry.name === "nuanu-dev");
+  let baseMarketplaces = [];
+  let baseInstalled = [];
+  if (await directoryExists(baseHome)) {
+    baseMarketplaces = parseMarketplaceList(
+      runCodex(
+        ["plugin", "marketplace", "list", "--json"],
+        codexOptionsForHome(baseHome),
+      ).stdout,
+    );
+    const basePlugins = JSON.parse(
+      runCodex(
+        ["plugin", "list", "--available", "--json"],
+        codexOptionsForHome(baseHome),
+      ).stdout,
+    );
+    baseInstalled = basePlugins.installed || [];
+  }
+  const prodMarketplaces = (await directoryExists(homes.prod))
+    ? parseMarketplaceList(
+        runCodex(
+          ["plugin", "marketplace", "list", "--json"],
+          codexOptions("prod"),
+        ).stdout,
+      )
+    : [];
+  const production = prodMarketplaces.find((entry) => entry.name === "nuanu");
   const productionClass = production
     ? classifyMarketplace(production, repoRoot)
     : "absent";
-  const developmentClass = classifyDevMarketplace(development, buildRoot);
-
   if (productionClass === "foreign") {
     throw new Error(
       "Refusing to replace a foreign marketplace named nuanu. Remove or rename it explicitly first.",
     );
   }
+
+  const devMarketplaces = (await directoryExists(homes.dev))
+    ? parseMarketplaceList(
+        runCodex(
+          ["plugin", "marketplace", "list", "--json"],
+          codexOptions("dev"),
+        ).stdout,
+      )
+    : [];
+  const development = devMarketplaces.find(
+    (entry) => entry.name === "nuanu-dev",
+  );
+  const developmentClass = classifyDevMarketplace(development, buildRoot);
   if (developmentClass === "foreign") {
     throw new Error(
       "Refusing to replace a foreign marketplace named nuanu-dev. Remove or rename it explicitly first.",
@@ -166,11 +315,80 @@ export async function setup(options = {}) {
   }
 
   const actions = [];
-  if (productionClass === "this-checkout") {
+  const baseProduction = baseMarketplaces.find(
+    (entry) => entry.name === "nuanu",
+  );
+  const baseDevelopment = baseMarketplaces.find(
+    (entry) => entry.name === "nuanu-dev",
+  );
+  if (
+    baseDevelopment &&
+    classifyDevMarketplace(baseDevelopment, buildRoot) === "this-build"
+  ) {
+    if (
+      baseInstalled.some(
+        (plugin) => plugin.pluginId === "nuanu-flow-dev@nuanu-dev",
+      )
+    ) {
+      actions.push(
+        commandAction(
+          "base",
+          baseHome,
+          ["plugin", "remove", "nuanu-flow-dev@nuanu-dev", "--json"],
+          "remove legacy development plugin from base Codex home",
+          "plugin-remove",
+        ),
+      );
+    }
     actions.push(
       commandAction(
+        "base",
+        baseHome,
+        ["plugin", "marketplace", "remove", "nuanu-dev", "--json"],
+        "remove legacy development marketplace from base Codex home",
+        "marketplace-remove",
+      ),
+    );
+  }
+  if (
+    baseProduction &&
+    classifyMarketplace(baseProduction, repoRoot) === "this-checkout"
+  ) {
+    if (
+      baseInstalled.some(
+        (plugin) => plugin.pluginId === "nuanu-flow@nuanu",
+      )
+    ) {
+      actions.push(
+        commandAction(
+          "base",
+          baseHome,
+          ["plugin", "remove", "nuanu-flow@nuanu", "--json"],
+          "remove legacy checkout plugin from base Codex home",
+          "plugin-remove",
+        ),
+      );
+    }
+    actions.push(
+      commandAction(
+        "base",
+        baseHome,
         ["plugin", "marketplace", "remove", "nuanu", "--json"],
-        "remove old checkout-backed production marketplace",
+        "remove legacy checkout marketplace from base Codex home",
+        "marketplace-remove",
+      ),
+    );
+  }
+  if (
+    productionClass === "this-checkout" ||
+    productionClass === "remote-other"
+  ) {
+    actions.push(
+      commandAction(
+        "prod",
+        homes.prod,
+        ["plugin", "marketplace", "remove", "nuanu", "--json"],
+        "remove noncanonical production marketplace",
         "marketplace-remove",
       ),
     );
@@ -178,6 +396,8 @@ export async function setup(options = {}) {
   if (productionClass !== "remote") {
     actions.push(
       commandAction(
+        "prod",
+        homes.prod,
         [
           "plugin",
           "marketplace",
@@ -192,9 +412,21 @@ export async function setup(options = {}) {
       ),
     );
   }
+  actions.push(
+    commandAction(
+      "prod",
+      homes.prod,
+      ["plugin", "add", "nuanu-flow@nuanu", "--json"],
+      "install production plugin",
+      "plugin-add",
+    ),
+    mcpConfigAction("prod", homes.prod),
+  );
   if (developmentClass === "this-build") {
     actions.push(
       commandAction(
+        "dev",
+        homes.dev,
         ["plugin", "marketplace", "remove", "nuanu-dev", "--json"],
         "refresh local development marketplace",
         "marketplace-remove",
@@ -203,34 +435,36 @@ export async function setup(options = {}) {
   }
   actions.push(
     commandAction(
+      "dev",
+      homes.dev,
       ["plugin", "marketplace", "add", build.marketplaceRoot, "--json"],
       "register local development marketplace",
       "marketplace-add",
     ),
     commandAction(
-      ["plugin", "add", "nuanu-flow@nuanu", "--json"],
-      "install production plugin",
-      "plugin-add",
-    ),
-    commandAction(
+      "dev",
+      homes.dev,
       ["plugin", "add", "nuanu-flow-dev@nuanu-dev", "--json"],
       "install development plugin",
       "plugin-add",
     ),
+    mcpConfigAction("dev", homes.dev),
   );
 
-  const prodProfile = path.join(home, "nuanu-flow-prod.config.toml");
-  const devProfile = path.join(home, "nuanu-flow-dev.config.toml");
-  actions.push(profileAction(prodProfile, "prod"), profileAction(devProfile, "dev"));
-
   if (!options.dryRun) {
+    await Promise.all(
+      Object.values(homes).map((home) =>
+        ensureSharedCodexAuth(baseHome, home),
+      ),
+    );
     for (const action of actions) {
       if (action.args) {
-        runCodex(action.args, codexOptions);
+        runCodex(action.args, codexOptionsForHome(action.home));
       } else {
-        action.result = await writeOwnedProfile(
-          action.file,
-          profileText(action.mode),
+        action.result = await writeModeMcpConfig(
+          action.mode,
+          action.home,
+          baseEnv,
         );
       }
     }
@@ -238,8 +472,9 @@ export async function setup(options = {}) {
 
   return {
     dryRun: Boolean(options.dryRun),
-    codexVersion: String(version.stdout).trim(),
-    codexHome: home,
+    codexVersion: String(versions.prod.stdout).trim(),
+    codexHome: baseHome,
+    homes,
     build,
     actions,
   };
@@ -264,7 +499,9 @@ function parseArgs(argv) {
 
 function printReport(report) {
   console.log(`Codex: ${report.codexVersion}`);
-  console.log(`Codex home: ${report.codexHome}`);
+  console.log(`Base Codex home: ${report.codexHome}`);
+  console.log(`Production home: ${report.homes.prod}`);
+  console.log(`Development home: ${report.homes.dev}`);
   console.log(
     `Development package: ${report.build.version} (${report.build.changed ? "rebuilt" : "unchanged"})`,
   );

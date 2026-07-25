@@ -12,6 +12,7 @@ import {
 } from "./modes.mjs";
 
 const DEFAULT_PLUGIN_ROOT = path.join(REPO_ROOT, "plugins/nuanu-flow");
+const DEV_PACKAGE_FORMAT_VERSION = 2;
 
 async function walkFiles(root, current = root) {
   const entries = await fs.readdir(current, { withFileTypes: true });
@@ -73,13 +74,18 @@ function developmentManifest(source, { version, mcpUrl }) {
   if (!sourceMcp) {
     throw new Error("Production Codex manifest must define mcpServers.flow");
   }
+  const {
+    auth: _productionAuth,
+    oauth: _productionOAuth,
+    ...developmentMcp
+  } = sourceMcp;
   return {
     ...source,
     name: "nuanu-flow-dev",
     version,
     mcpServers: {
       flow_dev: {
-        ...sourceMcp,
+        ...developmentMcp,
         url: mcpUrl,
         env_http_headers: {
           "X-Plane-User-Token": "NUANU_DEV_TOKEN",
@@ -114,7 +120,7 @@ function developmentMarketplace() {
         },
         policy: {
           installation: "AVAILABLE",
-          authentication: "ON_USE",
+          authentication: "ON_INSTALL",
         },
         category: "Productivity",
       },
@@ -181,6 +187,7 @@ export async function buildDevPackage(options = {}) {
     !options.force &&
     previous?.fingerprint === fingerprint &&
     previous?.mcpUrl === mode.mcpUrl &&
+    previous?.formatVersion === DEV_PACKAGE_FORMAT_VERSION &&
     (await outputExists(buildRoot))
   ) {
     return {
@@ -229,6 +236,7 @@ export async function buildDevPackage(options = {}) {
       `${JSON.stringify(
         {
           fingerprint,
+          formatVersion: DEV_PACKAGE_FORMAT_VERSION,
           version,
           mcpUrl: mode.mcpUrl,
           generatedAt: now.toISOString(),

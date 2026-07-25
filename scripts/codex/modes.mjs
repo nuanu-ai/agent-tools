@@ -15,7 +15,6 @@ export const MODES = Object.freeze({
   prod: Object.freeze({
     name: "prod",
     label: "PRODUCTION",
-    profile: "nuanu-flow-prod",
     marketplace: "nuanu",
     pluginName: "nuanu-flow",
     pluginId: "nuanu-flow@nuanu",
@@ -30,7 +29,6 @@ export const MODES = Object.freeze({
   dev: Object.freeze({
     name: "dev",
     label: "LOCAL DEVELOPMENT",
-    profile: "nuanu-flow-dev",
     marketplace: "nuanu-dev",
     pluginName: "nuanu-flow-dev",
     pluginId: "nuanu-flow-dev@nuanu-dev",
@@ -88,11 +86,26 @@ export function assertCodexVersion(
 }
 
 export function codexHome(options = {}) {
-  return (
+  const env = options.env || process.env;
+  const selected =
     options.codexHome ||
-    process.env.CODEX_HOME ||
-    path.join(os.homedir(), ".codex")
-  );
+    env.NUANU_CODEX_BASE_HOME ||
+    env.CODEX_HOME ||
+    path.join(os.homedir(), ".codex");
+  const modeName = path.basename(selected);
+  const modeParent = path.dirname(selected);
+  if (
+    (modeName === "prod" || modeName === "dev") &&
+    path.basename(modeParent) === "nuanu-flow"
+  ) {
+    return path.dirname(modeParent);
+  }
+  return selected;
+}
+
+export function codexModeHome(name, options = {}) {
+  modeConfig(name, options.env || process.env);
+  return path.join(codexHome(options), "nuanu-flow", name);
 }
 
 export function runCodex(args, options = {}) {

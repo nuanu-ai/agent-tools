@@ -8,6 +8,8 @@
     "validate:dev": "npm run build:codex:dev && node scripts/validate-plugins.mjs --codex-plugin .build/codex-dev/plugins/nuanu-flow-dev --codex-marketplace .build/codex-dev/.agents/plugins/marketplace.json",
     "test": "node --test tests/e2e/*.test.mjs",
     "test:e2e": "node --test tests/e2e/*.test.mjs",
+    "test:acceptance:codex": "node tests/acceptance/codex-dev-modes-acceptance.mjs",
+    "test:acceptance:codex:model": "node tests/acceptance/codex-dev-modes-acceptance.mjs --model",
     "codex:setup": "node scripts/codex/setup.mjs",
     "codex:dev": "node scripts/codex/run-mode.mjs dev",
     "codex:prod": "node scripts/codex/run-mode.mjs prod",
@@ -19,7 +21,6 @@
     "worker:dev": "node scripts/codex/run-worker.mjs dev",
     "worker:prod": "node scripts/codex/run-worker.mjs prod",
     "plugin:version": "node scripts/codex/version.mjs",
-    "codex:dev-install": "node scripts/codex/dev-install.mjs --cachebuster",
     "codex:auth-doctor": "node scripts/codex/auth-doctor.mjs"
   }
 }
