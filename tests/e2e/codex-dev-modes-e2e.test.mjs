@@ -38,6 +38,11 @@ import {
   parseRunModeArgs,
 } from "../../scripts/codex/run-mode.mjs";
 import { buildWorkerLaunch } from "../../scripts/codex/run-worker.mjs";
+import {
+  nextVersion,
+  updateManifestVersion,
+} from "../../scripts/codex/version.mjs";
+import { updateProduction } from "../../scripts/codex/update.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const sourcePluginRoot = path.join(repoRoot, "plugins/nuanu-flow");
@@ -922,4 +927,177 @@ test("buildWorkerLaunch rejects missing keys and production endpoints in develop
       }),
     /development worker URL must use localhost/i,
   );
+});
+
+test("nextVersion supports release increments and rejects invalid requests", () => {
+  assert.equal(nextVersion("0.1.0", "patch"), "0.1.1");
+  assert.equal(nextVersion("0.1.0", "minor"), "0.2.0");
+  assert.equal(nextVersion("0.1.0", "major"), "1.0.0");
+  assert.equal(nextVersion("0.1.0", "1.4.2"), "1.4.2");
+  assert.throws(
+    () => nextVersion("0.1.0", "banana"),
+    /patch, minor, major/,
+  );
+  assert.throws(
+    () => nextVersion("0.1.0+local", "patch"),
+    /canonical semantic version/,
+  );
+});
+
+test("updateManifestVersion changes only the canonical version and honors dry-run", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-version-"));
+  const manifestPath = path.join(tempRoot, "plugin.json");
+  const original = {
+    name: "nuanu-flow",
+    version: "0.1.0",
+    description: "fixture",
+  };
+  await fs.writeFile(manifestPath, `${JSON.stringify(original, null, 2)}\n`);
+  try {
+    const dry = await updateManifestVersion({
+      manifestPath,
+      request: "minor",
+      dryRun: true,
+    });
+    assert.deepEqual(dry, {
+      oldVersion: "0.1.0",
+      newVersion: "0.2.0",
+      changed: false,
+      dryRun: true,
+    });
+    assert.deepEqual(await readJson(manifestPath), original);
+
+    const written = await updateManifestVersion({
+      manifestPath,
+      request: "patch",
+    });
+    assert.deepEqual(written, {
+      oldVersion: "0.1.0",
+      newVersion: "0.1.1",
+      changed: true,
+      dryRun: false,
+    });
+    assert.equal(
+      await fs.readFile(manifestPath, "utf8"),
+      `{
+  "name": "nuanu-flow",
+  "version": "0.1.1",
+  "description": "fixture"
+}
+`,
+    );
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("updateProduction upgrades only Git-backed production without removing the plugin", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-update-"));
+  const statePath = path.join(tempRoot, "state.json");
+  const logPath = path.join(tempRoot, "log.jsonl");
+  const codexHome = path.join(tempRoot, "codex-home");
+  await fs.writeFile(
+    statePath,
+    `${JSON.stringify({
+      marketplaces: [
+        {
+          name: "nuanu",
+          root: "/fake/git/nuanu-ai-agent-tools",
+          marketplaceSource: {
+            sourceType: "git",
+            source: "nuanu-ai/agent-tools",
+            ref: "main",
+          },
+        },
+      ],
+      installed: [
+        {
+          pluginId: "nuanu-flow@nuanu",
+          name: "nuanu-flow",
+          marketplaceName: "nuanu",
+          version: "0.1.0",
+          installed: true,
+          enabled: true,
+        },
+      ],
+      mcpAuth: {},
+    })}\n`,
+  );
+  try {
+    const report = await updateProduction({
+      repoRoot,
+      codexHome,
+      codexBin: fakeCodexBin,
+      env: {
+        ...process.env,
+        FAKE_CODEX_STATE: statePath,
+        FAKE_CODEX_LOG: logPath,
+      },
+    });
+    assert.equal(report.oldVersion, "0.1.0");
+    assert.equal(report.newVersion, "0.1.0");
+    assert.equal(report.changed, false);
+
+    const commands = await readCommandLog(logPath);
+    const mutations = commands.filter(
+      (args) =>
+        args[0] === "plugin" &&
+        (args[1] === "add" ||
+          (args[1] === "marketplace" && args[2] === "upgrade")),
+    );
+    assert.deepEqual(mutations, [
+      ["plugin", "marketplace", "upgrade", "nuanu", "--json"],
+      ["plugin", "add", "nuanu-flow@nuanu", "--json"],
+    ]);
+    assert.equal(commands.some((args) => args.includes("remove")), false);
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("updateProduction refuses a local production marketplace before mutation", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-update-local-"));
+  const statePath = path.join(tempRoot, "state.json");
+  const logPath = path.join(tempRoot, "log.jsonl");
+  await fs.writeFile(
+    statePath,
+    `${JSON.stringify({
+      marketplaces: [
+        {
+          name: "nuanu",
+          root: repoRoot,
+          marketplaceSource: { sourceType: "local", source: repoRoot },
+        },
+      ],
+      installed: [],
+      mcpAuth: {},
+    })}\n`,
+  );
+  try {
+    await assert.rejects(
+      updateProduction({
+        repoRoot,
+        codexHome: path.join(tempRoot, "codex-home"),
+        codexBin: fakeCodexBin,
+        env: {
+          ...process.env,
+          FAKE_CODEX_STATE: statePath,
+          FAKE_CODEX_LOG: logPath,
+        },
+      }),
+      /npm run codex:setup/,
+    );
+    const commands = await readCommandLog(logPath);
+    assert.equal(
+      commands.some(
+        (args) =>
+          args.includes("upgrade") ||
+          args.includes("add") ||
+          args.includes("remove"),
+      ),
+      false,
+    );
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
 });

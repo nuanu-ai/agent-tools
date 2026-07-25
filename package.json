@@ -10,11 +10,13 @@
     "codex:dev": "node scripts/codex/run-mode.mjs dev",
     "codex:prod": "node scripts/codex/run-mode.mjs prod",
     "codex:status": "node scripts/codex/status.mjs",
+    "codex:update": "node scripts/codex/update.mjs",
     "codex:refresh": "node scripts/codex/run-mode.mjs dev --force-refresh --no-launch",
     "codex:auth:prod": "node scripts/codex/auth.mjs prod",
     "codex:auth:dev": "node scripts/codex/auth.mjs dev",
     "worker:dev": "node scripts/codex/run-worker.mjs dev",
     "worker:prod": "node scripts/codex/run-worker.mjs prod",
+    "plugin:version": "node scripts/codex/version.mjs",
     "codex:dev-install": "node scripts/codex/dev-install.mjs --cachebuster",
     "codex:auth-doctor": "node scripts/codex/auth-doctor.mjs"
   }
