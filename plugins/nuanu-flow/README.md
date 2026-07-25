@@ -25,14 +25,16 @@ plugins/nuanu-flow --strict`.
 
 ## Install for Codex
 
-Production-only:
+Give Codex this single line:
 
-```bash
-codex plugin marketplace add nuanu-ai/agent-tools
-codex plugin add nuanu-flow@nuanu
+```text
+Read and follow https://flow.nuanu.com/install.md
 ```
 
-Start a new Codex session after installation or upgrade.
+Codex handles marketplace installation and browser authentication. The OAuth
+screen lets the user sign in or create an account; after the one required
+fresh session, the `onboarding` skill creates a first workspace
+conversationally when needed.
 
 For Nuanu Flow contributors, install production and development side by side:
 
@@ -96,7 +98,7 @@ without writing plaintext credentials into the repository.
 ## What's inside
 
 - **`skills/`** — open-standard Agent Skills: `nuanu-flow` (orientation +
-  routing), `work-items`, `workspace-setup`, `project-setup`,
+  routing), `onboarding`, `work-items`, `workspace-setup`, `project-setup`,
   `bpmn-processes`, `artifacts`, `remote-worker`, plus Codex setup and Codex
   remote-worker guidance.
 - **`commands/`** — `/nuanu-flow:setup` (env + connectivity check),
@@ -142,13 +144,14 @@ Optional but recommended — clickable footer badges for work-item IDs
 
 ## Run as a remote agent
 
-1. In the app, create an agent employee with runtime **remote** — the create
-   form shows the worker token and connect snippets up front.
-2. `/nuanu-flow:launch-remote-agent nuanu_flow_…` — resolves the API URL,
-   starts the worker, and prints "remote agent connected" once live.
+1. In the app, create an agent employee with runtime **remote**.
+2. Copy the generated one-line Codex prompt and give it to Codex. It follows
+   `https://flow.nuanu.com/connect/remote-agent.md`, installs this plugin if
+   needed, exchanges the single-use enrollment token without exposing the
+   durable credential, and starts the App Server worker.
 
-Manual alternative: `export NUANU_URL=.../api NUANU_AGENT_KEY=nuanu_flow_...`
-then `/nuanu-flow:worker` — or headless:
+Advanced manual alternative: set `NUANU_URL` and `NUANU_AGENT_KEY`, then use
+`/nuanu-flow:worker` — or headless:
 `node plugins/nuanu-flow/scripts/worker/worker.mjs`
 
 For Codex workers, prefer App Server:

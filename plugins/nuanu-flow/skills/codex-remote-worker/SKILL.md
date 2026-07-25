@@ -10,13 +10,19 @@ Codex worker.
 
 ## Recommended worker mode
 
-Use the repository wrapper so the worker and App Server select the same
-production Codex home:
+For a user-facing production connection, follow the copied one-line prompt:
 
-```bash
-export NUANU_AGENT_KEY=nuanu_flow_...
-npm run worker:prod
+```text
+Read and follow https://flow.nuanu.com/connect/remote-agent.md using enrollment token nuanu_join_…
 ```
+
+This exchanges the short-lived token through the bundled helper, keeps the
+durable credential outside model-visible output, and starts the worker with
+the `codex-app-server` adapter.
+
+For repository development, use the wrappers so the worker and App Server
+select the same isolated Codex home. These advanced wrappers intentionally
+keep explicit `NUANU_AGENT_KEY` / `NUANU_DEV_AGENT_KEY` overrides.
 
 For local Flow development:
 

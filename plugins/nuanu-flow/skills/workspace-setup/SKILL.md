@@ -5,6 +5,10 @@ description: Onboard a new Nuanu Flow workspace from a business brief — captur
 
 # Workspace setup
 
+This skill enriches a workspace that already exists. It does not create a
+workspace. For a first workspace, a new account, or zero workspaces, use the
+`onboarding` skill first.
+
 Call tools via `execute_tool("<name>", {...})`. The flow is deliberately
 conversational-first: **brief → wiki → objectives + milestones → members →
 hand-off**. Do not create anything before step 1 is done.

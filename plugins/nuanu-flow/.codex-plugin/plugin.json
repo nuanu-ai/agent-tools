@@ -1,7 +1,7 @@
 {
   "name": "nuanu-flow",
-  "version": "0.1.0",
-  "description": "Work with Nuanu Flow from Codex: projects, work items, BPMN processes, artifacts, decisions, and remote agent workers.",
+  "version": "0.2.0",
+  "description": "Install and onboard Nuanu Flow from one prompt, then work with projects, processes, artifacts, decisions, and remote agents.",
   "author": {
     "name": "Nuanu",
     "email": "albert@nuanu.com",
@@ -37,8 +37,8 @@
   },
   "interface": {
     "displayName": "Nuanu Flow",
-    "shortDescription": "Nuanu Flow MCP tools, domain skills, and remote agent worker support for Codex.",
-    "longDescription": "Work with Nuanu Flow from Codex using OAuth-ready hosted MCP configuration, environment-token auth for headless workers, domain skills for work items and BPMN processes, and a bundled worker daemon with Codex App Server support.",
+    "shortDescription": "One-prompt setup, Flow MCP tools, onboarding, and remote Codex workers.",
+    "longDescription": "Install from one versionless prompt, sign in or sign up through OAuth, create a first workspace conversationally, and connect a remote Codex worker through a single-use enrollment token. Advanced environment-token and isolated development profiles remain available.",
     "developerName": "Nuanu",
     "category": "Productivity",
     "capabilities": [
@@ -52,7 +52,7 @@
     "defaultPrompt": [
       "Show my Nuanu Flow work items and suggest my next action.",
       "Create a Nuanu Flow work item from this bug report.",
-      "Run a Nuanu Flow process and summarize the result."
+      "Continue Nuanu Flow setup."
     ]
   }
 }

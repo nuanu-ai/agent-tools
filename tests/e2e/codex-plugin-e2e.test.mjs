@@ -10,6 +10,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const pluginRoot = path.join(repoRoot, "plugins/nuanu-flow");
 const manifestPath = path.join(pluginRoot, ".codex-plugin/plugin.json");
 const marketplacePath = path.join(repoRoot, ".agents/plugins/marketplace.json");
+const installPrompt = "Read and follow https://flow.nuanu.com/install.md";
+const remoteGuideUrl = "https://flow.nuanu.com/connect/remote-agent.md";
 
 async function readJson(file) {
   return JSON.parse(await fs.readFile(file, "utf8"));
@@ -103,4 +105,23 @@ test("Codex auth doctor detects disabled OAuth metadata", async () => {
   } finally {
     await server.close();
   }
+});
+
+test("public plugin exposes the one-prompt onboarding and remote enrollment flow", async () => {
+  const manifest = await readJson(manifestPath);
+  const rootReadme = await fs.readFile(path.join(repoRoot, "README.md"), "utf8");
+  const pluginReadme = await fs.readFile(path.join(pluginRoot, "README.md"), "utf8");
+  const orientation = await fs.readFile(path.join(pluginRoot, "skills/nuanu-flow/SKILL.md"), "utf8");
+
+  await fs.access(path.join(pluginRoot, "skills/onboarding/SKILL.md"));
+  await fs.access(path.join(pluginRoot, "scripts/worker/enroll.mjs"));
+  await fs.access(path.join(pluginRoot, "scripts/worker/credentials.mjs"));
+
+  assert.match(rootReadme, new RegExp(installPrompt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(pluginReadme, new RegExp(installPrompt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(pluginReadme, new RegExp(remoteGuideUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(orientation, /first workspace|zero workspaces/i);
+  assert.match(orientation, /`onboarding`/);
+  assert.equal(manifest.mcpServers.flow.url, "https://flow.nuanu.com/mcp-server/mcp");
+  assert.equal(manifest.mcpServers.flow.auth, "oauth");
 });

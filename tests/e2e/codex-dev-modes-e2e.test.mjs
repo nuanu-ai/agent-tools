@@ -72,6 +72,10 @@ async function readJson(file) {
   return JSON.parse(await fs.readFile(file, "utf8"));
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 async function readCommandLog(file) {
   try {
     return (await fs.readFile(file, "utf8"))
@@ -190,6 +194,7 @@ test("buildDevPackage generates an isolated development marketplace without muta
   const fixture = await makeTempPlugin();
   const manifestPath = path.join(fixture.pluginRoot, ".codex-plugin/plugin.json");
   const originalManifest = await fs.readFile(manifestPath, "utf8");
+  const sourceVersion = JSON.parse(originalManifest).version;
   try {
     const result = await buildDevPackage({
       pluginRoot: fixture.pluginRoot,
@@ -201,7 +206,7 @@ test("buildDevPackage generates an isolated development marketplace without muta
     assert.equal(result.changed, true);
     assert.match(
       result.version,
-      /^0\.1\.0\+codex\.local-20260725-120000\.[a-f0-9]{12}$/,
+      new RegExp(`^${escapeRegExp(sourceVersion)}\\+codex\\.local-20260725-120000\\.[a-f0-9]{12}$`),
     );
     assert.equal(result.marketplaceRoot, fixture.buildRoot);
     assert.equal(
@@ -957,7 +962,8 @@ test("collectStatus reports selected mode health and auth without exposing crede
     assert.equal(report.endpoints.api.status, "reachable");
     assert.equal(report.auth.source, "environment-token");
     assert.equal(report.oauth.status, "oauth-disabled");
-    assert.match(report.installedVersion, /^0\.1\.0\+codex\.local-/);
+    const sourceVersion = (await readJson(path.join(sourcePluginRoot, ".codex-plugin/plugin.json"))).version;
+    assert.match(report.installedVersion, new RegExp(`^${escapeRegExp(sourceVersion)}\\+codex\\.local-`));
     assert.doesNotMatch(JSON.stringify(report), /status-(?:dev|prod)-secret/);
   } finally {
     await fixture.close();

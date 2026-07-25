@@ -321,3 +321,73 @@ test("worker completes a task through codex-app-server and handles server reques
   assert.equal(result.body.output, "app-server result");
   assert.match(stdout, /adapter=codex-app-server/);
 });
+
+test("bundled enrollment exchanges once, stores privately, and feeds worker config", async () => {
+  const [{ enroll }, { createFileCredentialStore }, { loadConfig }] = await Promise.all([
+    import("../../plugins/nuanu-flow/scripts/worker/enroll.mjs"),
+    import("../../plugins/nuanu-flow/scripts/worker/credentials.mjs"),
+    import("../../plugins/nuanu-flow/scripts/worker/config.mjs"),
+  ]);
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-public-enroll-"));
+  const credentialPath = path.join(tmpDir, "credentials", "worker.json");
+  const credentialStore = createFileCredentialStore({ filePath: credentialPath });
+  const enrollmentToken = `nuanu_join_${"ab".repeat(32)}`;
+  const agentKey = `nuanu_flow_${"cd".repeat(32)}`;
+  const agent = {
+    id: "24d91802-8f82-43ef-8978-d69dc612ad47",
+    display_name: "Codex Worker",
+    workspace: "nuanu",
+  };
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url, options });
+    if (url.endsWith("/agent-worker/enroll/")) {
+      return new Response(
+        JSON.stringify({
+          agent_key: agentKey,
+          api_url: "https://flow.nuanu.com/api",
+          agent,
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        agent_id: agent.id,
+        display_name: agent.display_name,
+        workspace: agent.workspace,
+        is_active: true,
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  };
+
+  try {
+    const first = await enroll({
+      enrollmentToken,
+      credentialStore,
+      fetchImpl,
+    });
+    const second = await enroll({
+      enrollmentToken,
+      credentialStore,
+      fetchImpl,
+    });
+    const config = loadConfig({ env: {}, credentialStore });
+    const storedStat = await fs.stat(credentialPath);
+
+    assert.deepEqual(first, { status: "enrolled", agent });
+    assert.deepEqual(second, { status: "already_enrolled", agent });
+    assert.equal(calls.filter(({ url }) => url.endsWith("/agent-worker/enroll/")).length, 1);
+    assert.deepEqual(JSON.parse(calls[0].options.body), {
+      enrollment_token: enrollmentToken,
+    });
+    assert.equal(calls[0].url.includes(enrollmentToken), false);
+    assert.equal(JSON.stringify(first).includes(agentKey), false);
+    assert.equal(storedStat.mode & 0o777, 0o600);
+    assert.equal(config.baseUrl, "https://flow.nuanu.com/api");
+    assert.equal(config.agentKey, agentKey);
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+});

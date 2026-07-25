@@ -9,14 +9,14 @@ export class NuanuClient {
     this.agentKey = agentKey;
   }
 
-  async _post(path, body) {
+  async _request(path, { method = "GET", body } = {}) {
     const res = await fetch(`${this.baseUrl}${path}`, {
-      method: "POST",
+      method,
       headers: {
-        "Content-Type": "application/json",
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
         "X-Agent-Key": this.agentKey,
       },
-      body: JSON.stringify(body || {}),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     const text = await res.text();
     let data = {};
@@ -31,6 +31,14 @@ export class NuanuClient {
       throw err;
     }
     return data;
+  }
+
+  _post(path, body) {
+    return this._request(path, { method: "POST", body: body || {} });
+  }
+
+  whoami() {
+    return this._request("/agent-worker/whoami/");
   }
 
   heartbeat(workerId) {

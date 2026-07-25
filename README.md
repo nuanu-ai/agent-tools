@@ -18,14 +18,16 @@ CI/scripted use can set `NUANU_TOKEN`, and remote agent workers set
 
 ## Install (Codex)
 
-For production-only use:
+Give Codex this single line:
 
-```bash
-codex plugin marketplace add nuanu-ai/agent-tools
-codex plugin add nuanu-flow@nuanu
+```text
+Read and follow https://flow.nuanu.com/install.md
 ```
 
-Start a new Codex session after installation.
+Codex installs or updates the plugin, opens browser authentication where the
+user can sign in or create an account, and continues with conversational
+workspace setup. A single fresh Codex session is required after first install
+so the new plugin tools can load.
 
 ## Codex production and local development
 
@@ -87,6 +89,12 @@ Both default to Codex App Server. Set `NUANU_DEV_AGENT_KEY` for local work or
 gateway overrides only on `flow.nuanu.com`; the development wrapper accepts
 only localhost/loopback endpoints. Model subprocesses receive the task's
 short-lived key, never the durable worker key or an interactive user token.
+
+For the normal remote-agent flow, copy the one-line prompt generated in Nuanu
+Flow and give it to Codex. It follows
+`https://flow.nuanu.com/connect/remote-agent.md`, installs the plugin if
+needed, exchanges the short-lived enrollment token over standard input, and
+starts the App Server worker without exposing the durable credential.
 
 Real Codex acceptance is explicit:
 

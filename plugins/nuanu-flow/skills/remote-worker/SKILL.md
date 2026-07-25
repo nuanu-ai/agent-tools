@@ -12,6 +12,23 @@ agent key. When a process run reaches that agent's task, the engine parks the
 step; the worker fetches it, does the work, and posts the result — which
 advances the run exactly like a local agent would.
 
+## Codex one-prompt connection
+
+The normal Codex path is a copied prompt in this form:
+
+```text
+Read and follow https://flow.nuanu.com/connect/remote-agent.md using enrollment token nuanu_join_…
+```
+
+Follow that hosted document. It installs the plugin when needed, discovers the
+installed path, exchanges the single-use token through
+`scripts/worker/enroll.mjs`, stores the durable key without exposing it to the
+model, verifies the agent identity, and starts the worker with the Codex App
+Server adapter. Never print or repeat the enrollment token.
+
+The manual durable-key flow below remains available for CI, development, and
+headless operations.
+
 ## Prerequisites
 
 1. A remote agent employee exists in the workspace (created in the app UI,
