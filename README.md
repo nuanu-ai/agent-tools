@@ -94,8 +94,10 @@ Codex App prefers the native Workspace Plugin directory and **Connect / Sign
 in** flow. Until the native listing is published, an App task with shell
 access uses the same canonical Git marketplace as an internal agent action;
 the user is never asked to open Terminal or run `codex resume`. After OAuth,
-the App reloads MCP state when supported or reopens the current task to pick
-up the new plugin. See `https://flow.nuanu.com/connect/codex-app.md`.
+the App reloads MCP state when supported. If that build exposes no reload
+action, start one new App task instead of reopening the pre-install task,
+which can retain its old capability snapshot. See
+`https://flow.nuanu.com/connect/codex-app.md`.
 
 After a workspace and project are confirmed, the `project-setup` skill can
 create a commit-safe `.nuanu-flow.json` at the Git root. Future sessions read

@@ -32,12 +32,16 @@ Codex profile. The agent, not the user, runs the public `codex plugin` and
 `codex mcp` commands. Preserve unrelated configuration and never launch a
 child Codex process or `codex app`.
 
-After OAuth, use a supported MCP/plugin reload when available. If the running
-task still has its old capability set, ask the user to reopen the current task
-from App history. Only when reopening still cannot load the plugin should the
-user start a new App task with `Continue Nuanu Flow setup`. Never display a
-CLI resume command. If the listing is absent and the conversation has no
-shell execution capability, report that specific host limitation.
+After OAuth, use a supported MCP/plugin reload when the App exposes it, then
+continue on the next turn with a real `onboarding_next` call. If the running
+task still has its old capability set and no reload action is exposed, do not
+ask the user to reopen that task: it can retain the pre-install capability
+snapshot. Ask once for a new App task with `Continue Nuanu Flow setup`; the
+bundled `SessionStart` hook will continue onboarding there. The hook injects
+startup context but cannot add MCP tool schemas to an already-running task.
+Never display a CLI resume command. If the listing is absent and the
+conversation has no shell execution capability, report that specific host
+limitation.
 
 ## Terminal-first setup
 

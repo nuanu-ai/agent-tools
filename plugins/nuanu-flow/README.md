@@ -54,8 +54,11 @@ Codex App prefers the native Workspace Plugin directory, Connect action, and
 MCP reload lifecycle. Until the listing is published, an App task with shell
 access may install from the canonical Git marketplace as an internal agent
 action. It must not ask the user to open Terminal or show a CLI resume
-command. After OAuth, reopen the current App task only when the new plugin
-cannot load live. Both paths avoid private App Server APIs.
+command. After OAuth, use the App's supported MCP reload when exposed. If the
+App exposes no reload action, start one new task instead of reopening the
+pre-install task, which can retain its old capability snapshot. The
+`SessionStart` hook continues onboarding in that new task but cannot add MCP
+tools to an already-running one. Both paths avoid private App Server APIs.
 
 ## Install skills without the plugin
 

@@ -137,7 +137,18 @@ test("public plugin exposes the one-prompt onboarding and remote enrollment flow
   assert.match(pluginReadme, /App task with shell\s+access may install from the canonical Git marketplace/);
   assert.match(codexSetup, /do not stop solely for that reason/);
   assert.match(codexSetup, /The agent, not the user, runs the public `codex plugin` and\s+`codex mcp` commands/);
-  assert.match(codexSetup, /reopen the current task\s+from App history/);
+  assert.match(codexSetup, /Ask once for a new App task/);
+  assert.match(codexSetup, /cannot add MCP tool schemas to an already-running task/);
+  assert.doesNotMatch(codexSetup, /reopen the current task\s+from App history/);
+  assert.match(codexSetup, /Codex CLI loads new MCP tools only at process startup/);
+  assert.match(
+    codexSetup,
+    /codex resume <thread-id> "Continue Nuanu Flow setup"/,
+  );
+  assert.match(
+    rootReadme,
+    /Run it in\s+the same terminal to continue the same\s+conversation/,
+  );
   assert.doesNotMatch(codexSetup, /report that official-directory dependency/);
   assert.match(orientation, /first workspace|zero workspaces/i);
   assert.match(orientation, /`onboarding`/);
