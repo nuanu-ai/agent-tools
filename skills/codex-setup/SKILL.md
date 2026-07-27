@@ -69,7 +69,11 @@ For production, register the canonical Git-backed `nuanu` marketplace, install
 `nuanu-flow@nuanu` with the Codex CLI, and run
 `codex mcp login nuanu-flow`. Let Codex open the authorization page once and
 keep the login attached until callback completion; do not reopen the printed
-fallback URL. Then resume the current thread after one CLI restart with the
+fallback URL. When an agent shell yields a running process while browser
+approval is pending, keep the current agent turn open and poll that same
+process until the callback completes or Codex reports a real timeout. The
+browser page appearing is not a reason to finish the turn or ask the user to
+reply `done`. Then resume the current thread after one CLI restart with the
 fixed continuation prompt.
 
 The OAuth helper retries one transient 502/503/504/522/524 or timeout failure
@@ -155,8 +159,10 @@ For isolated CLI profiles, each command invokes
 profile installer invokes the same OAuth command in the normal Codex home.
 Codex opens the authorization URL, owns the callback and credential storage,
 and prints the URL as its fallback if native browser launch fails. The wrapper
-must not open the printed URL again. Never ask the user to copy the URL or
-reply `done` unless Codex explicitly reports that browser launch failed.
+must not open the printed URL again. Keep a running login command and the
+current agent turn alive until the callback resolves. Never ask the user to
+copy the URL or reply `done` unless Codex explicitly reports that browser
+launch failed.
 
 The Codex desktop app and IDE extension also expose an Authenticate action,
 but the Codex CLI does not expose that clickable action.

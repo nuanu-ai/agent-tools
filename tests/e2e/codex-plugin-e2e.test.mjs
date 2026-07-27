@@ -139,6 +139,8 @@ test("public plugin exposes the one-prompt onboarding and remote enrollment flow
   assert.match(codexSetup, /The agent, not the user, runs the public `codex plugin` and\s+`codex mcp` commands/);
   assert.match(codexSetup, /Ask once for a new App task/);
   assert.match(codexSetup, /cannot add MCP tool schemas to an already-running task/);
+  assert.match(codexSetup, /keep the current agent turn open and poll that same\s+process/);
+  assert.match(codexSetup, /not a reason to finish the turn or ask the user to\s+reply `done`/);
   assert.doesNotMatch(codexSetup, /reopen the current task\s+from App history/);
   assert.match(codexSetup, /Codex CLI loads new MCP tools only at process startup/);
   assert.match(
