@@ -88,6 +88,10 @@ test("Codex plugin metadata points at skills and OAuth-ready Flow MCP config", a
     mcp["nuanu-flow"].env_http_headers["X-Agent-Key"],
     "NUANU_AGENT_KEY",
   );
+  assert.equal(
+    mcp["nuanu-flow"].http_headers["X-Agent-Client"],
+    "Codex App",
+  );
   assert.equal(mcp["nuanu-flow"].default_tools_approval_mode, "writes");
 
   assert.equal(marketplace.name, "nuanu");

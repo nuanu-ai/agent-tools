@@ -6,7 +6,8 @@
       "headers": {
         "X-Plane-User-Token": "${NUANU_TOKEN:-}",
         "X-Agent-Key": "${NUANU_AGENT_KEY:-}",
-        "X-Plane-Workspace": "${NUANU_WORKSPACE:-}"
+        "X-Plane-Workspace": "${NUANU_WORKSPACE:-}",
+        "X-Agent-Client": "Claude Code"
       }
     }
   }

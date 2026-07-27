@@ -121,6 +121,22 @@ test("distributed skills describe repository binding only after project confirma
   assert.match(projectSetup, /never overwrite a binding\s+silently/);
 });
 
+test("distributed work-item skill clarifies, shapes, estimates, and verifies creation", async () => {
+  const body = await fs.readFile(
+    path.join(standaloneRoot, "work-items/SKILL.md"),
+    "utf8",
+  );
+
+  assert.match(body, /A title-only request is a brief, not a ready Flow item/);
+  assert.match(body, /one compact,\s+grouped follow-up/);
+  assert.match(body, /definition of done/i);
+  assert.match(body, /omit empty boilerplate/);
+  assert.match(body, /Call `list_estimates` before creation/);
+  assert.match(body, /never replace a project's configured scale with Fibonacci/);
+  assert.match(body, /values `1, 2, 3, 5, 8, 13`/);
+  assert.match(body, /Finish with `get_issue`/);
+});
+
 test("portable manifest hashes every generated source and all local links resolve", async () => {
   const manifest = JSON.parse(
     await fs.readFile(

@@ -42,6 +42,9 @@ startup_timeout_sec = 20
 tool_timeout_sec = 120
 default_tools_approval_mode = "writes"
 
+[mcp_servers.${mode.mcpName}.http_headers]
+"X-Agent-Client" = "Codex App"
+
 [mcp_servers.${mode.mcpName}.env_http_headers]
 "X-Plane-User-Token" = ${JSON.stringify(mode.tokenEnv)}
 "X-Agent-Key" = ${JSON.stringify(mode.agentKeyEnv)}

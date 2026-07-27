@@ -1,6 +1,6 @@
 {
   "name": "nuanu-flow",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Install and onboard Nuanu Flow from one prompt, then work with projects, processes, artifacts, decisions, and remote agents.",
   "author": {
     "name": "Nuanu",
@@ -30,6 +30,9 @@
         "X-Plane-User-Token": "NUANU_TOKEN",
         "X-Agent-Key": "NUANU_AGENT_KEY",
         "X-Plane-Workspace": "NUANU_WORKSPACE"
+      },
+      "http_headers": {
+        "X-Agent-Client": "Codex App"
       },
       "startup_timeout_sec": 20,
       "tool_timeout_sec": 120,
