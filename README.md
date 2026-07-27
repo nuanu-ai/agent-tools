@@ -90,10 +90,12 @@ resumes; Codex may ask for one-time hook review on the first restart. The
 installer never opens the desktop app, asks the user to copy an authorization
 URL, bypasses hook trust, or creates a new chat.
 
-Codex App uses the native Workspace Plugin directory and **Connect / Sign in**
-flow instead. It reloads MCP state and continues the current conversation; it
-must never display the CLI resume command. See
-`https://flow.nuanu.com/connect/codex-app.md`.
+Codex App prefers the native Workspace Plugin directory and **Connect / Sign
+in** flow. Until the native listing is published, an App task with shell
+access uses the same canonical Git marketplace as an internal agent action;
+the user is never asked to open Terminal or run `codex resume`. After OAuth,
+the App reloads MCP state when supported or reopens the current task to pick
+up the new plugin. See `https://flow.nuanu.com/connect/codex-app.md`.
 
 After a workspace and project are confirmed, the `project-setup` skill can
 create a commit-safe `.nuanu-flow.json` at the Git root. Future sessions read

@@ -50,10 +50,12 @@ future starts and resumes. Codex requires one-time review before a plugin hook
 can run; review the Nuanu Flow hook when prompted and never bypass that trust
 step.
 
-Codex App instead uses the native Workspace Plugin directory, Connect action,
-and MCP reload lifecycle. It continues in the active conversation and must not
-show a terminal resume command. The app-native path intentionally avoids
-private App Server APIs.
+Codex App prefers the native Workspace Plugin directory, Connect action, and
+MCP reload lifecycle. Until the listing is published, an App task with shell
+access may install from the canonical Git marketplace as an internal agent
+action. It must not ask the user to open Terminal or show a CLI resume
+command. After OAuth, reopen the current App task only when the new plugin
+cannot load live. Both paths avoid private App Server APIs.
 
 ## Install skills without the plugin
 

@@ -1,12 +1,22 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "nuanu-flow",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "displayName": "Nuanu Flow",
   "description": "Work with Nuanu Flow from a coding agent: projects, work items, BPMN processes, artifacts, decisions — plus run as a remote agent worker.",
-  "author": { "name": "Nuanu", "url": "https://flow.nuanu.com" },
+  "author": {
+    "name": "Nuanu",
+    "url": "https://flow.nuanu.com"
+  },
   "repository": "https://github.com/nuanu-ai/agent-tools",
   "license": "AGPL-3.0",
-  "keywords": ["nuanu-flow", "plane", "project-management", "bpmn", "artifacts", "mcp"],
+  "keywords": [
+    "nuanu-flow",
+    "plane",
+    "project-management",
+    "bpmn",
+    "artifacts",
+    "mcp"
+  ],
   "hooks": "./hooks/claude-hooks.json"
 }

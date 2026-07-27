@@ -124,6 +124,7 @@ test("public plugin exposes the one-prompt onboarding and remote enrollment flow
   const rootReadme = await fs.readFile(path.join(repoRoot, "README.md"), "utf8");
   const pluginReadme = await fs.readFile(path.join(pluginRoot, "README.md"), "utf8");
   const orientation = await fs.readFile(path.join(pluginRoot, "skills/nuanu-flow/SKILL.md"), "utf8");
+  const codexSetup = await fs.readFile(path.join(pluginRoot, "skills/codex-setup/SKILL.md"), "utf8");
 
   await fs.access(path.join(pluginRoot, "skills/onboarding/SKILL.md"));
   await fs.access(path.join(pluginRoot, "scripts/worker/enroll.mjs"));
@@ -132,6 +133,12 @@ test("public plugin exposes the one-prompt onboarding and remote enrollment flow
   assert.match(rootReadme, new RegExp(installPrompt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(pluginReadme, new RegExp(installPrompt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(pluginReadme, new RegExp(remoteGuideUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(rootReadme, /App task with shell\s+access uses the same canonical Git marketplace/);
+  assert.match(pluginReadme, /App task with shell\s+access may install from the canonical Git marketplace/);
+  assert.match(codexSetup, /do not stop solely for that reason/);
+  assert.match(codexSetup, /The agent, not the user, runs the public `codex plugin` and\s+`codex mcp` commands/);
+  assert.match(codexSetup, /reopen the current task\s+from App history/);
+  assert.doesNotMatch(codexSetup, /report that official-directory dependency/);
   assert.match(orientation, /first workspace|zero workspaces/i);
   assert.match(orientation, /`onboarding`/);
   assert.equal(

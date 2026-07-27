@@ -11,11 +11,12 @@ global npm package, daemon, or shell alias.
 
 ## Select the Codex surface first
 
-This skill covers Codex CLI setup. If the current conversation is running in
-Codex App, use the app's native Workspace Plugin directory and **Connect /
-Sign in** action instead:
+This skill covers Codex CLI setup and the temporary public-CLI fallback used
+by Codex App until Nuanu Flow is published in its native directory. In Codex
+App, prefer the native Workspace Plugin directory and **Connect / Sign in**
+action:
 
-- never print `codex resume`, a terminal command, or a fresh-terminal request
+- never ask the user to open Terminal, run a command, or use `codex resume`
   inside Codex App;
 - let the app own OAuth completion and MCP configuration reload;
 - continue the active conversation with `Continue Nuanu Flow setup` and a real
@@ -24,8 +25,19 @@ Sign in** action instead:
   `plugin/install` API.
 
 If the Nuanu Flow native listing is absent in the current Codex App build,
-report that official-directory dependency. Do not silently switch the user to
-Codex CLI.
+do not stop solely for that reason. When the App conversation has
+agent-controlled shell access, perform the production flow in
+**Terminal-first setup** below as internal agent actions against the same
+Codex profile. The agent, not the user, runs the public `codex plugin` and
+`codex mcp` commands. Preserve unrelated configuration and never launch a
+child Codex process or `codex app`.
+
+After OAuth, use a supported MCP/plugin reload when available. If the running
+task still has its old capability set, ask the user to reopen the current task
+from App history. Only when reopening still cannot load the plugin should the
+user start a new App task with `Continue Nuanu Flow setup`. Never display a
+CLI resume command. If the listing is absent and the conversation has no
+shell execution capability, report that specific host limitation.
 
 ## Terminal-first setup
 
