@@ -11,7 +11,7 @@ later steps reference IDs from earlier ones.
 ## 1. Create the project
 
 `create_project` with `name` and `identifier` (short, UPPERCASE, stable —
-it prefixes every work item: `ENG` → `ENG-42`). Returns the project `id`;
+it prefixes every flow item: `ENG` → `ENG-42`). Returns the project `id`;
 subsequent calls can also address it by `project_identifier`.
 
 ## 2. Workflow states
@@ -22,7 +22,7 @@ Cancelled). Adjust only if the team's flow differs:
 - `create_state` — requires `name`, `color` (hex), `group` ∈
   `backlog | unstarted | started | completed | cancelled`.
 - `update_state` / `delete_state` to reshape the defaults.
-- `set_default_state` — the state new work items land in.
+- `set_default_state` — the state new flow items land in.
 
 Keep exactly one obvious default in `unstarted` (or `backlog` for
 intake-style projects).
@@ -35,7 +35,7 @@ labels are workspace-visible filters, not a taxonomy.
 ## 4. Estimates (optional)
 
 `create_estimate` (e.g. name "Story points", type points) →
-`create_estimate_point` per value (1, 2, 3, 5, 8…). Work items then accept
+`create_estimate_point` per value (1, 2, 3, 5, 8…). Flow items then accept
 `estimate_point` (the point's UUID).
 
 ## 5. Members
@@ -57,10 +57,55 @@ references).
 - Event rules: `create_automation` (+ `toggle_automation` to enable) for
   things like auto-assign on create.
 
+## 8. Bind the Git repository (recommended)
+
+After the user has confirmed both the workspace and project, offer to create
+`.nuanu-flow.json` at the Git root. This small, commit-safe file lets future
+agent sessions select the same Flow project without a network lookup:
+
+```json
+{
+  "$schema": "https://flow.nuanu.com/schemas/project-context.v1.json",
+  "version": 1,
+  "workspace_slug": "confirmed-workspace-slug",
+  "project_identifier": "CONFIRMED_PROJECT_IDENTIFIER"
+}
+```
+
+Read an existing file before changing it and never overwrite a binding
+silently. Store only stable routing data: no tokens, user IDs, MCP URLs,
+callback URLs, or credentials.
+
+For a monorepo, keep one root default and add the smallest confirmed path
+overrides. Paths are relative to the Git root; the most specific matching
+scope wins:
+
+```json
+{
+  "$schema": "https://flow.nuanu.com/schemas/project-context.v1.json",
+  "version": 1,
+  "workspace_slug": "confirmed-workspace-slug",
+  "project_identifier": "PLATFORM",
+  "scopes": [
+    {
+      "path": "apps/web",
+      "project_identifier": "WEB"
+    }
+  ]
+}
+```
+
+Use `.nuanu-flow.local.json` only as a gitignored, partial local override when
+development data genuinely differs from the shared binding. Never create it
+for credentials or normal per-user preferences.
+
 ## Verify
 
 `get_project` + `list_states` + `list_labels` + `list_project_members` to
-confirm the scaffold before handing the project over.
+confirm the scaffold before handing the project over. If repository binding
+was accepted, parse the written JSON and confirm the exact workspace and
+project values. Flow validates the binding lazily on the first real operation;
+do not add a startup network call.
 
 ## Tools Used
 

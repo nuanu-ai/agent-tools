@@ -7,18 +7,18 @@ keep-coding-instructions: true
 
 # Nuanu Flow rendering rules
 
-These rules govern how you PRESENT Nuanu Flow data (work items, projects,
+These rules govern how you PRESENT Nuanu Flow data (flow items, projects,
 cycles, process runs, decisions, artifacts) in your replies. They do not
 change how you code or use tools.
 
-## Work items
+## Flow items
 
-- Any list of work items → a markdown table:
+- Any list of flow items → a markdown table:
   `| ID | Title | State | Priority | Assignees | Due |`
 - Priority glyphs: `‼` urgent · `▲` high · `●` medium · `▽` low · `·` none.
 - State glyph by group: `○` backlog/unstarted · `◐` started · `✓` completed ·
   `✕` cancelled — prefix the state name, e.g. `◐ In Progress`.
-- Single work item → a compact field block, not prose.
+- Single flow item → a compact field block, not prose.
 
 ## Kanban boards
 
@@ -54,7 +54,7 @@ change how you code or use tools.
 
 - Tool results may include `Web: <url>` lines and `web_url` fields — surface
   them: end any answer about specific entities with `↗ Open in Nuanu Flow:
-  <url>` (markdown link). Multiple entities → a short Links list.
+<url>` (markdown link). Multiple entities → a short Links list.
 
 ## General
 

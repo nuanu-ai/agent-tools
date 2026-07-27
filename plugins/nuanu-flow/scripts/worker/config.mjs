@@ -1,7 +1,9 @@
 import os from "node:os";
 
-function required(name) {
-  const v = process.env[name];
+import { createDefaultCredentialStore } from "./credentials.mjs";
+
+function required(name, value) {
+  const v = value;
   if (!v) {
     console.error(`[nuanu-worker] Missing required env var: ${name}`);
     process.exit(1);
@@ -9,14 +11,14 @@ function required(name) {
   return v;
 }
 
-function int(name, def) {
-  const v = process.env[name];
+function int(env, name, def) {
+  const v = env[name];
   const n = v == null || v === "" ? def : Number(v);
   return Number.isFinite(n) ? n : def;
 }
 
-function bool(name, def = false) {
-  const v = process.env[name];
+function bool(env, name, def = false) {
+  const v = env[name];
   if (v == null) return def;
   return /^(1|true|yes|on)$/i.test(v);
 }
@@ -38,41 +40,43 @@ function deriveGatewayUrl(baseUrl) {
 }
 
 /**
- * Worker configuration, entirely from env. The base URL must include `/api`.
- * Adapter "claude" wraps `claude -p`; "codex-exec" wraps `codex exec`;
+ * Worker configuration from explicit env overrides or an enrolled credential.
+ * The base URL must include `/api`.
+ * Adapter "claude-code" wraps `claude -p`; "codex-exec" wraps `codex exec`;
  * "codex-app-server" drives Codex App Server over JSON-RPC; "command" runs an
  * arbitrary shell command (prompt on stdin, answer on stdout).
  */
-export function loadConfig() {
-  const baseUrl = required("NUANU_URL").replace(/\/+$/, "");
+export function loadConfig({ env = process.env, credentialStore = createDefaultCredentialStore() } = {}) {
+  const stored = !env.NUANU_URL || !env.NUANU_AGENT_KEY ? credentialStore.loadSync() : null;
+  const baseUrl = required("NUANU_URL", env.NUANU_URL || stored?.baseUrl).replace(/\/+$/, "");
   return {
     baseUrl,
-    agentKey: required("NUANU_AGENT_KEY"),
-    workerId: process.env.NUANU_WORKER_ID || `worker-${os.hostname()}-${process.pid}`,
-    maxConcurrency: Math.max(1, int("NUANU_MAX_CONCURRENCY", 1)),
+    agentKey: required("NUANU_AGENT_KEY", env.NUANU_AGENT_KEY || stored?.agentKey),
+    workerId: env.NUANU_WORKER_ID || `worker-${os.hostname()}-${process.pid}`,
+    maxConcurrency: Math.max(1, int(env, "NUANU_MAX_CONCURRENCY", 1)),
     // "poll" (HTTP long/short-poll, zero infra) | "gateway" (WS wake + HTTP claim).
-    transport: (process.env.NUANU_TRANSPORT || "poll").toLowerCase(),
-    gatewayUrl: process.env.NUANU_GATEWAY_URL || deriveGatewayUrl(baseUrl),
-    pollIntervalMs: Math.max(500, int("NUANU_POLL_INTERVAL_MS", 2000)),
-    heartbeatIntervalMs: Math.max(5000, int("NUANU_HEARTBEAT_INTERVAL_MS", 15000)),
-    lockSeconds: Math.max(30, int("NUANU_LOCK_SECONDS", 300)),
+    transport: (env.NUANU_TRANSPORT || "poll").toLowerCase(),
+    gatewayUrl: env.NUANU_GATEWAY_URL || deriveGatewayUrl(baseUrl),
+    pollIntervalMs: Math.max(500, int(env, "NUANU_POLL_INTERVAL_MS", 2000)),
+    heartbeatIntervalMs: Math.max(5000, int(env, "NUANU_HEARTBEAT_INTERVAL_MS", 15000)),
+    lockSeconds: Math.max(30, int(env, "NUANU_LOCK_SECONDS", 300)),
     adapter: {
-      type: (process.env.NUANU_ADAPTER || "claude").toLowerCase(),
-      claudeBin: process.env.NUANU_CLAUDE_BIN || "claude",
-      claudeArgs: (process.env.NUANU_CLAUDE_ARGS || "-p --output-format json").split(/\s+/).filter(Boolean),
-      claudeSkipPermissions: bool("NUANU_CLAUDE_SKIP_PERMISSIONS", false),
-      claudeCwd: process.env.NUANU_CLAUDE_CWD || os.tmpdir(),
-      codexBin: process.env.NUANU_CODEX_BIN || "codex",
-      codexArgs: (process.env.NUANU_CODEX_ARGS || "exec --skip-git-repo-check").split(/\s+/).filter(Boolean),
-      codexCwd: process.env.NUANU_CODEX_CWD || os.tmpdir(),
-      codexAppServerArgs: (process.env.NUANU_CODEX_APP_SERVER_ARGS || "app-server --stdio")
-        .split(/\s+/)
-        .filter(Boolean),
-      codexAgentKeyEnv: process.env.NUANU_CODEX_AGENT_KEY_ENV || "NUANU_AGENT_KEY",
-      codexAppServerApprovalMode: (process.env.NUANU_CODEX_APP_SERVER_APPROVAL_MODE || "deny").toLowerCase(),
-      codexAppServerApprovalPolicy: process.env.NUANU_CODEX_APP_SERVER_APPROVAL_POLICY || "never",
-      command: process.env.NUANU_ADAPTER_CMD || "",
-      timeoutMs: Math.max(10000, int("NUANU_ADAPTER_TIMEOUT_MS", 300000)),
+      type: (env.NUANU_ADAPTER || "claude-code").toLowerCase(),
+      claudeBin: env.NUANU_CLAUDE_BIN || "claude",
+      claudeArgs: (env.NUANU_CLAUDE_ARGS || "-p --output-format stream-json --verbose").split(/\s+/).filter(Boolean),
+      claudeSkipPermissions: bool(env, "NUANU_CLAUDE_SKIP_PERMISSIONS", false),
+      claudePermissionMode: env.NUANU_CLAUDE_PERMISSION_MODE || "dontAsk",
+      claudeAllowedTools: env.NUANU_CLAUDE_ALLOWED_TOOLS || "mcp__plugin_nuanu-flow_mcp__*",
+      claudeCwd: env.NUANU_CLAUDE_CWD || os.tmpdir(),
+      codexBin: env.NUANU_CODEX_BIN || "codex",
+      codexArgs: (env.NUANU_CODEX_ARGS || "exec --skip-git-repo-check").split(/\s+/).filter(Boolean),
+      codexCwd: env.NUANU_CODEX_CWD || os.tmpdir(),
+      codexAppServerArgs: (env.NUANU_CODEX_APP_SERVER_ARGS || "app-server --stdio").split(/\s+/).filter(Boolean),
+      codexAgentKeyEnv: env.NUANU_CODEX_AGENT_KEY_ENV || "NUANU_AGENT_KEY",
+      codexAppServerApprovalMode: (env.NUANU_CODEX_APP_SERVER_APPROVAL_MODE || "deny").toLowerCase(),
+      codexAppServerApprovalPolicy: env.NUANU_CODEX_APP_SERVER_APPROVAL_POLICY || "never",
+      command: env.NUANU_ADAPTER_CMD || "",
+      timeoutMs: Math.max(10000, int(env, "NUANU_ADAPTER_TIMEOUT_MS", 300000)),
     },
   };
 }

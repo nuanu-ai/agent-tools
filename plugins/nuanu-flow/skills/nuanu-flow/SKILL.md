@@ -1,6 +1,6 @@
 ---
 name: nuanu-flow
-description: Start here when working with Nuanu Flow (Plane-based work management platform). Explains the object model (workspaces, projects, work items, cycles, processes, artifacts, agents), how to call Flow MCP tools, required auth env vars, and which detailed skill to load for each job.
+description: Start here when working with Nuanu Flow (Plane-based work management platform). Explains the object model (workspaces, projects, flow items, cycles, processes, artifacts, agents), how to call Flow MCP tools, required auth env vars, and which detailed skill to load for each job.
 ---
 
 # Working with Nuanu Flow
@@ -8,11 +8,25 @@ description: Start here when working with Nuanu Flow (Plane-based work managemen
 Nuanu Flow is a work-management platform (a Plane fork) with an AI layer:
 BPMN **processes** orchestrate humans and AI **agent employees**, **decisions**
 gate approvals, and an **artifacts** registry stores versioned files. You talk
-to it through the bundled `flow` MCP server.
+to it through the bundled `nuanu-flow` MCP server.
+
+## Session activation
+
+On a startup or resume turn, treat Nuanu Flow as the session's task tracker.
+When onboarding status is not already established in the thread, call the
+read-only `onboarding_next` tool at most once. Continue only its returned step
+when incomplete. If onboarding is complete, do not interrupt unrelated work.
+If the check is unavailable, continue the user's request without a retry loop.
+
+The SessionStart hook may also provide a repository binding loaded from
+`.nuanu-flow.json`. Discovery is deliberately local and bounded: it walks only
+to the Git root, reads at most 4 KiB, performs no network call, and fails open.
+Validate the selected workspace/project lazily on the first real Flow
+operation.
 
 ## Calling convention (read this first)
 
-The `flow` MCP server runs in **compact mode** by default and publishes only
+The `nuanu-flow` MCP server runs in **compact mode** by default and publishes only
 two tools:
 
 - `search_tools(query)` — keyword search over the full catalog (~149 tools);
@@ -29,13 +43,11 @@ the same names are directly callable as regular MCP tools.
 
 1. **Proxy agent (default, interactive)** — no env needed. On first contact
    the hosted MCP replies with an OAuth challenge; the browser opens Nuanu
-   Flow, the user logs in with their normal account, picks a workspace, and
-   approves. You then act **as that user**, and your actions are attributed
-   "via <client>" (junction avatar in the app). Claude Code re-auth:
-   `/mcp` -> mcp -> authenticate. Codex re-auth: `codex mcp login flow`
-   after confirming the server name in `codex mcp list`. If Codex reports
-   `Auth Unsupported`, load `codex-setup` and use its environment/Keychain
-   fallback until the hosted endpoint exposes OAuth discovery.
+   Flow, where the user can sign in or create an account and approve. A new
+   account may authorize before it has a workspace; use `onboarding` next. You
+   then act **as that user**, and your actions are attributed
+   "via <client>" (junction avatar in the app). Re-auth: `/mcp` → mcp →
+   authenticate.
 2. **Ambient agent (headless)** — `NUANU_AGENT_KEY` (`nuanu_flow_…`) is set;
    automatic inside worker-run task sessions. You act **as the agent
    employee** itself.
@@ -43,20 +55,19 @@ the same names are directly callable as regular MCP tools.
    Workspace Settings → API tokens) acts as the user without a browser.
 
 Optional for all modes: `NUANU_WORKSPACE` (default workspace slug; overrides
-the consent-time choice), `NUANU_MCP_URL` (Claude endpoint override). Run
-`/nuanu-flow:setup` in Claude Code or load `codex-setup` in Codex for a guided
-check.
+the consent-time choice), `NUANU_MCP_URL` (endpoint override). Run
+`/nuanu-flow:setup` for a guided check.
 
 ## Object model
 
 - **Workspace** (addressed by slug) → **Projects** (short identifier like
-  `ENG`) → **Work items** ("issues", addressed `ENG-42`).
-- Work items have: **states** (grouped `backlog / unstarted / started /
+  `ENG`) → **Flow items** ("issues", addressed `ENG-42`).
+- Flow items have: **states** (grouped `backlog / unstarted / started /
 completed / cancelled`), **priority** (`urgent / high / medium / low /
 none`), assignees, **labels**, **estimates**, sub-items (parent), relations,
   comments, attachments.
 - **Cycles** = time-boxed sprints; **Modules** = feature buckets. Both contain
-  work items.
+  flow items.
 - **Teams** group members and projects across the workspace. **Objectives**
   are portfolios that roll up projects. **Views** are saved filters.
   **Automations** are event → action rules.
@@ -65,13 +76,23 @@ none`), assignees, **labels**, **estimates**, sub-items (parent), relations,
   **Agent employees** are configured AI agents (local runtime or remote
   workers). **Decisions** are human approve/deny/option gates inside runs.
 - **Artifacts** = versioned files/documents in a registry, bound to entities
-  (projects, runs, work items, …) and organized in logical folders.
+  (projects, runs, flow items, …) and organized in logical folders.
 
 ## Conventions that apply everywhere
 
-- `workspace_slug` is optional in almost every tool — it falls back to the
-  server's default workspace (`NUANU_WORKSPACE`). Pass it only to cross
-  workspaces.
+- `workspace_slug` is optional in almost every tool. Resolution order is an
+  explicit user/tool argument, the most specific matching repository scope,
+  the root repository binding, connection default, `NUANU_WORKSPACE`, then
+  the only accessible workspace. Multiple unresolved workspaces require an
+  explicit choice.
+- `.nuanu-flow.json` contains `version`, `workspace_slug`, a root
+  `project_identifier`, and optional path `scopes`. The nearest matching scope
+  wins. `.nuanu-flow.local.json` may partially override it for local
+  development only and must remain gitignored. Neither file may contain
+  secrets, endpoints, callback URLs, or identity data.
+- Create a repository binding only after the workspace and project are
+  confirmed, normally through `project-setup`. Authentication and account
+  onboarding alone are not enough to choose a project.
 - **Human aliases work alongside UUIDs**: `project_identifier` (`"ENG"`),
   `issue_identifier` (`"ENG-42"`), `state_name`, `assignee_emails`,
   `assignee_names`, `label_names`, `parent_ref`. Alias matching is **exact**,
@@ -84,15 +105,16 @@ none`), assignees, **labels**, **estimates**, sub-items (parent), relations,
 
 ## Which skill to load
 
-| Job                                                                  | Skill            |
-| -------------------------------------------------------------------- | ---------------- |
-| Create/search/triage/update work items, sprints, relations, comments | `work-items`     |
-| Scaffold a new project (states, labels, estimates, members, views)   | `project-setup`  |
-| Author or operate a BPMN process / approval chain / automation flow  | `bpmn-processes` |
-| Store, version, search, or link files and documents                  | `artifacts`      |
-| Run this agent as a remote worker executing process agent-tasks      | `remote-worker`  |
-| Install, verify, or locally develop the Codex plugin                 | `codex-setup`    |
-| Run remote-worker tasks through Codex App Server                     | `codex-remote-worker` |
+| Job                                                                  | Skill             |
+| -------------------------------------------------------------------- | ----------------- |
+| First workspace, new account, or unfinished first-run setup          | `onboarding`      |
+| Enrich an existing workspace with company context and goals          | `workspace-setup` |
+| Create/search/triage/update flow items, sprints, relations, comments | `work-items`      |
+| Scaffold a new project (states, labels, estimates, members, views)   | `project-setup`   |
+| Author or operate a BPMN process / approval chain / automation flow  | `bpmn-processes`  |
+| Store, version, search, or link files and documents                  | `artifacts`       |
+| Design, create, connect, or launch a local or remote agent employee  | `create-agent`    |
+| Run this agent as a remote worker executing process agent-tasks      | `remote-worker`   |
 
 ## Tools Used
 

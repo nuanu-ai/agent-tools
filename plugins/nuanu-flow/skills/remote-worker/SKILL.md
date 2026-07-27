@@ -1,6 +1,6 @@
 ---
 name: remote-worker
-description: Connect a coding agent to Nuanu Flow as a remote agent worker — authenticate with an agent key, pull BPMN agent tasks (fetch-and-lock), execute them, and report complete/fail; via the bundled zero-dependency daemon or direct REST calls.
+description: Connect a coding agent to Nuanu Flow as a remote agent worker — use the environment-aware one-prompt enrollment flow, or operate the worker REST protocol directly.
 ---
 
 # Running as a remote agent worker
@@ -8,15 +8,38 @@ description: Connect a coding agent to Nuanu Flow as a remote agent worker — a
 A Nuanu Flow **agent employee** with `runtime: "remote"` is executed by an
 external worker instead of the platform's built-in agent runtime. The model is
 **pull**: the worker dials out (NAT-proof, no inbound URL), identified by an
-agent key. When a process run reaches that agent's task, the engine parks the
+agent credential. When a process run reaches that agent's task, the engine parks the
 step; the worker fetches it, does the work, and posts the result — which
 advances the run exactly like a local agent would.
 
-## Prerequisites
+## Recommended creation and connection
 
-1. A remote agent employee exists in the workspace (created in the app UI,
-   with runtime "remote").
-2. An **agent key** for it. Keys are minted once via the app or
+For an agent-led flow, load `create-agent`. It discovers the active
+environment, creates the remote agent through MCP, and either launches its
+worker in the current Codex session or returns the environment-aware
+connection prompt.
+
+The UI remains available as an equivalent manual path: create a remote agent
+and copy its generated prompt into Codex. Both paths point to the same guide:
+
+- Local: `http://localhost:3000/connect/remote-agent.md`
+- Production: `https://flow.nuanu.com/connect/remote-agent.md`
+
+The guide installs or updates the combined Nuanu Flow plugin, completes MCP
+OAuth when needed, exchanges the short-lived `nuanu_join_…` enrollment token
+through standard input, stores the durable credential in OS-protected storage,
+and launches the bundled worker. Never repeat or place the enrollment token in
+a URL, command argument, environment variable, or file.
+
+The enrollment prompt is the normal customer path. It does not expose a
+durable agent key and is safe to retry on the same installation: the helper
+verifies an already-enrolled credential without exchanging the token again.
+
+## Manual operator prerequisites
+
+1. A remote agent employee exists in the workspace (created through MCP or
+   the app UI, with runtime "remote").
+2. An **agent key** for it. Manual keys are minted once via the app or
    `POST /api/workspaces/<slug>/agent-employees/<agent_id>/keys/` — the
    plaintext `nuanu_flow_…` token is shown **only at creation**.
 3. Env:
@@ -27,16 +50,16 @@ advances the run exactly like a local agent would.
 | `NUANU_AGENT_KEY`       | The durable `nuanu_flow_…` key                                                                              |
 | `NUANU_WORKER_ID`       | Optional stable worker name (default `worker-<host>-<pid>`)                                                 |
 | `NUANU_MAX_CONCURRENCY` | Parallel tasks (default 1)                                                                                  |
-| `NUANU_ADAPTER`         | `claude` (default) \| `codex-exec` \| `codex-app-server` \| `command`                                      |
+| `NUANU_ADAPTER`         | `claude` (default) \| `codex` \| `command`                                                                  |
 | `NUANU_TRANSPORT`       | `poll` (default) \| `gateway` (WS wake-ups)                                                                 |
 
-## Quick start — the bundled daemon
+## Start the bundled daemon
 
-The plugin vendors the zero-dependency worker (Node ≥ 20.6):
+After one-prompt enrollment, the plugin vendors the zero-dependency worker
+(Node ≥ 20.6) and reads the stored credential automatically:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/worker/worker.mjs
-# or interactively: /nuanu-flow:worker
+NUANU_ADAPTER=codex node "<plugin-root>/scripts/worker/worker.mjs"
 ```
 
 The daemon heartbeats (~15 s), polls `fetch-and-lock`, and per task spawns the
@@ -46,14 +69,9 @@ pipes the task prompt on stdin, and exposes the task's **per-task
 own Flow MCP calls are attributed to the agent. Results post back
 automatically; SIGINT/SIGTERM drains gracefully.
 
-Because the plugin's MCP config forwards `NUANU_AGENT_KEY` as `X-Agent-Key`,
-a worker-spawned Claude session with this plugin installed is **already
-authenticated as the ambient agent** — no OAuth prompt, no setup inside task
-executions.
-
-For Codex, use `NUANU_ADAPTER=codex-app-server` when the worker should run on
-Codex's App Server protocol with streamed turns and approval handling. Use
-`NUANU_ADAPTER=codex-exec` for one-shot `codex exec` task execution.
+During a claimed task, the worker passes only the short-lived per-task agent
+credential to the spawned adapter. Human MCP OAuth and the worker credential
+remain separate.
 
 ## The REST protocol (for self-polling without the daemon)
 
