@@ -10,12 +10,7 @@ const ENROLLMENT_TOKEN_PATTERN = /^nuanu_join_[0-9a-f]{64}$/;
 const AGENT_KEY_PATTERN = /^nuanu_flow_[0-9a-f]{64}$/;
 
 function isLoopback(hostname) {
-  return (
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "[::1]" ||
-    hostname === "::1"
-  );
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]" || hostname === "::1";
 }
 
 export function normalizeApiBase(value) {
@@ -25,9 +20,7 @@ export function normalizeApiBase(value) {
   } catch {
     throw new Error("Invalid API base URL");
   }
-  const transportAllowed =
-    url.protocol === "https:" ||
-    (url.protocol === "http:" && isLoopback(url.hostname));
+  const transportAllowed = url.protocol === "https:" || (url.protocol === "http:" && isLoopback(url.hostname));
   if (
     !transportAllowed ||
     url.username ||
@@ -36,9 +29,7 @@ export function normalizeApiBase(value) {
     url.hash ||
     !url.pathname.replace(/\/+$/, "").endsWith("/api")
   ) {
-    throw new Error(
-      "API base URL must use HTTPS, or loopback HTTP for local development, and end in /api",
-    );
+    throw new Error("API base URL must use HTTPS, or loopback HTTP for local development, and end in /api");
   }
   return url.toString().replace(/\/+$/, "");
 }
@@ -101,11 +92,7 @@ export async function enroll({
   const normalizedBase = normalizeApiBase(baseUrl);
   const fingerprint = enrollmentFingerprint(enrollmentToken);
   const existing = await credentialStore.load();
-  if (
-    existing &&
-    existing.baseUrl === normalizedBase &&
-    existing.enrollment_token_sha256 === fingerprint
-  ) {
+  if (existing && existing.baseUrl === normalizedBase && existing.enrollment_token_sha256 === fingerprint) {
     const agent = await verifyCredential(existing, fetchImpl);
     return { status: "already_enrolled", agent };
   }
@@ -181,9 +168,6 @@ async function main() {
   }
 }
 
-if (
-  process.argv[1] &&
-  pathToFileURL(process.argv[1]).href === import.meta.url
-) {
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   await main();
 }
