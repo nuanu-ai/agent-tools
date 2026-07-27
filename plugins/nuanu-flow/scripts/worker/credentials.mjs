@@ -89,11 +89,37 @@ function runSecurity(args, input) {
   });
 }
 
-export function createKeychainCredentialStore() {
+function securityInteractiveQuote(value) {
+  if (typeof value !== "string" || /[\0\r\n]/.test(value)) {
+    throw new Error("Keychain value contains unsupported control characters");
+  }
+  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+}
+
+export function buildKeychainSaveInput(record) {
+  const serialized = JSON.stringify(record);
+  if (typeof serialized !== "string") {
+    throw new Error("Worker credential cannot be serialized");
+  }
+  return (
+    [
+      "add-generic-password",
+      "-a",
+      securityInteractiveQuote(KEYCHAIN_ACCOUNT),
+      "-s",
+      securityInteractiveQuote(KEYCHAIN_SERVICE),
+      "-U",
+      "-w",
+      securityInteractiveQuote(serialized),
+    ].join(" ") + "\n"
+  );
+}
+
+export function createKeychainCredentialStore({ runSecurityImpl = runSecurity } = {}) {
   return {
     async load() {
       try {
-        const output = await runSecurity([
+        const output = await runSecurityImpl([
           "find-generic-password",
           "-a",
           KEYCHAIN_ACCOUNT,
@@ -118,10 +144,11 @@ export function createKeychainCredentialStore() {
     },
 
     async save(record) {
-      await runSecurity(
-        ["add-generic-password", "-a", KEYCHAIN_ACCOUNT, "-s", KEYCHAIN_SERVICE, "-U", "-w"],
-        JSON.stringify(record)
-      );
+      // `security add-generic-password ... -w` with no argument silently stores
+      // an empty password. Passing the record as an argv value would expose a
+      // durable agent key through the process list. Interactive mode accepts
+      // the complete command over stdin, keeping the key out of argv/env/files.
+      await runSecurityImpl(["-i"], buildKeychainSaveInput(record));
     },
   };
 }

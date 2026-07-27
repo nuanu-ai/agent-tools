@@ -15,7 +15,7 @@ then print one compact status report at the end.
   with an OAuth challenge and the browser opens Nuanu Flow to authorize;
   the user logs in there, picks a workspace, done. No env needed. If the
   connection shows as failed/expired, tell the user to run `/mcp` and
-  re-authenticate the `flow` server.
+  re-authenticate the `nuanu-flow` server.
 
 1. **Check env vars** — run EXACTLY this snippet (POSIX-portable; do not
    rewrite it with shell-specific syntax like zsh `${(P)v}`, and never print
@@ -45,7 +45,8 @@ then print one compact status report at the end.
    - `NUANU_MCP_URL` — optional override; empty means the hosted server
      (`https://flow.nuanu.com/mcp-server/mcp`).
 
-2. **Probe the MCP server**: call the `flow` MCP server's `execute_tool` with
+2. **Probe the MCP server**: call the `nuanu-flow` MCP server's `execute_tool`
+   with
    `{"name": "list_workspaces", "arguments": {}}`.
    - Success → list the workspace slugs returned and confirm whether
      `NUANU_WORKSPACE` is among them.

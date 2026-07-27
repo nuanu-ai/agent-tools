@@ -1,0 +1,69 @@
+# Artifacts
+
+The artifact registry is the platform's versioned file store (MinIO-backed).
+Every meaningful file an agent produces — research, reports, specs, datasets —
+belongs here, bound to the entities it's about.
+
+Call tools via `execute_tool("<name>", {...})`.
+
+## The model
+
+- **Statuses**: `draft` (registered, bytes pending) → `temp` (scratch,
+  TTL-swept unless committed) → `stored` (permanent) → `archived`.
+- **Scopes**: `private | project | workspace | run | kb`.
+- **Folders**: logical paths like `/projects/<id>/…` — derived automatically
+  from context, overridable.
+- **Context** drives placement: pass `context: {kind, …}` on create —
+  `kind:"run"` (+`run_id`), `"project"` (+`project_id`), `"agent"`
+  (+`agent_id`, lands as temp scratch), `"kb"` (+`topic`), `"personal"`
+  (+`user_id`). The server derives folder, scope, and typed entity links.
+- **Entity links**: artifacts bind to `project | process_run | process_task |
+  work_item | user | team | agent | …` with a relation
+  `about | source | output | attachment`.
+
+## Discipline (the failure modes to avoid)
+
+1. **Search before you create.** `search_artifacts` by `q` (keywords over
+   name/tags/parsed text), `entity_type`+`entity_id`, `folder`, `tag`, …
+   Duplicating an existing artifact instead of versioning it fragments the
+   registry.
+2. **New content for the same artifact = a new version**, not a new artifact:
+   `add_artifact_version` (`content`, optional `change_summary` — treat it
+   like a commit message).
+3. **Scratch work must be `temp`** (`temp: true` or `context.kind:"agent"`) —
+   and **promoted with `commit_artifact` if it turns out to matter**,
+   otherwise the TTL sweeper deletes it. A run-scoped artifact commits to
+   `project` scope by default (run outputs belong to the project library).
+
+## Workflows
+
+**Create with content (the normal path)** — one call registers the artifact
+AND uploads v1:
+
+```js
+execute_tool("create_artifact", {
+  name: "competitor-research.md",        // extension drives MIME inference
+  content: "…markdown/text/JSON…",
+  tags: ["research", "competitors"],
+  context: { kind: "run", run_id: "…" }
+})
+```
+
+Text, markdown, JSON, CSV, HTML all work inline. Omitting `content` just
+registers the row and returns presigned `upload_data` for a raw-bytes REST
+upload (binary files) — prefer inline `content` whenever the payload is text.
+
+**Read**: `get_artifact` (metadata + versions + links + history) →
+`get_artifact_download_url` (optionally a specific `version`) → fetch the
+short-lived URL for the bytes.
+
+**Bind**: `link_artifact` with `entity_type`, `entity_id`, `relation`
+(idempotent). Use `output` for things a run/task produced, `source` for
+inputs, `about` for subject matter, `attachment` for misc.
+
+**Promote**: `commit_artifact` (optional explicit `folder`/`scope`) — drops
+the TTL and files it permanently.
+
+## Tools Used
+
+`search_artifacts`, `get_artifact`, `create_artifact`, `add_artifact_version`, `link_artifact`, `commit_artifact`, `get_artifact_download_url`

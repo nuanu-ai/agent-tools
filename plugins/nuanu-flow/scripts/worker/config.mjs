@@ -42,7 +42,7 @@ function deriveGatewayUrl(baseUrl) {
 /**
  * Worker configuration from explicit env overrides or an enrolled credential.
  * The base URL must include `/api`.
- * Adapter "claude" wraps `claude -p`; "codex-exec" wraps `codex exec`;
+ * Adapter "claude-code" wraps `claude -p`; "codex-exec" wraps `codex exec`;
  * "codex-app-server" drives Codex App Server over JSON-RPC; "command" runs an
  * arbitrary shell command (prompt on stdin, answer on stdout).
  */
@@ -61,10 +61,20 @@ export function loadConfig({ env = process.env, credentialStore = createDefaultC
     heartbeatIntervalMs: Math.max(5000, int(env, "NUANU_HEARTBEAT_INTERVAL_MS", 15000)),
     lockSeconds: Math.max(30, int(env, "NUANU_LOCK_SECONDS", 300)),
     adapter: {
-      type: (env.NUANU_ADAPTER || "claude").toLowerCase(),
+      type: (env.NUANU_ADAPTER || "claude-code").toLowerCase(),
       claudeBin: env.NUANU_CLAUDE_BIN || "claude",
-      claudeArgs: (env.NUANU_CLAUDE_ARGS || "-p --output-format json").split(/\s+/).filter(Boolean),
+      claudeArgs: (
+        env.NUANU_CLAUDE_ARGS ||
+        "-p --output-format stream-json --verbose"
+      )
+        .split(/\s+/)
+        .filter(Boolean),
       claudeSkipPermissions: bool(env, "NUANU_CLAUDE_SKIP_PERMISSIONS", false),
+      claudePermissionMode:
+        env.NUANU_CLAUDE_PERMISSION_MODE || "dontAsk",
+      claudeAllowedTools:
+        env.NUANU_CLAUDE_ALLOWED_TOOLS ||
+        "mcp__plugin_nuanu-flow_mcp__*",
       claudeCwd: env.NUANU_CLAUDE_CWD || os.tmpdir(),
       codexBin: env.NUANU_CODEX_BIN || "codex",
       codexArgs: (env.NUANU_CODEX_ARGS || "exec --skip-git-repo-check").split(/\s+/).filter(Boolean),

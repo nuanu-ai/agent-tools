@@ -30,6 +30,58 @@ export function buildCodexPrompt(task) {
   ].join("\n\n");
 }
 
+function hasArg(args, name) {
+  return args.some((argument) => argument === name || argument.startsWith(`${name}=`));
+}
+
+export function parseClaudeOutput(stdout) {
+  const body = stdout.trim();
+  if (!body) throw new Error("Claude Code returned no output");
+
+  try {
+    const result = JSON.parse(body);
+    if (result.is_error || result.subtype === "error") {
+      throw new Error(result.result || result.error || "Claude Code reported an error");
+    }
+    return {
+      output:
+        typeof result.result === "string"
+          ? result.result
+          : JSON.stringify(result.result),
+      sessionId: result.session_id,
+    };
+  } catch (error) {
+    if (!body.includes("\n")) throw error;
+  }
+
+  let finalResult = null;
+  for (const line of body.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    let event;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (event.type === "result") finalResult = event;
+  }
+  if (!finalResult) {
+    throw new Error("Claude Code stream ended without a result event");
+  }
+  if (finalResult.is_error || finalResult.subtype === "error") {
+    throw new Error(
+      finalResult.result || finalResult.error || "Claude Code reported an error",
+    );
+  }
+  return {
+    output:
+      typeof finalResult.result === "string"
+        ? finalResult.result
+        : JSON.stringify(finalResult.result),
+    sessionId: finalResult.session_id,
+  };
+}
+
 function runProcess(cmd, args, { input, env, cwd, timeoutMs }) {
   return new Promise((resolve) => {
     let stdout = "";
@@ -91,15 +143,39 @@ function codexTaskEnv(task, cfg) {
  * `handle(task) -> {status:"ok", output, options?, meta?} | {status:"error", error}`.
  */
 export function makeAdapter(cfg) {
-  const type = String(cfg.type || "claude").replace(/_/g, "-");
+  const type = String(cfg.type || "claude-code").replace(/_/g, "-");
+  const claudeSessions = new Map();
 
-  if (type === "claude") {
+  if (type === "claude" || type === "claude-code") {
     return {
-      name: "claude",
+      name: "claude-code",
       async handle(task) {
         const prompt = buildPrompt(task);
         const args = [...cfg.claudeArgs];
-        if (cfg.claudeSkipPermissions) args.push("--dangerously-skip-permissions");
+        if (
+          cfg.claudePermissionMode &&
+          !hasArg(args, "--permission-mode") &&
+          !cfg.claudeSkipPermissions
+        ) {
+          args.push("--permission-mode", cfg.claudePermissionMode);
+        }
+        if (
+          cfg.claudeAllowedTools &&
+          !hasArg(args, "--allowedTools") &&
+          !cfg.claudeSkipPermissions
+        ) {
+          args.push("--allowedTools", cfg.claudeAllowedTools);
+        }
+        if (cfg.claudeSkipPermissions) {
+          args.push("--dangerously-skip-permissions");
+        }
+        const conversationKey = task.thread_id || task.run_id;
+        const sessionId = conversationKey
+          ? claudeSessions.get(conversationKey)
+          : null;
+        if (sessionId && !hasArg(args, "--resume")) {
+          args.push("--resume", sessionId);
+        }
         const env = modelTaskEnv(task);
         const { code, stdout, stderr } = await runProcess(cfg.claudeBin, args, {
           input: prompt,
@@ -108,16 +184,30 @@ export function makeAdapter(cfg) {
           timeoutMs: cfg.timeoutMs,
         });
         if (code !== 0 && !stdout) {
-          return { status: "error", error: `claude exited ${code}: ${stderr.slice(0, 500)}` };
+          return {
+            status: "error",
+            error: `claude exited ${code}: ${stderr.slice(0, 500)}`,
+          };
         }
-        // `claude -p --output-format json` prints one JSON object with a `result`.
         try {
-          const j = JSON.parse(stdout);
-          if (j.is_error) return { status: "error", error: j.result || j.error || "claude reported an error" };
-          const output = typeof j.result === "string" ? j.result : JSON.stringify(j.result);
-          return { status: "ok", output, meta: { session_id: j.session_id } };
-        } catch {
-          // Non-JSON (e.g. --output-format text) → use raw stdout.
+          const result = parseClaudeOutput(stdout);
+          if (conversationKey && result.sessionId) {
+            claudeSessions.set(conversationKey, result.sessionId);
+          }
+          return {
+            status: "ok",
+            output: result.output,
+            meta: { session_id: result.sessionId },
+          };
+        } catch (error) {
+          if (code !== 0) {
+            return {
+              status: "error",
+              error: `claude exited ${code}: ${String(
+                error.message || stderr,
+              ).slice(0, 500)}`,
+            };
+          }
           return { status: "ok", output: stdout.trim() };
         }
       },

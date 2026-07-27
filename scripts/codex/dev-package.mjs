@@ -70,12 +70,13 @@ function assertLocalMcpUrl(rawUrl) {
 }
 
 function developmentManifest(source, { version, mcpUrl }) {
-  const sourceMcp = source.mcpServers?.flow;
+  const sourceMcp = source.mcpServers?.["nuanu-flow"];
   if (!sourceMcp) {
-    throw new Error("Production Codex manifest must define mcpServers.flow");
+    throw new Error(
+      "Production Codex manifest must define mcpServers.nuanu-flow",
+    );
   }
   const {
-    auth: _productionAuth,
     oauth: _productionOAuth,
     ...developmentMcp
   } = sourceMcp;
@@ -84,7 +85,7 @@ function developmentManifest(source, { version, mcpUrl }) {
     name: "nuanu-flow-dev",
     version,
     mcpServers: {
-      flow_dev: {
+      "nuanu-flow": {
         ...developmentMcp,
         url: mcpUrl,
         env_http_headers: {

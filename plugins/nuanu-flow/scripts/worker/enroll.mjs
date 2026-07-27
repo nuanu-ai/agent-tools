@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
 import { createDefaultCredentialStore } from "./credentials.mjs";
@@ -8,24 +9,42 @@ const DEFAULT_API_BASE = "https://flow.nuanu.com/api";
 const ENROLLMENT_TOKEN_PATTERN = /^nuanu_join_[0-9a-f]{64}$/;
 const AGENT_KEY_PATTERN = /^nuanu_flow_[0-9a-f]{64}$/;
 
-function normalizeApiBase(value) {
+function isLoopback(hostname) {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]" ||
+    hostname === "::1"
+  );
+}
+
+export function normalizeApiBase(value) {
   let url;
   try {
     url = new URL(value);
   } catch {
     throw new Error("Invalid API base URL");
   }
+  const transportAllowed =
+    url.protocol === "https:" ||
+    (url.protocol === "http:" && isLoopback(url.hostname));
   if (
-    url.protocol !== "https:" ||
+    !transportAllowed ||
     url.username ||
     url.password ||
     url.search ||
     url.hash ||
     !url.pathname.replace(/\/+$/, "").endsWith("/api")
   ) {
-    throw new Error("API base URL must be HTTPS and end in /api");
+    throw new Error(
+      "API base URL must use HTTPS, or loopback HTTP for local development, and end in /api",
+    );
   }
   return url.toString().replace(/\/+$/, "");
+}
+
+function enrollmentFingerprint(enrollmentToken) {
+  return createHash("sha256").update(enrollmentToken).digest("hex");
 }
 
 async function readJson(response, operation) {
@@ -80,8 +99,13 @@ export async function enroll({
   }
 
   const normalizedBase = normalizeApiBase(baseUrl);
+  const fingerprint = enrollmentFingerprint(enrollmentToken);
   const existing = await credentialStore.load();
-  if (existing) {
+  if (
+    existing &&
+    existing.baseUrl === normalizedBase &&
+    existing.enrollment_token_sha256 === fingerprint
+  ) {
     const agent = await verifyCredential(existing, fetchImpl);
     return { status: "already_enrolled", agent };
   }
@@ -104,9 +128,14 @@ export async function enroll({
     throw new Error("Enrollment response is missing required fields");
   }
 
+  const returnedBase = normalizeApiBase(data.api_url ?? normalizedBase);
+  if (returnedBase !== normalizedBase) {
+    throw new Error("Enrollment response returned an unexpected API origin");
+  }
   const record = {
-    baseUrl: normalizeApiBase(data.api_url ?? normalizedBase),
+    baseUrl: normalizedBase,
     agentKey: data.agent_key,
+    enrollment_token_sha256: fingerprint,
     agent: {
       id: data.agent.id,
       display_name: data.agent.display_name,
@@ -152,6 +181,9 @@ async function main() {
   }
 }
 
-if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+if (
+  process.argv[1] &&
+  pathToFileURL(process.argv[1]).href === import.meta.url
+) {
   await main();
 }

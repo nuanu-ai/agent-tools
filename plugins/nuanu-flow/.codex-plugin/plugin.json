@@ -1,6 +1,6 @@
 {
   "name": "nuanu-flow",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Install and onboard Nuanu Flow from one prompt, then work with projects, processes, artifacts, decisions, and remote agents.",
   "author": {
     "name": "Nuanu",
@@ -20,8 +20,9 @@
     "codex"
   ],
   "skills": "./skills",
+  "hooks": "./hooks/hooks.json",
   "mcpServers": {
-    "flow": {
+    "nuanu-flow": {
       "type": "http",
       "url": "https://flow.nuanu.com/mcp-server/mcp",
       "auth": "oauth",
@@ -47,8 +48,8 @@
       "Write"
     ],
     "websiteURL": "https://flow.nuanu.com",
-    "privacyPolicyURL": "https://flow.nuanu.com/privacy",
-    "termsOfServiceURL": "https://flow.nuanu.com/terms",
+    "privacyPolicyURL": "https://flow.nuanu.com/legals/privacy-policy",
+    "termsOfServiceURL": "https://flow.nuanu.com/legals/terms-and-conditions",
     "defaultPrompt": [
       "Show my Nuanu Flow work items and suggest my next action.",
       "Create a Nuanu Flow work item from this bug report.",

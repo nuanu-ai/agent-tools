@@ -6,45 +6,99 @@ plugin metadata, and a bundled remote-agent worker daemon.
 
 ## Install for Claude Code
 
-**From the marketplace** (needs access to the `nuanu-ai/mgmt` repo):
+Give Claude Code the same single line used for Codex:
 
+```text
+Read and install https://flow.nuanu.com/install.md
 ```
-/plugin marketplace add nuanu-ai/mgmt
+
+Claude follows the environment-aware guide, uses its native marketplace and
+MCP OAuth commands, and then activates the plugin in the current conversation
+with `/reload-plugins`. The equivalent marketplace commands are:
+
+```text
+/plugin marketplace add nuanu-ai/agent-tools
 /plugin install nuanu-flow@nuanu
 ```
 
-**Dev mode** (from a repo checkout — no install):
-
-```bash
-claude --plugin-dir plugins/nuanu-flow
-```
-
-After editing skills/commands/config, run `/reload-plugins` (SKILL.md text
-hot-reloads on its own). CI-style check: `claude plugin validate
-plugins/nuanu-flow --strict`.
+For an isolated localhost package and native browser OAuth, run
+`npm run claude:install:dev`. For source-only development, run
+`claude --plugin-dir plugins/nuanu-flow`; after editing plugin components, use
+`/reload-plugins`. Validate releases with
+`claude plugin validate plugins/nuanu-flow --strict`.
 
 ## Install for Codex
 
 Give Codex this single line:
 
 ```text
-Read and follow https://flow.nuanu.com/install.md
+Read and install https://flow.nuanu.com/install.md
 ```
 
-Codex handles marketplace installation and browser authentication. The OAuth
-screen lets the user sign in or create an account; after the one required
-fresh session, the `onboarding` skill creates a first workspace
-conversationally when needed.
+Codex handles marketplace installation in the terminal and opens only the
+browser OAuth page. After authentication, restart the CLI once and run the
+printed `codex resume <thread-id> "Continue Nuanu Flow setup"` command in the
+same terminal. The prompt starts the resumed conversation's first turn, where
+the `onboarding` skill continues exactly the first unmet requirement. The
+bundled `SessionStart` hook keeps Nuanu Flow available as the task tracker on
+future starts and resumes. Codex requires one-time review before a plugin hook
+can run; review the Nuanu Flow hook when prompted and never bypass that trust
+step.
 
-For Nuanu Flow contributors, install production and development side by side:
+## Install skills without the plugin
+
+Install the self-contained portable fallback into any agent supported by
+`skills`:
 
 ```bash
-npm run codex:setup
-npm run codex:dev
+npx skills add nuanu-ai/agent-tools --skill nuanu-flow
 ```
 
-Production remains `nuanu-flow@nuanu`. Local development is generated as
-`nuanu-flow-dev@nuanu-dev`, uses `flow_dev` at
+It contains the Nuanu Flow router, compiled domain references, and a simplified
+zero-dependency polling worker. It can enroll and execute remote jobs without
+MCP, but Agent Skills cannot universally register or authenticate an MCP
+server. Use the combined plugin for native OAuth, MCP tools, startup guidance,
+and the full remote-worker runtime.
+
+Install every canonical skill separately with
+`npx skills add nuanu-ai/agent-tools --skill '*'`, or refresh the portable
+fallback with `npx skills update nuanu-flow`.
+
+## Bind a repository to a Flow project
+
+After a workspace and project are confirmed, the `project-setup` skill offers
+to create a commit-safe `.nuanu-flow.json` at the Git root:
+
+```json
+{
+  "$schema": "https://flow.nuanu.com/schemas/project-context.v1.json",
+  "version": 1,
+  "workspace_slug": "nuanu",
+  "project_identifier": "FLOW"
+}
+```
+
+The SessionStart hook reads this file locally and adds the binding to the
+agent's short startup context. It makes no startup network request, reads at
+most 4 KiB, and ignores missing or invalid files. Monorepos can add `scopes`
+with relative paths and project identifiers; the most specific path wins.
+Use a gitignored `.nuanu-flow.local.json` only for partial local-development
+overrides. Neither file may contain credentials, endpoints, or user data.
+
+For interactive local development in the current Codex chat:
+
+```bash
+npm run codex:install:dev
+```
+
+This builds and installs the local marketplace package in the current Codex
+profile and opens only the browser OAuth page. No desktop app or fresh terminal
+is required; one CLI restart loads the new MCP tools into the resumed chat,
+and the printed prompt-bearing resume command starts onboarding automatically.
+
+For advanced isolated CLI testing, install production and development side by
+side. Production remains `nuanu-flow@nuanu`. Local development is generated as
+`nuanu-flow-dev@nuanu-dev`, uses `nuanu-flow` at
 `http://localhost:3001/mcp`, and is labeled `Nuanu Flow [DEV]`. Setup keeps
 the modes in separate persistent Codex homes:
 
@@ -58,6 +112,7 @@ npm run codex:prod
 npm run codex:dev
 npm run codex:refresh
 npm run codex:update
+npm run codex:remove
 ```
 
 `codex:dev` rebuilds and reinstalls when the source fingerprint changes.
@@ -65,6 +120,14 @@ npm run codex:update
 fails if localhost is unavailable and never falls back to `flow.nuanu.com`.
 Both homes reuse the existing Codex/OpenAI login, while Flow MCP auth remains
 mode-local. No Nuanu CLI or global package is installed.
+
+`codex:remove` provides a complete, repeatable reset for install testing. It
+logs out Nuanu MCP OAuth, removes Nuanu Flow plugins and marketplaces from the
+normal and isolated Codex homes, removes remembered Nuanu Flow hook trust,
+deletes isolated profiles, and removes the generated development package plus
+saved fallback tokens. It preserves the normal Codex login, unrelated hooks,
+unrelated plugins, and the separate remote-worker credential. Run
+`npm run codex:install:dev` afterward for a fresh terminal install.
 
 ## Configure — three auth modes
 
@@ -77,30 +140,35 @@ mode-local. No Nuanu CLI or global package is installed.
 3. **Manual token (CI)** — `NUANU_TOKEN` (`plane_api_…` from Workspace
    Settings → API tokens).
 
-| Env var           | Used for              | Meaning                                                                                                                                                         |
-| ----------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NUANU_TOKEN`     | manual mode           | Personal API token (leave unset for OAuth)                                                                                                                      |
-| `NUANU_AGENT_KEY` | ambient mode + worker | `nuanu_flow_…` key of a remote agent employee                                                                                                                   |
-| `NUANU_WORKSPACE` | all (optional)        | Default workspace slug; overrides the consent choice                                                                                                            |
-| `NUANU_MCP_URL`   | Claude (optional)     | Claude MCP endpoint override; Codex local development uses `NUANU_DEV_MCP_URL` through the generated plugin                                        |
-| `NUANU_DEV_MCP_URL` | Codex local dev     | Local MCP endpoint override (default `http://localhost:3001/mcp`)                                                                                   |
-| `NUANU_URL`       | worker + renderer     | Django API base **including `/api`**                                                                                                                            |
-| `NUANU_DEV_TOKEN` | Codex local dev       | Development user token; never forwarded to production                                                                                                          |
-| `NUANU_DEV_AGENT_KEY` | Codex local worker | Development worker key; mapped only inside the local worker child                                                                                               |
-| `NUANU_DEV_WORKSPACE` | Codex local dev    | Development workspace slug                                                                                                                                      |
+| Env var               | Used for              | Meaning                                                                                                     |
+| --------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `NUANU_TOKEN`         | manual mode           | Personal API token (leave unset for OAuth)                                                                  |
+| `NUANU_AGENT_KEY`     | ambient mode + worker | `nuanu_flow_…` key of a remote agent employee                                                               |
+| `NUANU_WORKSPACE`     | all (optional)        | Default workspace slug; overrides the consent choice                                                        |
+| `NUANU_MCP_URL`       | Claude (optional)     | Claude MCP endpoint override; Codex local development uses `NUANU_DEV_MCP_URL` through the generated plugin |
+| `NUANU_DEV_MCP_URL`   | Codex local dev       | Local MCP endpoint override (default `http://localhost:3001/mcp`)                                           |
+| `NUANU_URL`           | worker + renderer     | Django API base **including `/api`**                                                                        |
+| `NUANU_DEV_TOKEN`     | Codex local dev       | Development user token; never forwarded to production                                                       |
+| `NUANU_DEV_AGENT_KEY` | Codex local worker    | Development worker key; mapped only inside the local worker child                                           |
+| `NUANU_DEV_WORKSPACE` | Codex local dev       | Development workspace slug                                                                                  |
 
 Then run `/nuanu-flow:setup` for a guided Claude Code verification. In Codex,
-use the `codex-setup` skill and `npm run codex:status`. OAuth is preferred
-when discovery metadata is available. `npm run codex:auth:prod` and
-`npm run codex:auth:dev` handle the current environment/Keychain fallback
-without writing plaintext credentials into the repository.
+use the `codex-setup` skill and prefer current-profile terminal installation
+plus browser OAuth. Never open a `codex://` link for a terminal user. The
+repository's profile-specific auth scripts remain available for explicitly
+requested isolated CLI profiles. Never ask the user to copy an OAuth URL or
+reply `done`; environment/Keychain credentials remain advanced fallbacks.
 
 ## What's inside
 
 - **`skills/`** — open-standard Agent Skills: `nuanu-flow` (orientation +
   routing), `onboarding`, `work-items`, `workspace-setup`, `project-setup`,
-  `bpmn-processes`, `artifacts`, `remote-worker`, plus Codex setup and Codex
-  remote-worker guidance.
+  `bpmn-processes`, `artifacts`, `remote-worker`, plus host-specific Codex and
+  Claude Code remote-worker guidance.
+- **standalone `skills/nuanu-flow`** — generated portable distribution with
+  flattened copies of the domain references, a source-hash manifest, and
+  `scripts/worker.mjs`. Generate it from the canonical plugin skills with
+  `npm run sync:skills`; verify it is current with `npm run check:skills`.
 - **`commands/`** — `/nuanu-flow:setup` (env + connectivity check),
   `/nuanu-flow:launch-remote-agent <token>` (zero-config: resolve URL, start
   the worker, confirm connection), `/nuanu-flow:worker` (start the
@@ -145,14 +213,29 @@ Optional but recommended — clickable footer badges for work-item IDs
 ## Run as a remote agent
 
 1. In the app, create an agent employee with runtime **remote**.
-2. Copy the generated one-line Codex prompt and give it to Codex. It follows
-   `https://flow.nuanu.com/connect/remote-agent.md`, installs this plugin if
-   needed, exchanges the single-use enrollment token without exposing the
-   durable credential, and starts the App Server worker.
+2. Select Codex, Claude Code, or Generic agent and copy its generated one-line
+   prompt. It follows `http://localhost:3000/connect/remote-agent.md` locally
+   or `https://flow.nuanu.com/connect/remote-agent.md` in production, installs
+   and OAuth-authenticates the native plugin when supported, exchanges the
+   single-use enrollment token without exposing the durable credential, and
+   starts the selected worker.
 
 Advanced manual alternative: set `NUANU_URL` and `NUANU_AGENT_KEY`, then use
 `/nuanu-flow:worker` — or headless:
 `node plugins/nuanu-flow/scripts/worker/worker.mjs`
+
+Generic agents use the portable skill instead of the full plugin:
+
+```bash
+npx skills add nuanu-ai/agent-tools --skill nuanu-flow
+node "<installed-skill-root>/scripts/worker.mjs" enroll --base-url "https://flow.nuanu.com/api"
+node "<installed-skill-root>/scripts/worker.mjs" run --command "<text-in/text-out command>"
+```
+
+The enrollment token is written to the first command over standard input,
+never included in the command line. The portable worker stores its durable
+credential privately, passes only a task-scoped key to the child command, and
+omits plugin hooks, OAuth, WebSockets, and host-specific session management.
 
 For Codex workers, prefer App Server:
 

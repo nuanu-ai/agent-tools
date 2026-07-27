@@ -8,11 +8,26 @@ description: Start here when working with Nuanu Flow (Plane-based work managemen
 Nuanu Flow is a work-management platform (a Plane fork) with an AI layer:
 BPMN **processes** orchestrate humans and AI **agent employees**, **decisions**
 gate approvals, and an **artifacts** registry stores versioned files. You talk
-to it through the bundled `flow` MCP server.
+to it through the bundled `nuanu-flow` MCP server.
+
+## Session activation
+
+On a startup or resume turn, treat Nuanu Flow as the session's task tracker.
+When onboarding status is not already established in the thread, call the
+read-only `onboarding_next` tool at most once. Continue only its returned step
+when incomplete. If onboarding is complete, do not interrupt unrelated work.
+If the check is unavailable, continue the user's request without a retry loop.
+
+The SessionStart hook may also provide a repository binding loaded from
+`.nuanu-flow.json`. Discovery is deliberately local and bounded: it walks only
+to the Git root, reads at most 4 KiB, performs no network call, and fails open.
+Validate the selected workspace/project lazily on the first real Flow
+operation.
 
 ## Calling convention (read this first)
 
-The `flow` MCP server runs in **compact mode** by default and publishes only
+The `nuanu-flow` MCP server runs in **compact mode** by default and publishes
+only
 two tools:
 
 - `search_tools(query)` — keyword search over the full catalog (~149 tools);
@@ -33,10 +48,12 @@ the same names are directly callable as regular MCP tools.
    account may authorize before it has a workspace; use `onboarding` next.
    You then act **as that user**, and your actions are attributed
    "via <client>" (junction avatar in the app). Claude Code re-auth:
-   `/mcp` -> mcp -> authenticate. Codex re-auth: `codex mcp login flow`
-   after confirming the server name in `codex mcp list`. If Codex reports
-   `Auth Unsupported`, load `codex-setup` and use its environment/Keychain
-   fallback until the hosted endpoint exposes OAuth discovery.
+   `/mcp` -> mcp -> authenticate. In the Codex desktop app or IDE extension,
+   use Authenticate for `nuanu-flow`. In Codex CLI, run the selected
+   environment's `codex:auth` helper, which lets Codex open and wait for
+   browser OAuth.
+   If Codex reports `Auth Unsupported`, load `codex-setup` and verify OAuth
+   discovery before using an advanced environment/Keychain fallback.
 2. **Ambient agent (headless)** — `NUANU_AGENT_KEY` (`nuanu_flow_…`) is set;
    automatic inside worker-run task sessions. You act **as the agent
    employee** itself.
@@ -51,7 +68,7 @@ check.
 For a versionless Codex install, the only user-facing prompt is:
 `Read and follow https://flow.nuanu.com/install.md`. If the user says
 `Continue Nuanu Flow setup` after the single required restart, load the
-`onboarding` skill and begin by calling `list_workspaces`.
+`onboarding` skill and begin by calling `onboarding_next`.
 
 ## Object model
 
@@ -75,9 +92,19 @@ none`), assignees, **labels**, **estimates**, sub-items (parent), relations,
 
 ## Conventions that apply everywhere
 
-- `workspace_slug` is optional in almost every tool. Resolution order is the
-  explicit argument, connection default, `NUANU_WORKSPACE`, then the only
-  accessible workspace. Multiple workspaces require an explicit choice.
+- `workspace_slug` is optional in almost every tool. Resolution order is an
+  explicit user/tool argument, the most specific matching repository scope,
+  the root repository binding, connection default, `NUANU_WORKSPACE`, then
+  the only accessible workspace. Multiple unresolved workspaces require an
+  explicit choice.
+- `.nuanu-flow.json` contains `version`, `workspace_slug`, a root
+  `project_identifier`, and optional path `scopes`. The nearest matching scope
+  wins. `.nuanu-flow.local.json` may partially override it for local
+  development only and must remain gitignored. Neither file may contain
+  secrets, endpoints, callback URLs, or identity data.
+- Create a repository binding only after the workspace and project are
+  confirmed, normally through `project-setup`. Authentication and account
+  onboarding alone are not enough to choose a project.
 - **Human aliases work alongside UUIDs**: `project_identifier` (`"ENG"`),
   `issue_identifier` (`"ENG-42"`), `state_name`, `assignee_emails`,
   `assignee_names`, `label_names`, `parent_ref`. Alias matching is **exact**,
@@ -92,15 +119,17 @@ none`), assignees, **labels**, **estimates**, sub-items (parent), relations,
 
 | Job                                                                  | Skill                 |
 | -------------------------------------------------------------------- | --------------------- |
-| First workspace, new account, or zero-workspace setup                | `onboarding`           |
-| Enrich an existing empty workspace with company context and goals    | `workspace-setup`      |
+| First workspace, new account, or zero-workspace setup                | `onboarding`          |
+| Enrich an existing empty workspace with company context and goals    | `workspace-setup`     |
 | Create/search/triage/update work items, sprints, relations, comments | `work-items`          |
 | Scaffold a new project (states, labels, estimates, members, views)   | `project-setup`       |
 | Author or operate a BPMN process / approval chain / automation flow  | `bpmn-processes`      |
 | Store, version, search, or link files and documents                  | `artifacts`           |
+| Design, create, connect, or launch a local or remote agent employee  | `create-agent`        |
 | Run this agent as a remote worker executing process agent-tasks      | `remote-worker`       |
 | Install, verify, or locally develop the Codex plugin                 | `codex-setup`         |
 | Run remote-worker tasks through Codex App Server                     | `codex-remote-worker` |
+| Run remote-worker tasks through Claude Code                          | `claude-code-remote-worker` |
 
 For Codex remote enrollment, use the versionless instructions at
 `https://flow.nuanu.com/connect/remote-agent.md`. The copied prompt contains a
