@@ -1,4 +1,4 @@
-# Work-item payload & filter reference
+# Flow item payload & filter reference
 
 ## Mutable issue fields (create_issue / bulk_create_issues / update_issue / bulk_update_issues)
 

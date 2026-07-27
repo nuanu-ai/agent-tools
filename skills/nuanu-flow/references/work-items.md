@@ -1,4 +1,4 @@
-# Work items (issues)
+# Flow items (issues)
 
 Call tools via `execute_tool("<name>", {...})` (see the `nuanu-flow`
 orientation skill). Full payload/filter reference: `work-items-payloads.md`.

@@ -11,7 +11,7 @@ later steps reference IDs from earlier ones.
 ## 1. Create the project
 
 `create_project` with `name` and `identifier` (short, UPPERCASE, stable —
-it prefixes every work item: `ENG` → `ENG-42`). Returns the project `id`;
+it prefixes every flow item: `ENG` → `ENG-42`). Returns the project `id`;
 subsequent calls can also address it by `project_identifier`.
 
 ## 2. Workflow states
@@ -22,7 +22,7 @@ Cancelled). Adjust only if the team's flow differs:
 - `create_state` — requires `name`, `color` (hex), `group` ∈
   `backlog | unstarted | started | completed | cancelled`.
 - `update_state` / `delete_state` to reshape the defaults.
-- `set_default_state` — the state new work items land in.
+- `set_default_state` — the state new flow items land in.
 
 Keep exactly one obvious default in `unstarted` (or `backlog` for
 intake-style projects).
@@ -35,7 +35,7 @@ labels are workspace-visible filters, not a taxonomy.
 ## 4. Estimates (optional)
 
 `create_estimate` (e.g. name "Story points", type points) →
-`create_estimate_point` per value (1, 2, 3, 5, 8…). Work items then accept
+`create_estimate_point` per value (1, 2, 3, 5, 8…). Flow items then accept
 `estimate_point` (the point's UUID).
 
 ## 5. Members

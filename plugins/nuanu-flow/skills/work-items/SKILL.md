@@ -1,9 +1,9 @@
 ---
 name: work-items
-description: Create, search, triage, and update Nuanu Flow work items (issues) — states, priorities, assignees, labels, comments, sub-items, relations, links, attachments, cycles/modules placement, and bulk operations.
+description: Create, search, triage, and update Flow items in Nuanu Flow (issues internally) — states, priorities, assignees, labels, comments, sub-items, relations, links, attachments, cycles/modules placement, and bulk operations.
 ---
 
-# Work items (issues)
+# Flow items (issues)
 
 Call tools via `execute_tool("<name>", {...})` (see the `nuanu-flow`
 orientation skill). Full payload/filter reference: `references/payloads.md`.

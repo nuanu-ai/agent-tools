@@ -1,7 +1,7 @@
 {
   "format_version": 1,
   "plugin_version": "0.3.0",
-  "bundle_sha256": "96bbcfba15359bc371cd43918328044d13095122f900a8fe8393c9e6bec9377d",
+  "bundle_sha256": "86d2679c90631425984d585edd53aa48cf56181f44d78ca2b887a4415a2dd34e",
   "sources": [
     {
       "path": "plugins/nuanu-flow/scripts/worker/portable-worker.mjs",
@@ -33,7 +33,7 @@
     },
     {
       "path": "plugins/nuanu-flow/skills/project-setup/SKILL.md",
-      "sha256": "99a06b8baaa0d9fc5c8a42d930f9b6b967dbee8394ef30e81ece05e07eaf9bb6"
+      "sha256": "b4e2988f13be8aa8f673a7103dcaea4079755a18b736d969132956ab43c134db"
     },
     {
       "path": "plugins/nuanu-flow/skills/remote-worker/SKILL.md",
@@ -41,11 +41,11 @@
     },
     {
       "path": "plugins/nuanu-flow/skills/work-items/SKILL.md",
-      "sha256": "24dc6fdd011a9870e851a6ae1092808e5cc59fca7b9f7b962f52e627db9949cb"
+      "sha256": "be0596e8dcc610d4d939ef20bf68920f2c0ff8dd990347ffa4cb74c880427273"
     },
     {
       "path": "plugins/nuanu-flow/skills/work-items/references/payloads.md",
-      "sha256": "2f52d30cec3c48e7c3330aaedde8bdd71a4e8d0ee99272473312713f4f7984f9"
+      "sha256": "880559901b1e76a3ee3c98dd84597d0535d33cf679da7b202f28c837e87a755a"
     },
     {
       "path": "plugins/nuanu-flow/skills/workspace-setup/SKILL.md",

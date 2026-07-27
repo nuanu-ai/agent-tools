@@ -133,9 +133,9 @@ export function runCodexAppServerTask(task, cfg, prompt, taskEnv) {
     };
 
     const request = (method, params) =>
-      new Promise((resolveRequest, reject) => {
+      new Promise((resolve, reject) => {
         const id = nextId++;
-        pending.set(id, { resolve: resolveRequest, reject, method });
+        pending.set(id, { resolve, reject, method });
         write({ id, method, params });
       });
 
