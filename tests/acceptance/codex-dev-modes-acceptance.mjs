@@ -246,6 +246,66 @@ function assertDevelopmentOnly(value, label) {
   );
 }
 
+async function assertPackagedSessionHook(pluginRoot, label) {
+  const manifest = parseJsonOutput(
+    `${label} manifest`,
+    await fs.readFile(
+      path.join(pluginRoot, ".codex-plugin/plugin.json"),
+      "utf8",
+    ),
+  );
+  assert.equal(manifest.hooks, "./hooks/hooks.json");
+  const hookConfig = parseJsonOutput(
+    `${label} hook config`,
+    await fs.readFile(path.join(pluginRoot, manifest.hooks), "utf8"),
+  );
+  const group = hookConfig.hooks?.SessionStart?.[0];
+  const handler = group?.hooks?.[0];
+  assert.equal(group?.matcher, "startup|resume|clear|compact");
+  assert.equal(handler?.timeout, 1);
+  assert.match(handler?.command || "", /session-start\.mjs/);
+  const scriptPath = path.join(pluginRoot, "hooks/session-start.mjs");
+  const durations = [];
+  for (const source of ["startup", "resume", "clear", "compact"]) {
+    for (let iteration = 0; iteration < 4; iteration++) {
+      const started = performance.now();
+      const result = spawnSync(process.execPath, [scriptPath], {
+        cwd: repoRoot,
+        encoding: "utf8",
+        input: JSON.stringify({
+          session_id: "acceptance-session",
+          transcript_path: null,
+          cwd: repoRoot,
+          hook_event_name: "SessionStart",
+          model: "acceptance",
+          permission_mode: "default",
+          source,
+          credential_probe: "MUST_NOT_APPEAR",
+        }),
+      });
+      durations.push(performance.now() - started);
+      assert.equal(result.status, 0, result.stderr);
+      assert.doesNotMatch(result.stdout, /MUST_NOT_APPEAR/);
+      const output = parseJsonOutput(`${label} ${source} hook`, result.stdout);
+      const context =
+        output.hookSpecificOutput?.additionalContext || "";
+      assert.match(context, /Nuanu Flow/);
+      assert.match(context, /onboarding_next/);
+      assert(
+        context.trim().split(/\s+/).length <= 80,
+        `${label} ${source} hook context exceeds 80 words`,
+      );
+    }
+  }
+  durations.sort((left, right) => left - right);
+  const p95 = durations[Math.ceil(durations.length * 0.95) - 1];
+  assert(
+    p95 < 100,
+    `${label} SessionStart hook p95 ${p95.toFixed(1)}ms exceeds 100ms`,
+  );
+  return p95;
+}
+
 async function installIsolatedModes({ codexHome, buildRoot, mcpUrl }) {
   const env = { NUANU_DEV_MCP_URL: mcpUrl };
   const dryRun = await setup({
@@ -330,23 +390,23 @@ async function runCredentialFreeAcceptance(mcp) {
     );
 
     assert.deepEqual(
-      prodMcp.filter((server) => server.name.startsWith("flow")).map((server) => ({
+      prodMcp.filter((server) => server.name === "nuanu-flow").map((server) => ({
         name: server.name,
         url: server.transport.url,
       })),
       [
         {
-          name: "flow",
+          name: "nuanu-flow",
           url: "https://flow.nuanu.com/mcp-server/mcp",
         },
       ],
     );
     assert.deepEqual(
-      devMcp.filter((server) => server.name.startsWith("flow")).map((server) => ({
+      devMcp.filter((server) => server.name === "nuanu-flow").map((server) => ({
         name: server.name,
         url: server.transport.url,
       })),
-      [{ name: "flow_dev", url: mcp.url }],
+      [{ name: "nuanu-flow", url: mcp.url }],
     );
     assertDevelopmentOnly(devMcp, "isolated development MCP list");
     assert.deepEqual(
@@ -361,7 +421,29 @@ async function runCredentialFreeAcceptance(mcp) {
         .map((plugin) => plugin.pluginId),
       ["nuanu-flow-dev@nuanu-dev"],
     );
-    console.log("credential-free: real Codex installed and isolated both modes");
+    const productionRoot = path.join(repoRoot, "plugins/nuanu-flow");
+    const productionManifest = parseJsonOutput(
+      "production package manifest",
+      await fs.readFile(
+        path.join(productionRoot, ".codex-plugin/plugin.json"),
+        "utf8",
+      ),
+    );
+    assert.doesNotMatch(
+      productionManifest.mcpServers["nuanu-flow"].url,
+      /localhost|127\.0\.0\.1|\[::1\]/,
+    );
+    const productionP95 = await assertPackagedSessionHook(
+      productionRoot,
+      "production",
+    );
+    const developmentP95 = await assertPackagedSessionHook(
+      installed.build.pluginRoot,
+      "development",
+    );
+    console.log(
+      `credential-free: real Codex installed both modes; SessionStart hooks passed (prod p95=${productionP95.toFixed(1)}ms, dev p95=${developmentP95.toFixed(1)}ms)`,
+    );
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
@@ -709,7 +791,7 @@ async function runModelBackedAcceptance(mcp, options = {}) {
       },
       `Codex MCP diagnostics: ${String(firstExec.stderr)
         .split("\n")
-        .filter((line) => /mcp|rmcp|flow_dev/i.test(line))
+        .filter((line) => /mcp|rmcp|nuanu-flow/i.test(line))
         .slice(0, 120)
         .join("\n")}\nMCP requests: ${JSON.stringify(mcp.requests)}`,
     );

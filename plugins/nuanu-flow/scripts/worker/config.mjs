@@ -63,15 +63,25 @@ export function loadConfig({ env = process.env, credentialStore = createDefaultC
     adapter: {
       type: (env.NUANU_ADAPTER || "claude-code").toLowerCase(),
       claudeBin: env.NUANU_CLAUDE_BIN || "claude",
-      claudeArgs: (env.NUANU_CLAUDE_ARGS || "-p --output-format stream-json --verbose").split(/\s+/).filter(Boolean),
+      claudeArgs: (
+        env.NUANU_CLAUDE_ARGS ||
+        "-p --output-format stream-json --verbose"
+      )
+        .split(/\s+/)
+        .filter(Boolean),
       claudeSkipPermissions: bool(env, "NUANU_CLAUDE_SKIP_PERMISSIONS", false),
-      claudePermissionMode: env.NUANU_CLAUDE_PERMISSION_MODE || "dontAsk",
-      claudeAllowedTools: env.NUANU_CLAUDE_ALLOWED_TOOLS || "mcp__plugin_nuanu-flow_mcp__*",
+      claudePermissionMode:
+        env.NUANU_CLAUDE_PERMISSION_MODE || "dontAsk",
+      claudeAllowedTools:
+        env.NUANU_CLAUDE_ALLOWED_TOOLS ||
+        "mcp__plugin_nuanu-flow_mcp__*",
       claudeCwd: env.NUANU_CLAUDE_CWD || os.tmpdir(),
       codexBin: env.NUANU_CODEX_BIN || "codex",
       codexArgs: (env.NUANU_CODEX_ARGS || "exec --skip-git-repo-check").split(/\s+/).filter(Boolean),
       codexCwd: env.NUANU_CODEX_CWD || os.tmpdir(),
-      codexAppServerArgs: (env.NUANU_CODEX_APP_SERVER_ARGS || "app-server --stdio").split(/\s+/).filter(Boolean),
+      codexAppServerArgs: (env.NUANU_CODEX_APP_SERVER_ARGS || "app-server --stdio")
+        .split(/\s+/)
+        .filter(Boolean),
       codexAgentKeyEnv: env.NUANU_CODEX_AGENT_KEY_ENV || "NUANU_AGENT_KEY",
       codexAppServerApprovalMode: (env.NUANU_CODEX_APP_SERVER_APPROVAL_MODE || "deny").toLowerCase(),
       codexAppServerApprovalPolicy: env.NUANU_CODEX_APP_SERVER_APPROVAL_POLICY || "never",

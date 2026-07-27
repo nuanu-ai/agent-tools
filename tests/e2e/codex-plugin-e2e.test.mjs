@@ -10,6 +10,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const pluginRoot = path.join(repoRoot, "plugins/nuanu-flow");
 const manifestPath = path.join(pluginRoot, ".codex-plugin/plugin.json");
 const marketplacePath = path.join(repoRoot, ".agents/plugins/marketplace.json");
+const installPrompt = "Read and install https://flow.nuanu.com/install.md";
+const remoteGuideUrl = "https://flow.nuanu.com/connect/remote-agent.md";
 
 async function readJson(file) {
   return JSON.parse(await fs.readFile(file, "utf8"));
@@ -71,15 +73,22 @@ test("Codex plugin metadata points at skills and OAuth-ready Flow MCP config", a
   assert.equal(manifest.name, "nuanu-flow");
   assert.match(manifest.version, /^\d+\.\d+\.\d+(\+[0-9A-Za-z.-]+)?$/);
   assert.equal(manifest.skills, "./skills");
+  assert.equal(manifest.hooks, "./hooks/hooks.json");
   assert.equal(typeof manifest.mcpServers, "object");
   assert.equal(manifest.interface.displayName, "Nuanu Flow");
   assert(manifest.interface.defaultPrompt.some((line) => line.includes("work items")));
 
-  assert.equal(mcp.flow.type, "http");
-  assert.equal(mcp.flow.url, "https://flow.nuanu.com/mcp-server/mcp");
-  assert.equal(mcp.flow.auth, "oauth");
-  assert.equal(mcp.flow.env_http_headers["X-Agent-Key"], "NUANU_AGENT_KEY");
-  assert.equal(mcp.flow.default_tools_approval_mode, "writes");
+  assert.equal(mcp["nuanu-flow"].type, "http");
+  assert.equal(
+    mcp["nuanu-flow"].url,
+    "https://flow.nuanu.com/mcp-server/mcp",
+  );
+  assert.equal(mcp["nuanu-flow"].auth, "oauth");
+  assert.equal(
+    mcp["nuanu-flow"].env_http_headers["X-Agent-Key"],
+    "NUANU_AGENT_KEY",
+  );
+  assert.equal(mcp["nuanu-flow"].default_tools_approval_mode, "writes");
 
   assert.equal(marketplace.name, "nuanu");
   assert.equal(marketplace.plugins[0].name, "nuanu-flow");
@@ -89,6 +98,7 @@ test("Codex plugin metadata points at skills and OAuth-ready Flow MCP config", a
   });
 
   await fs.access(path.join(pluginRoot, manifest.skills));
+  await fs.access(path.join(pluginRoot, manifest.hooks));
   await fs.access(path.join(pluginRoot, ".mcp.json"));
 });
 
@@ -99,8 +109,34 @@ test("Codex auth doctor detects disabled OAuth metadata", async () => {
     assert.equal(result.status, 0, result.stderr);
     const body = JSON.parse(result.stdout);
     assert.equal(body.status, "oauth-disabled");
+    assert.match(
+      body.hookStatus,
+      /^(trusted|review_required|unsupported)$/,
+    );
     assert.equal(body.probe, `${new URL(server.url).origin}/mcp-server/.well-known/oauth-protected-resource`);
   } finally {
     await server.close();
   }
+});
+
+test("public plugin exposes the one-prompt onboarding and remote enrollment flow", async () => {
+  const manifest = await readJson(manifestPath);
+  const rootReadme = await fs.readFile(path.join(repoRoot, "README.md"), "utf8");
+  const pluginReadme = await fs.readFile(path.join(pluginRoot, "README.md"), "utf8");
+  const orientation = await fs.readFile(path.join(pluginRoot, "skills/nuanu-flow/SKILL.md"), "utf8");
+
+  await fs.access(path.join(pluginRoot, "skills/onboarding/SKILL.md"));
+  await fs.access(path.join(pluginRoot, "scripts/worker/enroll.mjs"));
+  await fs.access(path.join(pluginRoot, "scripts/worker/credentials.mjs"));
+
+  assert.match(rootReadme, new RegExp(installPrompt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(pluginReadme, new RegExp(installPrompt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(pluginReadme, new RegExp(remoteGuideUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(orientation, /first workspace|zero workspaces/i);
+  assert.match(orientation, /`onboarding`/);
+  assert.equal(
+    manifest.mcpServers["nuanu-flow"].url,
+    "https://flow.nuanu.com/mcp-server/mcp",
+  );
+  assert.equal(manifest.mcpServers["nuanu-flow"].auth, "oauth");
 });

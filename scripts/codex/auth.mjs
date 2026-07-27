@@ -1,15 +1,10 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import {
-  MODES,
-  codexModeHome,
-  modeConfig,
-  runCodex,
-} from "./modes.mjs";
+import { MODES, codexModeHome, modeConfig, runCodex } from "./modes.mjs";
 
-const KEYCHAIN_SERVICE = "nuanu-flow-codex";
+export const CODEX_KEYCHAIN_SERVICE = "nuanu-flow-codex";
 const AUTH_ENV_NAMES = Object.values(MODES).flatMap((mode) => [
   mode.tokenEnv,
   mode.agentKeyEnv,
@@ -28,14 +23,7 @@ export const systemKeychain = {
     if (process.platform !== "darwin") return null;
     const result = spawnSync(
       "/usr/bin/security",
-      [
-        "find-generic-password",
-        "-s",
-        service,
-        "-a",
-        account,
-        "-w",
-      ],
+      ["find-generic-password", "-s", service, "-a", account, "-w"],
       {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"],
@@ -49,15 +37,7 @@ export const systemKeychain = {
     }
     const result = spawnSync(
       "/usr/bin/security",
-      [
-        "add-generic-password",
-        "-U",
-        "-s",
-        service,
-        "-a",
-        account,
-        "-w",
-      ],
+      ["add-generic-password", "-U", "-s", service, "-a", account, "-w"],
       {
         encoding: "utf8",
         input: `${token}\n`,
@@ -69,6 +49,27 @@ export const systemKeychain = {
         `Could not store token in macOS Keychain: ${String(result.stderr).trim()}`,
       );
     }
+  },
+  async remove({ service, account }) {
+    if (process.platform !== "darwin") return false;
+    const result = spawnSync(
+      "/usr/bin/security",
+      ["delete-generic-password", "-s", service, "-a", account],
+      {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    if (result.status === 0) return true;
+    if (
+      result.status === 44 ||
+      /could not be found|item not found/i.test(String(result.stderr))
+    ) {
+      return false;
+    }
+    throw new Error(
+      `Could not remove token from macOS Keychain: ${String(result.stderr).trim()}`,
+    );
   },
 };
 
@@ -91,7 +92,7 @@ export async function resolveModeCredentials(
   else {
     selectedToken =
       (await keychain?.get?.({
-        service: KEYCHAIN_SERVICE,
+        service: CODEX_KEYCHAIN_SERVICE,
         account: keychainAccount(modeName),
       })) || "";
     if (selectedToken) source = "keychain";
@@ -221,33 +222,85 @@ export async function probeEndpoint(url, timeoutMs = 5000) {
 
 export async function readMcpAuthStatus(modeName, options = {}) {
   const mode = modeConfig(modeName, options.env || process.env);
-  const home = codexModeHome(modeName, {
-    codexHome: options.codexHome,
-    env: options.env,
-  });
-  const result = runCodex(
-    ["mcp", "list", "--json"],
-    {
-      codexBin: options.codexBin,
-      cwd: options.cwd,
-      env: {
-        ...process.env,
-        ...options.env,
-        CODEX_HOME: home,
-      },
+  const home =
+    options.home ||
+    codexModeHome(modeName, {
+      codexHome: options.codexHome,
+      env: options.env,
+    });
+  const result = runCodex(["mcp", "list", "--json"], {
+    codexBin: options.codexBin,
+    cwd: options.cwd,
+    env: {
+      ...process.env,
+      ...options.env,
+      CODEX_HOME: home,
     },
-  );
+  });
   let servers;
   try {
     servers = JSON.parse(result.stdout);
   } catch {
     return "unknown";
   }
-  const status = servers.find((server) => server.name === mode.mcpName)
-    ?.auth_status;
+  const status = servers.find(
+    (server) => server.name === mode.mcpName,
+  )?.auth_status;
   return ["o_auth", "not_logged_in", "unsupported"].includes(status)
     ? status
     : "unknown";
+}
+
+export function runCodexWithBrowserAuth(args, options = {}) {
+  const spawnImpl = options.spawnImpl || spawn;
+
+  return new Promise((resolve, reject) => {
+    const child = spawnImpl(
+      options.codexBin || "codex",
+      args,
+      {
+        cwd: options.cwd,
+        env: {
+          ...process.env,
+          ...options.env,
+          ...(options.home ? { CODEX_HOME: options.home } : {}),
+        },
+        stdio: ["inherit", "pipe", "pipe"],
+      },
+    );
+    // Codex owns browser launch and its printed-URL fallback. Reopening a URL
+    // observed in this output creates a duplicate authorization tab.
+    child.stdout.on("data", (chunk) => process.stdout.write(chunk));
+    child.stderr.on("data", (chunk) => process.stderr.write(chunk));
+    child.on("error", reject);
+    child.on("close", (status, signal) => {
+      if (status === 0) {
+        resolve();
+        return;
+      }
+      reject(
+        new Error(
+          `codex ${args.join(" ")} exited ${
+            status ?? `after signal ${signal || "unknown"}`
+          }`,
+        ),
+      );
+    });
+  });
+}
+
+export function runMcpLogin(modeName, options = {}) {
+  const mode = modeConfig(modeName, options.env || process.env);
+  const home =
+    options.home ||
+    codexModeHome(modeName, {
+      codexHome: options.codexHome,
+      env: options.env,
+    });
+  return runCodexWithBrowserAuth(["mcp", "login", mode.mcpName], {
+    ...options,
+    home,
+  });
 }
 
 function readHiddenToken(promptText) {
@@ -296,28 +349,12 @@ export async function authenticateMode(modeName, options = {}) {
       return { mode: modeName, ready: true, source: "oauth" };
     }
     if (oauthStatus === "not_logged_in" && !options.check) {
-      const home = codexModeHome(modeName, {
-        codexHome: options.codexHome,
-        env: options.env,
-      });
-      runCodex(
-        ["mcp", "login", mode.mcpName],
-        {
-          codexBin: options.codexBin,
-          cwd: options.cwd,
-          env: {
-            ...process.env,
-            ...options.env,
-            CODEX_HOME: home,
-          },
-          stdio: "inherit",
-        },
-      );
+      await runMcpLogin(modeName, options);
       const verified = await readMcpAuthStatus(modeName, options);
       return {
         mode: modeName,
         ready: verified === "o_auth",
-        source: verified === "o_auth" ? "oauth" : "missing",
+        source: verified === "o_auth" ? "oauth" : "oauth-failed",
       };
     }
     const credentials = await resolveModeCredentials(
@@ -332,11 +369,13 @@ export async function authenticateMode(modeName, options = {}) {
         source: credentials.report.source,
       };
     }
+    return {
+      mode: modeName,
+      ready: false,
+      source: oauthStatus === "not_logged_in" ? "oauth-required" : "missing",
+    };
   }
 
-  if (options.check) {
-    return { mode: modeName, ready: false, source: "missing" };
-  }
   if (process.platform !== "darwin") {
     throw new Error(
       `Persistent fallback auth is unavailable on this platform. Set ${mode.tokenEnv} or ${mode.agentKeyEnv}.`,
@@ -346,7 +385,7 @@ export async function authenticateMode(modeName, options = {}) {
   const token = await readToken(`Token for ${mode.label}: `);
   if (!token) throw new Error("No token provided");
   await keychain.set({
-    service: KEYCHAIN_SERVICE,
+    service: CODEX_KEYCHAIN_SERVICE,
     account: keychainAccount(modeName),
     token,
   });
@@ -379,6 +418,7 @@ async function main() {
 
 Options:
   --check          Report readiness without prompting or changing credentials.
+                   Without --check, start profile-scoped browser OAuth when needed.
   --store-token    Replace the selected mode's macOS Keychain fallback token.
   --codex-bin BIN  Codex binary to execute. Defaults to "codex".
 `);
@@ -388,6 +428,11 @@ Options:
   console.log(
     `${options.mode}: ${result.ready ? "ready" : "not ready"} (${result.source})`,
   );
+  if (result.source === "oauth-required") {
+    console.log(
+      `Run npm run codex:auth:${options.mode} to open Nuanu Flow authorization in the default browser.`,
+    );
+  }
   if (!result.ready) process.exitCode = 1;
 }
 

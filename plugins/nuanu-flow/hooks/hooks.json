@@ -1,0 +1,19 @@
+{
+  "description": "Keep Nuanu Flow available as the session task tracker and resume unfinished onboarding.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hooks/session-start.mjs\"",
+            "commandWindows": "node \"%PLUGIN_ROOT%\\hooks\\session-start.mjs\"",
+            "timeout": 1,
+            "statusMessage": "Activating Nuanu Flow"
+          }
+        ]
+      }
+    ]
+  }
+}

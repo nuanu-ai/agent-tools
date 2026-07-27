@@ -3,14 +3,24 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "sync:skills": "node scripts/sync-skills.mjs",
+    "check:skills": "node scripts/sync-skills.mjs --check",
+    "validate:skills:spec": "node scripts/validate-agent-skills.mjs",
     "build:codex:dev": "node scripts/codex/dev-package.mjs --build-only",
-    "validate:plugins": "node scripts/validate-plugins.mjs",
+    "build:claude:dev": "node scripts/claude/dev-package.mjs",
+    "validate:plugins": "npm run check:skills && node scripts/validate-plugins.mjs",
     "validate:dev": "npm run build:codex:dev && node scripts/validate-plugins.mjs --codex-plugin .build/codex-dev/plugins/nuanu-flow-dev --codex-marketplace .build/codex-dev/.agents/plugins/marketplace.json",
     "test": "node --test tests/e2e/*.test.mjs",
     "test:e2e": "node --test tests/e2e/*.test.mjs",
     "test:acceptance:codex": "node tests/acceptance/codex-dev-modes-acceptance.mjs",
     "test:acceptance:codex:model": "node tests/acceptance/codex-dev-modes-acceptance.mjs --model",
+    "test:acceptance:skills": "node tests/acceptance/agent-skills-acceptance.mjs",
+    "test:acceptance:skills:live": "node tests/acceptance/portable-worker-live-acceptance.mjs",
     "codex:setup": "node scripts/codex/setup.mjs",
+    "codex:install:dev": "node scripts/codex/install-current.mjs dev",
+    "codex:install:prod": "node scripts/codex/install-current.mjs prod",
+    "codex:prepare:dev": "node scripts/codex/install-current.mjs dev",
+    "codex:remove": "node scripts/codex/remove.mjs",
     "codex:dev": "node scripts/codex/run-mode.mjs dev",
     "codex:prod": "node scripts/codex/run-mode.mjs prod",
     "codex:status": "node scripts/codex/status.mjs",
@@ -21,6 +31,9 @@
     "worker:dev": "node scripts/codex/run-worker.mjs dev",
     "worker:prod": "node scripts/codex/run-worker.mjs prod",
     "plugin:version": "node scripts/codex/version.mjs",
-    "codex:auth-doctor": "node scripts/codex/auth-doctor.mjs"
+    "codex:auth-doctor": "node scripts/codex/auth-doctor.mjs",
+    "claude:install:dev": "node scripts/claude/install.mjs dev",
+    "claude:install:prod": "node scripts/claude/install.mjs prod",
+    "claude:remove": "node scripts/claude/remove.mjs"
   }
 }

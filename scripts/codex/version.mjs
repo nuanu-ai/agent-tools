@@ -34,23 +34,42 @@ export function nextVersion(current, request) {
 }
 
 export async function updateManifestVersion(options) {
-  const manifestPath =
-    options.manifestPath ||
-    path.join(
-      REPO_ROOT,
-      "plugins/nuanu-flow/.codex-plugin/plugin.json",
+  const manifestPaths = options.manifestPath
+    ? [options.manifestPath]
+    : [
+        path.join(
+          REPO_ROOT,
+          "plugins/nuanu-flow/.codex-plugin/plugin.json",
+        ),
+        path.join(
+          REPO_ROOT,
+          "plugins/nuanu-flow/.claude-plugin/plugin.json",
+        ),
+      ];
+  const manifests = await Promise.all(
+    manifestPaths.map(async (manifestPath) => ({
+      manifestPath,
+      manifest: JSON.parse(await fs.readFile(manifestPath, "utf8")),
+    })),
+  );
+  const versions = new Set(manifests.map(({ manifest }) => manifest.version));
+  if (versions.size !== 1) {
+    throw new Error(
+      `Production plugin manifests must share one version: ${[...versions].join(", ")}`,
     );
-  const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
-  const oldVersion = manifest.version;
+  }
+  const oldVersion = manifests[0].manifest.version;
   const newVersion = nextVersion(oldVersion, options.request);
   const willChange = newVersion !== oldVersion;
   if (!options.dryRun && willChange) {
-    const temp = `${manifestPath}.tmp-${process.pid}-${Date.now()}`;
-    await fs.writeFile(
-      temp,
-      `${JSON.stringify({ ...manifest, version: newVersion }, null, 2)}\n`,
-    );
-    await fs.rename(temp, manifestPath);
+    for (const { manifestPath, manifest } of manifests) {
+      const temp = `${manifestPath}.tmp-${process.pid}-${Date.now()}`;
+      await fs.writeFile(
+        temp,
+        `${JSON.stringify({ ...manifest, version: newVersion }, null, 2)}\n`,
+      );
+      await fs.rename(temp, manifestPath);
+    }
   }
   return {
     oldVersion,

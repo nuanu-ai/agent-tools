@@ -1,0 +1,59 @@
+{
+  "name": "nuanu-flow",
+  "version": "0.3.0",
+  "description": "Install and onboard Nuanu Flow from one prompt, then work with projects, processes, artifacts, decisions, and remote agents.",
+  "author": {
+    "name": "Nuanu",
+    "email": "albert@nuanu.com",
+    "url": "https://flow.nuanu.com"
+  },
+  "homepage": "https://flow.nuanu.com",
+  "repository": "https://github.com/nuanu-ai/agent-tools",
+  "license": "AGPL-3.0",
+  "keywords": [
+    "nuanu-flow",
+    "plane",
+    "project-management",
+    "bpmn",
+    "artifacts",
+    "mcp",
+    "codex"
+  ],
+  "skills": "./skills",
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": {
+    "nuanu-flow": {
+      "type": "http",
+      "url": "https://flow.nuanu.com/mcp-server/mcp",
+      "auth": "oauth",
+      "env_http_headers": {
+        "X-Plane-User-Token": "NUANU_TOKEN",
+        "X-Agent-Key": "NUANU_AGENT_KEY",
+        "X-Plane-Workspace": "NUANU_WORKSPACE"
+      },
+      "startup_timeout_sec": 20,
+      "tool_timeout_sec": 120,
+      "default_tools_approval_mode": "writes"
+    }
+  },
+  "interface": {
+    "displayName": "Nuanu Flow",
+    "shortDescription": "One-prompt setup, Flow MCP tools, onboarding, and remote Codex workers.",
+    "longDescription": "Install from one versionless prompt, sign in or sign up through OAuth, create a first workspace conversationally, and connect a remote Codex worker through a single-use enrollment token. Advanced environment-token and isolated development profiles remain available.",
+    "developerName": "Nuanu",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://flow.nuanu.com",
+    "privacyPolicyURL": "https://flow.nuanu.com/legals/privacy-policy",
+    "termsOfServiceURL": "https://flow.nuanu.com/legals/terms-and-conditions",
+    "defaultPrompt": [
+      "Show my Nuanu Flow work items and suggest my next action.",
+      "Create a Nuanu Flow work item from this bug report.",
+      "Continue Nuanu Flow setup."
+    ]
+  }
+}

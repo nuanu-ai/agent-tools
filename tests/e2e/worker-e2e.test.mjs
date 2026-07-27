@@ -226,6 +226,47 @@ if (args[0] === "exec") {
   return fakeCodex;
 }
 
+async function makeFakeClaude(tmpDir) {
+  const fakeClaude = path.join(tmpDir, "claude");
+  await fs.writeFile(
+    fakeClaude,
+    `#!/usr/bin/env node
+const args = process.argv.slice(2);
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => {
+  input += chunk;
+});
+process.stdin.on("end", () => {
+  if (!args.includes("-p")) process.exit(21);
+  if (!args.includes("stream-json")) process.exit(22);
+  if (!args.includes("--verbose")) process.exit(23);
+  if (!args.includes("dontAsk")) process.exit(24);
+  if (!args.includes("mcp__plugin_nuanu-flow_mcp__*")) process.exit(25);
+  if (process.env.NUANU_AGENT_KEY !== "per-task-key") process.exit(26);
+  if (process.env.NUANU_TOKEN || process.env.NUANU_DEV_TOKEN) process.exit(27);
+  if (!input.includes("Task for claude-code")) process.exit(28);
+  process.stdout.write(JSON.stringify({
+    type: "system",
+    subtype: "init",
+    session_id: "claude-session-test",
+    plugins: [{ name: "nuanu-flow" }]
+  }) + "\\n");
+  process.stdout.write(JSON.stringify({
+    type: "result",
+    subtype: "success",
+    is_error: false,
+    result: "claude-code result",
+    session_id: "claude-session-test"
+  }) + "\\n");
+});
+`,
+    "utf8"
+  );
+  await fs.chmod(fakeClaude, 0o755);
+  return fakeClaude;
+}
+
 function withTimeout(promise, ms, label) {
   return Promise.race([
     promise,
@@ -246,6 +287,7 @@ async function stopWorker(child) {
 async function runWorkerE2E(adapter) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), `nuanu-worker-${adapter}-`));
   const fakeCodex = await makeFakeCodex(tmpDir);
+  const fakeClaude = await makeFakeClaude(tmpDir);
   const task = {
     task_id: `task-${adapter}`,
     step_id: "step-1",
@@ -269,6 +311,8 @@ async function runWorkerE2E(adapter) {
       NUANU_ADAPTER: adapter,
       NUANU_CODEX_BIN: fakeCodex,
       NUANU_CODEX_CWD: tmpDir,
+      NUANU_CLAUDE_BIN: fakeClaude,
+      NUANU_CLAUDE_CWD: tmpDir,
       ...(adapter === "codex-app-server"
         ? {
             NUANU_CODEX_APP_SERVER_ARGS:
@@ -320,4 +364,85 @@ test("worker completes a task through codex-app-server and handles server reques
   const { result, stdout } = await runWorkerE2E("codex-app-server");
   assert.equal(result.body.output, "app-server result");
   assert.match(stdout, /adapter=codex-app-server/);
+});
+
+test("worker completes a task through first-class Claude Code streaming mode", async () => {
+  const { result, stdout } = await runWorkerE2E("claude-code");
+  assert.equal(result.body.output, "claude-code result");
+  assert.match(stdout, /adapter=claude-code/);
+});
+
+test("bundled enrollment exchanges once, stores privately, and feeds worker config", async () => {
+  const [{ enroll, normalizeApiBase }, { createFileCredentialStore }, { loadConfig }] = await Promise.all([
+    import("../../plugins/nuanu-flow/scripts/worker/enroll.mjs"),
+    import("../../plugins/nuanu-flow/scripts/worker/credentials.mjs"),
+    import("../../plugins/nuanu-flow/scripts/worker/config.mjs"),
+  ]);
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-public-enroll-"));
+  const credentialPath = path.join(tmpDir, "credentials", "worker.json");
+  const credentialStore = createFileCredentialStore({ filePath: credentialPath });
+  const enrollmentToken = `nuanu_join_${"ab".repeat(32)}`;
+  const agentKey = `nuanu_flow_${"cd".repeat(32)}`;
+  const agent = {
+    id: "24d91802-8f82-43ef-8978-d69dc612ad47",
+    display_name: "Codex Worker",
+    workspace: "nuanu",
+  };
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url, options });
+    if (url.endsWith("/agent-worker/enroll/")) {
+      return new Response(
+        JSON.stringify({
+          agent_key: agentKey,
+          api_url: "https://flow.nuanu.com/api",
+          agent,
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        agent_id: agent.id,
+        display_name: agent.display_name,
+        workspace: agent.workspace,
+        is_active: true,
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  };
+
+  try {
+    const first = await enroll({
+      enrollmentToken,
+      credentialStore,
+      fetchImpl,
+    });
+    const second = await enroll({
+      enrollmentToken,
+      credentialStore,
+      fetchImpl,
+    });
+    const config = loadConfig({ env: {}, credentialStore });
+    const storedStat = await fs.stat(credentialPath);
+    const stored = JSON.parse(await fs.readFile(credentialPath, "utf8"));
+
+    assert.deepEqual(first, { status: "enrolled", agent });
+    assert.deepEqual(second, { status: "already_enrolled", agent });
+    assert.equal(calls.filter(({ url }) => url.endsWith("/agent-worker/enroll/")).length, 1);
+    assert.deepEqual(JSON.parse(calls[0].options.body), {
+      enrollment_token: enrollmentToken,
+    });
+    assert.equal(calls[0].url.includes(enrollmentToken), false);
+    assert.equal(JSON.stringify(first).includes(agentKey), false);
+    assert.equal(storedStat.mode & 0o777, 0o600);
+    assert.match(stored.enrollment_token_sha256, /^[0-9a-f]{64}$/);
+    assert.equal(JSON.stringify(stored).includes(enrollmentToken), false);
+    assert.equal(config.baseUrl, "https://flow.nuanu.com/api");
+    assert.equal(config.agentKey, agentKey);
+    assert.equal(normalizeApiBase("http://localhost:8000/api"), "http://localhost:8000/api");
+    assert.throws(() => normalizeApiBase("http://flow.nuanu.com/api"), /HTTPS/);
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
 });

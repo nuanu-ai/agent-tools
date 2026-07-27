@@ -1,6 +1,6 @@
 ---
 name: nuanu-flow
-description: Start here when working with Nuanu Flow (Plane-based work management platform). Explains the object model (workspaces, projects, flow items, cycles, processes, artifacts, agents), how to call Flow MCP tools, required auth env vars, and which detailed skill to load for each job.
+description: Start here when working with Nuanu Flow (Plane-based work management platform). Explains the object model (workspaces, projects, work items, cycles, processes, artifacts, agents), how to call Flow MCP tools, required auth env vars, and which detailed skill to load for each job.
 ---
 
 # Working with Nuanu Flow
@@ -26,7 +26,8 @@ operation.
 
 ## Calling convention (read this first)
 
-The `nuanu-flow` MCP server runs in **compact mode** by default and publishes only
+The `nuanu-flow` MCP server runs in **compact mode** by default and publishes
+only
 two tools:
 
 - `search_tools(query)` — keyword search over the full catalog (~149 tools);
@@ -44,10 +45,15 @@ the same names are directly callable as regular MCP tools.
 1. **Proxy agent (default, interactive)** — no env needed. On first contact
    the hosted MCP replies with an OAuth challenge; the browser opens Nuanu
    Flow, where the user can sign in or create an account and approve. A new
-   account may authorize before it has a workspace; use `onboarding` next. You
-   then act **as that user**, and your actions are attributed
-   "via <client>" (junction avatar in the app). Re-auth: `/mcp` → mcp →
-   authenticate.
+   account may authorize before it has a workspace; use `onboarding` next.
+   You then act **as that user**, and your actions are attributed
+   "via <client>" (junction avatar in the app). Claude Code re-auth:
+   `/mcp` -> mcp -> authenticate. In the Codex desktop app or IDE extension,
+   use Authenticate for `nuanu-flow`. In Codex CLI, run the selected
+   environment's `codex:auth` helper, which lets Codex open and wait for
+   browser OAuth.
+   If Codex reports `Auth Unsupported`, load `codex-setup` and verify OAuth
+   discovery before using an advanced environment/Keychain fallback.
 2. **Ambient agent (headless)** — `NUANU_AGENT_KEY` (`nuanu_flow_…`) is set;
    automatic inside worker-run task sessions. You act **as the agent
    employee** itself.
@@ -55,19 +61,25 @@ the same names are directly callable as regular MCP tools.
    Workspace Settings → API tokens) acts as the user without a browser.
 
 Optional for all modes: `NUANU_WORKSPACE` (default workspace slug; overrides
-the consent-time choice), `NUANU_MCP_URL` (endpoint override). Run
-`/nuanu-flow:setup` for a guided check.
+the consent-time choice), `NUANU_MCP_URL` (Claude endpoint override). Run
+`/nuanu-flow:setup` in Claude Code or load `codex-setup` in Codex for a guided
+check.
+
+For a versionless Codex install, the only user-facing prompt is:
+`Read and follow https://flow.nuanu.com/install.md`. If the user says
+`Continue Nuanu Flow setup` after the single required restart, load the
+`onboarding` skill and begin by calling `onboarding_next`.
 
 ## Object model
 
 - **Workspace** (addressed by slug) → **Projects** (short identifier like
-  `ENG`) → **Flow items** ("issues", addressed `ENG-42`).
-- Flow items have: **states** (grouped `backlog / unstarted / started /
+  `ENG`) → **Work items** ("issues", addressed `ENG-42`).
+- Work items have: **states** (grouped `backlog / unstarted / started /
 completed / cancelled`), **priority** (`urgent / high / medium / low /
 none`), assignees, **labels**, **estimates**, sub-items (parent), relations,
   comments, attachments.
 - **Cycles** = time-boxed sprints; **Modules** = feature buckets. Both contain
-  flow items.
+  work items.
 - **Teams** group members and projects across the workspace. **Objectives**
   are portfolios that roll up projects. **Views** are saved filters.
   **Automations** are event → action rules.
@@ -76,7 +88,7 @@ none`), assignees, **labels**, **estimates**, sub-items (parent), relations,
   **Agent employees** are configured AI agents (local runtime or remote
   workers). **Decisions** are human approve/deny/option gates inside runs.
 - **Artifacts** = versioned files/documents in a registry, bound to entities
-  (projects, runs, flow items, …) and organized in logical folders.
+  (projects, runs, work items, …) and organized in logical folders.
 
 ## Conventions that apply everywhere
 
@@ -97,24 +109,32 @@ none`), assignees, **labels**, **estimates**, sub-items (parent), relations,
   `issue_identifier` (`"ENG-42"`), `state_name`, `assignee_emails`,
   `assignee_names`, `label_names`, `parent_ref`. Alias matching is **exact**,
   not fuzzy.
-- Every `create_*` tool returns the created entity's `id` in structured
-  output — chain follow-up calls on it.
+- Every scoped `create_*` tool returns the created entity's `id` in structured
+  output. Account-scoped `create_workspace` returns `{workspace: {...}}`.
 - Description/content fields named `*_html` take **HTML**, not markdown
   (`<p>…</p>`, `<ul><li>…`). Markdown pasted there renders as literal text.
 - Lists paginate with `cursor` + `per_page`.
 
 ## Which skill to load
 
-| Job                                                                  | Skill             |
-| -------------------------------------------------------------------- | ----------------- |
-| First workspace, new account, or unfinished first-run setup          | `onboarding`      |
-| Enrich an existing workspace with company context and goals          | `workspace-setup` |
-| Create/search/triage/update flow items, sprints, relations, comments | `work-items`      |
-| Scaffold a new project (states, labels, estimates, members, views)   | `project-setup`   |
-| Author or operate a BPMN process / approval chain / automation flow  | `bpmn-processes`  |
-| Store, version, search, or link files and documents                  | `artifacts`       |
-| Design, create, connect, or launch a local or remote agent employee  | `create-agent`    |
-| Run this agent as a remote worker executing process agent-tasks      | `remote-worker`   |
+| Job                                                                  | Skill                 |
+| -------------------------------------------------------------------- | --------------------- |
+| First workspace, new account, or zero-workspace setup                | `onboarding`          |
+| Enrich an existing empty workspace with company context and goals    | `workspace-setup`     |
+| Create/search/triage/update work items, sprints, relations, comments | `work-items`          |
+| Scaffold a new project (states, labels, estimates, members, views)   | `project-setup`       |
+| Author or operate a BPMN process / approval chain / automation flow  | `bpmn-processes`      |
+| Store, version, search, or link files and documents                  | `artifacts`           |
+| Design, create, connect, or launch a local or remote agent employee  | `create-agent`        |
+| Run this agent as a remote worker executing process agent-tasks      | `remote-worker`       |
+| Install, verify, or locally develop the Codex plugin                 | `codex-setup`         |
+| Run remote-worker tasks through Codex App Server                     | `codex-remote-worker` |
+| Run remote-worker tasks through Claude Code                          | `claude-code-remote-worker` |
+
+For Codex remote enrollment, use the versionless instructions at
+`https://flow.nuanu.com/connect/remote-agent.md`. The copied prompt contains a
+short-lived `nuanu_join_…` enrollment token and installs the plugin first when
+needed.
 
 ## Tools Used
 

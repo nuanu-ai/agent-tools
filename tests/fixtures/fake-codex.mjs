@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs/promises";
 import path from "node:path";
+import readline from "node:readline";
 
 const statePath =
   process.env.FAKE_CODEX_STATE ||
@@ -87,7 +88,8 @@ async function pluginVersion(selector, state) {
   const marketplace = state.marketplaces.find(
     (entry) => entry.name === marketplaceName,
   );
-  if (!marketplace) throw new Error(`marketplace not found: ${marketplaceName}`);
+  if (!marketplace)
+    throw new Error(`marketplace not found: ${marketplaceName}`);
   if (marketplace.marketplaceSource?.sourceType === "git") return "0.1.0";
   const catalog = JSON.parse(
     await fs.readFile(
@@ -114,7 +116,7 @@ function mcpList(state) {
   const dev = state.installed.some(
     (plugin) => plugin.pluginId === "nuanu-flow-dev@nuanu-dev",
   );
-  const name = dev ? "flow_dev" : "flow";
+  const name = "nuanu-flow";
   return [
     {
       name,
@@ -154,7 +156,66 @@ try {
   }
 
   const state = await loadState();
-  if (args[0] === "plugin" && args[1] === "marketplace") {
+  if (args[0] === "app-server") {
+    const input = readline.createInterface({ input: process.stdin });
+    const send = (message) => {
+      process.stdout.write(
+        `${JSON.stringify({ jsonrpc: "2.0", ...message })}\n`,
+      );
+    };
+    input.on("line", (line) => {
+      const message = JSON.parse(line);
+      if (message.method === "initialize") {
+        send({ id: message.id, result: { protocolVersion: "2" } });
+        return;
+      }
+      if (message.method === "hooks/list") {
+        if (process.env.FAKE_HOOKS_UNSUPPORTED === "1") {
+          send({
+            id: message.id,
+            error: { code: -32601, message: "hooks/list unsupported" },
+          });
+          return;
+        }
+        const plugin = state.installed.find((entry) =>
+          /^(nuanu-flow|nuanu-flow-dev)@/.test(entry.pluginId),
+        );
+        const hooks =
+          plugin && process.env.FAKE_HOOKS_EMPTY !== "1"
+            ? [
+                {
+                  key: `${plugin.pluginId}:hooks/hooks.json:session_start:0:0`,
+                  eventName: "session_start",
+                  handlerType: "command",
+                  isManaged: false,
+                  matcher: "startup|resume|clear|compact",
+                  command:
+                    'node "${PLUGIN_ROOT}/hooks/session-start.mjs"',
+                  timeoutSec: 1,
+                  source: "plugin",
+                  pluginId: plugin.pluginId,
+                  enabled: process.env.FAKE_HOOK_DISABLED !== "1",
+                  currentHash: "sha256:fake",
+                  trustStatus:
+                    process.env.FAKE_HOOK_TRUST || "untrusted",
+                },
+              ]
+            : [];
+        send({
+          id: message.id,
+          result: {
+            data: (message.params?.cwds || [process.cwd()]).map((cwd) => ({
+              cwd,
+              hooks,
+              warnings: [],
+              errors: [],
+            })),
+          },
+        });
+      }
+    });
+    await new Promise((resolve) => input.on("close", resolve));
+  } else if (args[0] === "plugin" && args[1] === "marketplace") {
     const command = args[2];
     if (command === "list") {
       output({ marketplaces: state.marketplaces });
@@ -200,6 +261,18 @@ try {
         installed: true,
         enabled: true,
       });
+      if (name === "nuanu-flow" || name === "nuanu-flow-dev") {
+        state.mcpAuth ||= {};
+        if (process.env.FAKE_PLUGIN_ADD_OAUTH === "1") {
+          console.log("Authorize plugin by opening this URL in your browser:");
+          console.log(
+            "https://auth.example.test/oauth/authorize?response_type=code&client_id=plugin-test&code_challenge=plugin-test&redirect_uri=http%3A%2F%2F127.0.0.1%3A4322%2Fcallback",
+          );
+          state.mcpAuth["nuanu-flow"] = "o_auth";
+        } else {
+          state.mcpAuth["nuanu-flow"] ||= "not_logged_in";
+        }
+      }
       await saveState(state);
       output({ installed: selector, version });
     } else if (command === "list") {
@@ -218,10 +291,20 @@ try {
     output(mcpList(state));
   } else if (args[0] === "mcp" && args[1] === "login") {
     const name = args[2];
+    console.log("Authorize by opening this URL in your browser:");
+    console.log(
+      "https://auth.example.test/oauth/authorize?response_type=code&client_id=test&code_challenge=test&redirect_uri=http%3A%2F%2F127.0.0.1%3A4321%2Fcallback",
+    );
     state.mcpAuth ||= {};
     state.mcpAuth[name] = "o_auth";
     await saveState(state);
     output({ loggedIn: name });
+  } else if (args[0] === "mcp" && args[1] === "logout") {
+    const name = args[2];
+    state.mcpAuth ||= {};
+    delete state.mcpAuth[name];
+    await saveState(state);
+    output({ loggedOut: name });
   } else {
     throw new Error(`unsupported fake Codex args: ${rawArgs.join(" ")}`);
   }

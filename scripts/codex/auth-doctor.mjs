@@ -2,6 +2,7 @@
 import { fileURLToPath } from "node:url";
 
 import { probeOAuthMetadata } from "./auth.mjs";
+import { readHookTrustStatus } from "./hook-status.mjs";
 import { modeConfig } from "./modes.mjs";
 
 function usage() {
@@ -46,6 +47,13 @@ export async function diagnoseAuth(options = {}) {
   const env = options.env || process.env;
   const tokenPresent = Boolean(env[mode.tokenEnv]);
   const agentKeyPresent = Boolean(env[mode.agentKeyEnv]);
+  const hook = await (options.readHookTrustStatus || readHookTrustStatus)({
+    codexBin: options.codexBin,
+    cwd: options.cwd,
+    env,
+    pluginId: mode.pluginId,
+    timeoutMs: options.hookStatusTimeoutMs,
+  });
   return {
     mode: mode.name,
     mcpName: mode.mcpName,
@@ -53,6 +61,8 @@ export async function diagnoseAuth(options = {}) {
     envReady: tokenPresent || agentKeyPresent,
     tokenPresent,
     agentKeyPresent,
+    hookStatus: hook.status,
+    hookDetail: hook.detail,
     ...oauth,
   };
 }
@@ -76,6 +86,13 @@ async function main() {
   console.log(
     `OAuth metadata: ${result.status}${result.probe ? ` (${result.probe})` : ""}`,
   );
+  console.log(
+    `Session hook: ${
+      result.hookStatus === "review_required"
+        ? "review required"
+        : result.hookStatus
+    }${result.hookDetail ? ` (${result.hookDetail})` : ""}`,
+  );
   if (
     result.status === "oauth-disabled" ||
     result.status === "oauth-metadata-missing"
@@ -85,7 +102,7 @@ async function main() {
     );
   } else {
     console.log(
-      `Next: run \`npm run codex:auth:${result.mode}\` if Codex is not already logged in.`,
+      `Next: run \`npm run codex:auth:${result.mode}\` to open browser OAuth for \`nuanu-flow\`.`,
     );
   }
 }

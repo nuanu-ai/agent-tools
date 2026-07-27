@@ -16,6 +16,7 @@ const CODEX_TOP_LEVEL_FIELDS = new Set([
   "license",
   "keywords",
   "skills",
+  "hooks",
   "mcpServers",
   "apps",
   "interface",
@@ -171,6 +172,83 @@ async function validateSkills(pluginRoot, skillsPath) {
   }
 }
 
+function resolveInside(root, relativePath, label) {
+  const resolvedRoot = path.resolve(root);
+  const resolved = path.resolve(root, relativePath);
+  const relative = path.relative(resolvedRoot, resolved);
+  if (
+    relative === "" ||
+    (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))
+  ) {
+    return resolved;
+  }
+  add(`${label} must stay inside the plugin root`);
+  return null;
+}
+
+async function validateHooks(pluginRoot, hooksPath) {
+  requireRelativePath(hooksPath, "Codex plugin hooks path");
+  const configPath = resolveInside(
+    pluginRoot,
+    hooksPath || "./hooks/hooks.json",
+    "Codex plugin hooks path",
+  );
+  if (!configPath) return;
+  if (!(await exists(configPath))) {
+    add(`hooks config does not exist: ${path.relative(repoRoot, configPath)}`);
+    return;
+  }
+  const config = await readJson(configPath, "Codex hooks config");
+  const sessionStart = config?.hooks?.SessionStart;
+  if (!Array.isArray(sessionStart) || sessionStart.length !== 1) {
+    add("Codex hooks config must define exactly one SessionStart matcher group");
+    return;
+  }
+  const group = sessionStart[0];
+  if (group?.matcher !== "startup|resume|clear|compact") {
+    add(
+      "Codex SessionStart matcher must be startup|resume|clear|compact",
+    );
+  }
+  if (!Array.isArray(group?.hooks) || group.hooks.length !== 1) {
+    add("Codex SessionStart must define exactly one command hook");
+    return;
+  }
+  const hook = group.hooks[0];
+  if (hook?.type !== "command") {
+    add("Codex SessionStart hook type must be command");
+  }
+  if (
+    typeof hook?.timeout !== "number" ||
+    !Number.isFinite(hook.timeout) ||
+    hook.timeout <= 0 ||
+    hook.timeout > 1
+  ) {
+    add("Codex SessionStart hook timeout must be greater than zero and at most one second");
+  }
+  if (typeof hook?.command !== "string") {
+    add("Codex SessionStart hook command must be a string");
+    return;
+  }
+  const target = hook.command.match(
+    /\$\{PLUGIN_ROOT\}\/([A-Za-z0-9._/-]+)/,
+  )?.[1];
+  if (!target) {
+    add("Codex SessionStart hook command must target a file under ${PLUGIN_ROOT}");
+    return;
+  }
+  const targetPath = resolveInside(
+    pluginRoot,
+    target,
+    "Codex SessionStart hook target",
+  );
+  if (targetPath && !(await exists(targetPath))) {
+    add(
+      `Codex SessionStart hook target does not exist: ${path.relative(repoRoot, targetPath)}`,
+    );
+  }
+}
+
 async function validateCodexPlugin(pluginRoot) {
   const manifestPath = path.join(pluginRoot, ".codex-plugin/plugin.json");
   const manifest = await readJson(manifestPath, "Codex plugin manifest");
@@ -189,6 +267,13 @@ async function validateCodexPlugin(pluginRoot) {
   requireHttpsUrl(manifest.repository, "Codex plugin repository");
 
   if (manifest.skills) await validateSkills(pluginRoot, manifest.skills);
+  if (manifest.hooks) {
+    if (typeof manifest.hooks !== "string") {
+      add("Codex plugin hooks must be a single relative path");
+    } else {
+      await validateHooks(pluginRoot, manifest.hooks);
+    }
+  }
 
   if (typeof manifest.mcpServers === "string") {
     if (manifest.mcpServers.replace(/^\.\//, "") !== ".mcp.json") {
@@ -262,11 +347,11 @@ function validateDevelopmentPackage(manifest, marketplace) {
     add("Codex development marketplace name must be nuanu-dev");
   }
   const serverNames = Object.keys(manifest.mcpServers || {});
-  if (serverNames.length !== 1 || serverNames[0] !== "flow_dev") {
-    add("Codex development plugin must define only MCP server flow_dev");
+  if (serverNames.length !== 1 || serverNames[0] !== "nuanu-flow") {
+    add("Codex development plugin must define only MCP server nuanu-flow");
     return;
   }
-  const server = manifest.mcpServers.flow_dev;
+  const server = manifest.mcpServers["nuanu-flow"];
   try {
     const hostname = new URL(server.url).hostname;
     if (!["localhost", "127.0.0.1", "::1"].includes(hostname)) {

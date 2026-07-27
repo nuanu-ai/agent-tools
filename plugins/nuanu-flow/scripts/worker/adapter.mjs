@@ -15,7 +15,10 @@ export function buildPrompt(task) {
   const ctx = task.context && Object.keys(task.context).length ? task.context : null;
   if (ctx) parts.push("--- Process context ---\n" + JSON.stringify(ctx, null, 2));
   if (task.output_schema) {
-    parts.push("Return ONLY a JSON object matching this schema (no prose):\n" + JSON.stringify(task.output_schema));
+    parts.push(
+      "Return ONLY a JSON object matching this schema (no prose):\n" +
+        JSON.stringify(task.output_schema)
+    );
   }
   return parts.join("\n\n");
 }
@@ -41,7 +44,10 @@ export function parseClaudeOutput(stdout) {
       throw new Error(result.result || result.error || "Claude Code reported an error");
     }
     return {
-      output: typeof result.result === "string" ? result.result : JSON.stringify(result.result),
+      output:
+        typeof result.result === "string"
+          ? result.result
+          : JSON.stringify(result.result),
       sessionId: result.session_id,
     };
   } catch (error) {
@@ -63,10 +69,15 @@ export function parseClaudeOutput(stdout) {
     throw new Error("Claude Code stream ended without a result event");
   }
   if (finalResult.is_error || finalResult.subtype === "error") {
-    throw new Error(finalResult.result || finalResult.error || "Claude Code reported an error");
+    throw new Error(
+      finalResult.result || finalResult.error || "Claude Code reported an error",
+    );
   }
   return {
-    output: typeof finalResult.result === "string" ? finalResult.result : JSON.stringify(finalResult.result),
+    output:
+      typeof finalResult.result === "string"
+        ? finalResult.result
+        : JSON.stringify(finalResult.result),
     sessionId: finalResult.session_id,
   };
 }
@@ -96,7 +107,11 @@ function runProcess(cmd, args, { input, env, cwd, timeoutMs }) {
   });
 }
 
-export function modelTaskEnv(task, selectedName = "NUANU_AGENT_KEY", sourceEnv = process.env) {
+export function modelTaskEnv(
+  task,
+  selectedName = "NUANU_AGENT_KEY",
+  sourceEnv = process.env,
+) {
   if (!/^NUANU_(?:DEV_)?AGENT_KEY$/.test(selectedName)) {
     throw new Error(`Unsupported agent-key environment variable: ${selectedName}`);
   }
@@ -104,7 +119,12 @@ export function modelTaskEnv(task, selectedName = "NUANU_AGENT_KEY", sourceEnv =
     throw new Error("Remote task is missing its short-lived agent_key");
   }
   const env = { ...sourceEnv };
-  for (const name of ["NUANU_TOKEN", "NUANU_DEV_TOKEN", "NUANU_AGENT_KEY", "NUANU_DEV_AGENT_KEY"]) {
+  for (const name of [
+    "NUANU_TOKEN",
+    "NUANU_DEV_TOKEN",
+    "NUANU_AGENT_KEY",
+    "NUANU_DEV_AGENT_KEY",
+  ]) {
     delete env[name];
   }
   env[selectedName] = task.agent_key;
@@ -112,7 +132,10 @@ export function modelTaskEnv(task, selectedName = "NUANU_AGENT_KEY", sourceEnv =
 }
 
 function codexTaskEnv(task, cfg) {
-  return modelTaskEnv(task, cfg.codexAgentKeyEnv || "NUANU_AGENT_KEY");
+  return modelTaskEnv(
+    task,
+    cfg.codexAgentKeyEnv || "NUANU_AGENT_KEY",
+  );
 }
 
 /**
@@ -129,17 +152,27 @@ export function makeAdapter(cfg) {
       async handle(task) {
         const prompt = buildPrompt(task);
         const args = [...cfg.claudeArgs];
-        if (cfg.claudePermissionMode && !hasArg(args, "--permission-mode") && !cfg.claudeSkipPermissions) {
+        if (
+          cfg.claudePermissionMode &&
+          !hasArg(args, "--permission-mode") &&
+          !cfg.claudeSkipPermissions
+        ) {
           args.push("--permission-mode", cfg.claudePermissionMode);
         }
-        if (cfg.claudeAllowedTools && !hasArg(args, "--allowedTools") && !cfg.claudeSkipPermissions) {
+        if (
+          cfg.claudeAllowedTools &&
+          !hasArg(args, "--allowedTools") &&
+          !cfg.claudeSkipPermissions
+        ) {
           args.push("--allowedTools", cfg.claudeAllowedTools);
         }
         if (cfg.claudeSkipPermissions) {
           args.push("--dangerously-skip-permissions");
         }
         const conversationKey = task.thread_id || task.run_id;
-        const sessionId = conversationKey ? claudeSessions.get(conversationKey) : null;
+        const sessionId = conversationKey
+          ? claudeSessions.get(conversationKey)
+          : null;
         if (sessionId && !hasArg(args, "--resume")) {
           args.push("--resume", sessionId);
         }
@@ -170,7 +203,9 @@ export function makeAdapter(cfg) {
           if (code !== 0) {
             return {
               status: "error",
-              error: `claude exited ${code}: ${String(error.message || stderr).slice(0, 500)}`,
+              error: `claude exited ${code}: ${String(
+                error.message || stderr,
+              ).slice(0, 500)}`,
             };
           }
           return { status: "ok", output: stdout.trim() };
@@ -222,7 +257,12 @@ export function makeAdapter(cfg) {
     return {
       name: "codex-app-server",
       async handle(task) {
-        return runCodexAppServerTask(task, cfg, buildCodexPrompt(task), codexTaskEnv(task, cfg));
+        return runCodexAppServerTask(
+          task,
+          cfg,
+          buildCodexPrompt(task),
+          codexTaskEnv(task, cfg),
+        );
       },
     };
   }

@@ -41,14 +41,23 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+
       - name: Validate plugin manifests
         run: npm run validate:plugins
+
+      - name: Validate Agent Skills specification
+        run: npm run validate:skills:spec
 
       - name: Build and validate Codex development plugin
         run: npm run validate:dev
 
       - name: Run e2e tests
         run: npm test
+
+      - name: Run real Agent Skills CLI acceptance
+        run: npm run test:acceptance:skills
 
       - name: Install tested Codex CLI
         run: npm install --global @openai/codex@0.145.0

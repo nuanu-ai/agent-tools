@@ -1,0 +1,55 @@
+{
+  "format_version": 1,
+  "plugin_version": "0.3.0",
+  "bundle_sha256": "86d2679c90631425984d585edd53aa48cf56181f44d78ca2b887a4415a2dd34e",
+  "sources": [
+    {
+      "path": "plugins/nuanu-flow/scripts/worker/portable-worker.mjs",
+      "sha256": "02d0abaa269e286307ad848e0c5588487f3bed14bf822725f1f8783e28a51e3e"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/artifacts/SKILL.md",
+      "sha256": "6e22ec487dbe92aea2d0468df5af7c827e4125303b8b51f4321b7935d05b2de6"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/bpmn-processes/SKILL.md",
+      "sha256": "2da25239140f1f7ff6cb0716734d35f57888df62060a27c8cf730416ec755c15"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/create-agent/SKILL.md",
+      "sha256": "7b1cde4e423dce08f2516d6e5ca78787dfe6b458a58f3c8409c3235b8c628304"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/create-agent/references/agent-design.md",
+      "sha256": "39703ed12b826eceea57358a308019e37e80c614e96c83155ee975c0d25b2a87"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/nuanu-flow/SKILL.md",
+      "sha256": "4d52f1efdebd85bf257bd1760e7cf67a59d28b1465d8aa70c0ea678969f057a4"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/onboarding/SKILL.md",
+      "sha256": "1a5e7e9a7729c50401e94cb4b4ba42c3dd8935a6ae6f92092d82ff8dd051d4d4"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/project-setup/SKILL.md",
+      "sha256": "b4e2988f13be8aa8f673a7103dcaea4079755a18b736d969132956ab43c134db"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/remote-worker/SKILL.md",
+      "sha256": "632ca33a066496035cf7c704e19a2f255d2773910ab13aecf3a212350405941e"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/work-items/SKILL.md",
+      "sha256": "be0596e8dcc610d4d939ef20bf68920f2c0ff8dd990347ffa4cb74c880427273"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/work-items/references/payloads.md",
+      "sha256": "880559901b1e76a3ee3c98dd84597d0535d33cf679da7b202f28c837e87a755a"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/workspace-setup/SKILL.md",
+      "sha256": "edc4effe4f340540bb2ad2b0a5bf06b2f742831d3e6a9c277d7c848583e8cdf6"
+    }
+  ]
+}
