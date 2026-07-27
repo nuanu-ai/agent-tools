@@ -272,8 +272,10 @@ export async function installCurrentProfile(modeName, options = {}) {
     pluginId: mode.pluginId,
     timeoutMs: options.hookStatusTimeoutMs,
   });
+  const activation = actions.length > 0 ? "reopen_required" : "ready";
 
   return {
+    surface: "codex-cli",
     mode: modeName,
     codexVersion: String(version.stdout).trim(),
     codexHome: home,
@@ -285,6 +287,13 @@ export async function installCurrentProfile(modeName, options = {}) {
     build,
     actions,
     resumeCommand: resumeCommand(env),
+    lifecycle: {
+      surface: "codex-cli",
+      plugin: "installed",
+      oauth: "connected",
+      activation,
+      continuation: activation === "ready" ? "automatic" : "same_thread_resume",
+    },
   };
 }
 
@@ -334,12 +343,17 @@ function printReport(report) {
     );
     console.log("");
   }
-  console.log("Codex CLI loads new MCP tools at session startup.");
-  console.log(
-    "Exit Codex, then run this once in the same terminal; setup will continue automatically:",
-  );
-  console.log("");
-  console.log(report.resumeCommand);
+  if (report.lifecycle.activation === "reopen_required") {
+    console.log("Codex CLI loads new MCP tools at session startup.");
+    console.log(
+      "Exit Codex, then run this once in the same terminal; setup will continue automatically:",
+    );
+    console.log("");
+    console.log(report.resumeCommand);
+  } else {
+    console.log("Nuanu Flow is ready in this Codex CLI session.");
+    console.log('Continue with: "Continue Nuanu Flow setup"');
+  }
 }
 
 async function main() {

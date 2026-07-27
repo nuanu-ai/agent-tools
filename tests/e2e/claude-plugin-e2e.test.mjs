@@ -102,6 +102,13 @@ test("Claude local installer uses native marketplace, plugin, MCP login, and cur
     assert.equal(result.pluginId, "nuanu-flow-dev@nuanu-dev");
     assert.equal(result.mcpName, "plugin:nuanu-flow-dev:mcp");
     assert.equal(result.reloadCommand, "/reload-plugins");
+    assert.deepEqual(result.lifecycle, {
+      surface: "claude-code",
+      plugin: "installed",
+      oauth: "connected",
+      activation: "reload_required",
+      continuation: "same_conversation_command",
+    });
     assert(calls.some((args) => args[0] === "plugin" && args[1] === "marketplace" && args[2] === "add"));
     assert(calls.some((args) => args[0] === "plugin" && args[1] === "install"));
     assert.deepEqual(

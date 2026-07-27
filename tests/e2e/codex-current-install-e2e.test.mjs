@@ -26,6 +26,7 @@ test("current-profile development install delegates browser OAuth to Codex and p
   const statePath = path.join(tempRoot, "state.json");
   const logPath = path.join(tempRoot, "commands.jsonl");
   let wrapperBrowserOpenAttempts = 0;
+  const observedAuthorizationUrls = [];
   const threadId = "019f9d90-ca3a-7e82-9893-13f2bae0e31e";
 
   try {
@@ -50,10 +51,14 @@ test("current-profile development install delegates browser OAuth to Codex and p
         FAKE_CODEX_STATE: statePath,
         FAKE_CODEX_LOG: logPath,
         FAKE_EXPECT_CODEX_HOME: codexHome,
+        FAKE_MCP_LOGIN_TRANSIENT_ONCE: "1",
       },
       openBrowser() {
         wrapperBrowserOpenAttempts += 1;
         return true;
+      },
+      onAuthorizationUrl(url) {
+        observedAuthorizationUrls.push(url);
       },
       now: () => new Date("2026-07-26T10:00:00Z"),
     });
@@ -62,11 +67,20 @@ test("current-profile development install delegates browser OAuth to Codex and p
     assert.equal(report.mcpUrl, "http://localhost:3001/mcp");
     assert.equal(report.authStatus, "o_auth");
     assert.equal(report.hookStatus, "review_required");
+    assert.deepEqual(report.lifecycle, {
+      surface: "codex-cli",
+      plugin: "installed",
+      oauth: "connected",
+      activation: "reopen_required",
+      continuation: "same_thread_resume",
+    });
     assert.equal(
       report.resumeCommand,
       `codex resume ${threadId} "Continue Nuanu Flow setup"`,
     );
     assert.equal(wrapperBrowserOpenAttempts, 0);
+    assert.equal(observedAuthorizationUrls.length, 1);
+    assert.match(observedAuthorizationUrls[0], /^https:\/\/auth\.example\.test\/oauth\/authorize\?/);
 
     const state = await readJson(statePath);
     assert.deepEqual(
@@ -79,7 +93,11 @@ test("current-profile development install delegates browser OAuth to Codex and p
       .split("\n")
       .map((line) => JSON.parse(line));
     assert(commands.some((args) => args[0] === "plugin" && args[1] === "add"));
-    assert(commands.some((args) => args[0] === "mcp" && args[1] === "login"));
+    assert.equal(
+      commands.filter((args) => args[0] === "mcp" && args[1] === "login")
+        .length,
+      2,
+    );
 
     const second = await installCurrentProfile("dev", {
       repoRoot,
@@ -102,6 +120,8 @@ test("current-profile development install delegates browser OAuth to Codex and p
     });
     assert.deepEqual(second.actions, []);
     assert.equal(second.hookStatus, "trusted");
+    assert.equal(second.lifecycle.activation, "ready");
+    assert.equal(second.lifecycle.continuation, "automatic");
     assert.equal(wrapperBrowserOpenAttempts, 0);
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });

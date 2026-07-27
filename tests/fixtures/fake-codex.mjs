@@ -291,6 +291,17 @@ try {
     output(mcpList(state));
   } else if (args[0] === "mcp" && args[1] === "login") {
     const name = args[2];
+    state.mcpLoginAttempts = (state.mcpLoginAttempts || 0) + 1;
+    if (
+      process.env.FAKE_MCP_LOGIN_TRANSIENT_ONCE === "1" &&
+      state.mcpLoginAttempts === 1
+    ) {
+      await saveState(state);
+      console.error(
+        "dynamic client registration failed: upstream returned HTTP 522",
+      );
+      process.exit(1);
+    }
     console.log("Authorize by opening this URL in your browser:");
     console.log(
       "https://auth.example.test/oauth/authorize?response_type=code&client_id=test&code_challenge=test&redirect_uri=http%3A%2F%2F127.0.0.1%3A4321%2Fcallback",

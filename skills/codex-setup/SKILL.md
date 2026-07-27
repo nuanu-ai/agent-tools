@@ -9,6 +9,24 @@ Use the repository scripts in the `agent-tools` checkout. They require the
 existing `codex` installation and Node.js; they do not install a Nuanu CLI,
 global npm package, daemon, or shell alias.
 
+## Select the Codex surface first
+
+This skill covers Codex CLI setup. If the current conversation is running in
+Codex App, use the app's native Workspace Plugin directory and **Connect /
+Sign in** action instead:
+
+- never print `codex resume`, a terminal command, or a fresh-terminal request
+  inside Codex App;
+- let the app own OAuth completion and MCP configuration reload;
+- continue the active conversation with `Continue Nuanu Flow setup` and a real
+  `onboarding_next` call once `nuanu-flow` is ready;
+- do not call private App Server methods or the still-unstable
+  `plugin/install` API.
+
+If the Nuanu Flow native listing is absent in the current Codex App build,
+report that official-directory dependency. Do not silently switch the user to
+Codex CLI.
+
 ## Terminal-first setup
 
 ```bash
@@ -22,7 +40,8 @@ authorization page in the default browser. Never open that printed URL a
 second time and never open a `codex://` link; that launches the desktop app.
 
 Codex CLI loads new MCP tools only at process startup. After OAuth completes,
-tell the user to exit Codex and run the exact
+the installer returns a structured lifecycle result. Only when it reports
+`activation: reopen_required`, tell the user to exit Codex and run the exact
 `codex resume <thread-id> "Continue Nuanu Flow setup"` command printed by the
 installer in the same terminal. This resumes the same conversation and starts
 the onboarding check without another typed message. If Codex asks for
@@ -36,6 +55,11 @@ For production, register the canonical Git-backed `nuanu` marketplace, install
 keep the login attached until callback completion; do not reopen the printed
 fallback URL. Then resume the current thread after one CLI restart with the
 fixed continuation prompt.
+
+The OAuth helper retries one transient 502/503/504/522/524 or timeout failure
+once only when no authorization page has been observed. It must never retry
+after a browser URL appears because that would create a duplicate consent
+page.
 
 ## Isolated CLI profiles
 

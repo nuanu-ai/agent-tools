@@ -27,6 +27,11 @@ For an isolated localhost package and native browser OAuth, run
 `/reload-plugins`. Validate releases with
 `claude plugin validate plugins/nuanu-flow --strict`.
 
+For Claude, Claude.ai, Claude Desktop, and Cowork, configure the public remote
+MCP endpoint as a custom connector instead. Those apps do not install this
+Claude Code plugin or use `/reload-plugins`; follow
+`https://flow.nuanu.com/connect/claude-app.md`.
+
 ## Install for Codex
 
 Give Codex this single line:
@@ -38,12 +43,17 @@ Read and install https://flow.nuanu.com/install.md
 Codex handles marketplace installation in the terminal and opens only the
 browser OAuth page. After authentication, restart the CLI once and run the
 printed `codex resume <thread-id> "Continue Nuanu Flow setup"` command in the
-same terminal. The prompt starts the resumed conversation's first turn, where
+same terminal only when the installer reports `reopen_required`. The prompt starts the resumed conversation's first turn, where
 the `onboarding` skill continues exactly the first unmet requirement. The
 bundled `SessionStart` hook keeps Nuanu Flow available as the task tracker on
 future starts and resumes. Codex requires one-time review before a plugin hook
 can run; review the Nuanu Flow hook when prompted and never bypass that trust
 step.
+
+Codex App instead uses the native Workspace Plugin directory, Connect action,
+and MCP reload lifecycle. It continues in the active conversation and must not
+show a terminal resume command. The app-native path intentionally avoids
+private App Server APIs.
 
 ## Install skills without the plugin
 

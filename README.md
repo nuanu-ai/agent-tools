@@ -54,6 +54,12 @@ conversation without a full CLI restart. The direct equivalent is:
 Then use `/mcp` to authenticate if needed and
 `/nuanu-flow:onboarding` to continue setup.
 
+Claude, Claude.ai, Claude Desktop, and Cowork are a separate surface: add
+Nuanu Flow as a remote MCP custom connector using
+`https://flow.nuanu.com/mcp-server/mcp`. They do not install this Claude Code
+plugin and do not use `/reload-plugins`. See
+`https://flow.nuanu.com/connect/claude-app.md`.
+
 For local plugin development:
 
 ```bash
@@ -76,12 +82,18 @@ Read and install https://flow.nuanu.com/install.md
 Codex installs the plugin from the terminal and opens only the browser OAuth
 page. Because the CLI loads new MCP tools at startup, the installer prints the
 exact `codex resume <thread-id> "Continue Nuanu Flow setup"` command needed
-after one restart. Run it in the same terminal to continue the same
+only when its structured lifecycle result says `reopen_required`. Run it in
+the same terminal to continue the same
 conversation and start the onboarding check immediately. The bundled
 `SessionStart` hook adds a short task-tracker reminder on future starts and
 resumes; Codex may ask for one-time hook review on the first restart. The
 installer never opens the desktop app, asks the user to copy an authorization
 URL, bypasses hook trust, or creates a new chat.
+
+Codex App uses the native Workspace Plugin directory and **Connect / Sign in**
+flow instead. It reloads MCP state and continues the current conversation; it
+must never display the CLI resume command. See
+`https://flow.nuanu.com/connect/codex-app.md`.
 
 After a workspace and project are confirmed, the `project-setup` skill can
 create a commit-safe `.nuanu-flow.json` at the Git root. Future sessions read

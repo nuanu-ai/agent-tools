@@ -255,6 +255,26 @@ export function runCodexWithBrowserAuth(args, options = {}) {
   const spawnImpl = options.spawnImpl || spawn;
 
   return new Promise((resolve, reject) => {
+    let outputTail = "";
+    let authorizationPageObserved = false;
+    const reportedAuthorizationUrls = new Set();
+    const observe = (chunk) => {
+      const text = String(chunk);
+      outputTail = `${outputTail}${text}`.slice(-16_384);
+      const authorizationUrls = outputTail
+        .match(/https?:\/\/[^\s`'"]+/gi)
+        ?.map((url) => url.replace(/[),.;]+$/, ""))
+        .filter((url) => /(?:oauth\/authorize|authorize\?)/i.test(url));
+      if (authorizationUrls?.length) {
+        authorizationPageObserved = true;
+        for (const url of authorizationUrls) {
+          if (reportedAuthorizationUrls.has(url)) continue;
+          reportedAuthorizationUrls.add(url);
+          options.onAuthorizationUrl?.(url);
+        }
+      }
+      return text;
+    };
     const child = spawnImpl(
       options.codexBin || "codex",
       args,
@@ -270,26 +290,29 @@ export function runCodexWithBrowserAuth(args, options = {}) {
     );
     // Codex owns browser launch and its printed-URL fallback. Reopening a URL
     // observed in this output creates a duplicate authorization tab.
-    child.stdout.on("data", (chunk) => process.stdout.write(chunk));
-    child.stderr.on("data", (chunk) => process.stderr.write(chunk));
+    child.stdout.on("data", (chunk) => process.stdout.write(observe(chunk)));
+    child.stderr.on("data", (chunk) => process.stderr.write(observe(chunk)));
     child.on("error", reject);
     child.on("close", (status, signal) => {
       if (status === 0) {
         resolve();
         return;
       }
-      reject(
-        new Error(
-          `codex ${args.join(" ")} exited ${
-            status ?? `after signal ${signal || "unknown"}`
-          }`,
-        ),
+      const error = new Error(
+        `codex ${args.join(" ")} exited ${
+          status ?? `after signal ${signal || "unknown"}`
+        }`,
       );
+      error.authorizationPageObserved = authorizationPageObserved;
+      error.transientOAuthFailure =
+        !authorizationPageObserved &&
+        /\b(?:502|503|504|522|524)\b|timed?\s*out|timeout/i.test(outputTail);
+      reject(error);
     });
   });
 }
 
-export function runMcpLogin(modeName, options = {}) {
+export async function runMcpLogin(modeName, options = {}) {
   const mode = modeConfig(modeName, options.env || process.env);
   const home =
     options.home ||
@@ -297,10 +320,25 @@ export function runMcpLogin(modeName, options = {}) {
       codexHome: options.codexHome,
       env: options.env,
     });
-  return runCodexWithBrowserAuth(["mcp", "login", mode.mcpName], {
-    ...options,
-    home,
-  });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await runCodexWithBrowserAuth(["mcp", "login", mode.mcpName], {
+        ...options,
+        home,
+      });
+    } catch (error) {
+      if (
+        attempt === 0 &&
+        error?.transientOAuthFailure === true &&
+        error?.authorizationPageObserved !== true
+      ) {
+        const delay = options.retryDelay || ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
+        await delay(options.retryDelayMs ?? 500);
+        continue;
+      }
+      throw error;
+    }
+  }
 }
 
 function readHiddenToken(promptText) {

@@ -150,6 +150,7 @@ export async function installClaude(modeName, options = {}) {
     throw new Error(`${mode.pluginId} was not enabled after installation.`);
   }
   return {
+    surface: "claude-code",
     mode: modeName,
     version,
     pluginId: mode.pluginId,
@@ -157,6 +158,13 @@ export async function installClaude(modeName, options = {}) {
     mcpUrl: modeName === "dev" ? build.mcpUrl : mode.mcpUrl,
     auth: options.skipAuth ? "skipped" : "oauth",
     reloadCommand: "/reload-plugins",
+    lifecycle: {
+      surface: "claude-code",
+      plugin: "installed",
+      oauth: options.skipAuth ? "skipped" : "connected",
+      activation: "reload_required",
+      continuation: "same_conversation_command",
+    },
   };
 }
 
