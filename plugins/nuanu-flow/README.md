@@ -12,9 +12,14 @@ Give Claude Code the same single line used for Codex:
 Read and install https://flow.nuanu.com/install.md
 ```
 
-Claude follows the environment-aware guide, uses its native marketplace and
-MCP OAuth commands, and then activates the plugin in the current conversation
-with `/reload-plugins`. The equivalent marketplace commands are:
+Claude follows the environment-aware guide and uses its native marketplace
+and MCP OAuth controls. Claude Code CLI and IDE activate the plugin in the
+current conversation with `/reload-plugins`. The Claude Desktop Code tab does
+not implement that command: after installation, start one new Code session in
+the same project. The plugin's `SessionStart` hook continues setup
+on its first actual turn alongside the user's intended task, and native
+**+ → Connectors → Nuanu Flow → Connect** handles OAuth there. The equivalent
+marketplace commands are:
 
 ```text
 /plugin marketplace add nuanu-ai/agent-tools
@@ -24,7 +29,10 @@ with `/reload-plugins`. The equivalent marketplace commands are:
 For an isolated localhost package and native browser OAuth, run
 `npm run claude:install:dev`. For source-only development, run
 `claude --plugin-dir plugins/nuanu-flow`; after editing plugin components, use
-`/reload-plugins`. Validate releases with
+`/reload-plugins` in CLI or IDE. For a Desktop-targeted package install, pass
+`--surface desktop`; its structured lifecycle reports
+`attachment: new_session_required` instead of inventing a reload command.
+Validate releases with
 `claude plugin validate plugins/nuanu-flow --strict`.
 
 For Claude, Claude.ai, Claude Desktop, and Cowork, configure the public remote
@@ -244,6 +252,15 @@ Optional but recommended — clickable footer badges for work-item IDs
 Advanced manual alternative: set `NUANU_URL` and `NUANU_AGENT_KEY`, then use
 `/nuanu-flow:worker` — or headless:
 `node plugins/nuanu-flow/scripts/worker/worker.mjs`
+
+In Codex, keep the worker's background output attached to the launching task.
+It renders safe connection and task milestones without raw task instructions,
+model deltas, tool arguments, or credentials. The inherited
+`CODEX_THREAD_ID` binds significant events to the exact originating
+conversation, and the plugin's `UserPromptSubmit` hook supplies a compact,
+one-time catch-up on the next message—even after reopening that conversation.
+This is not a spontaneous chat notification; a native updating card still
+requires Codex host support.
 
 Generic agents use the portable skill instead of the full plugin:
 

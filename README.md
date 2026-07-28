@@ -42,17 +42,26 @@ Give Claude Code the same one-line prompt used for Codex:
 Read and install https://flow.nuanu.com/install.md
 ```
 
-Claude Code uses its native marketplace, plugin, and MCP OAuth commands. After
-installation and OAuth, `/reload-plugins` attaches Nuanu Flow's MCP tools to
-the current conversation without a full CLI restart. The direct equivalent
-is:
+Claude Code uses its native marketplace, plugin, and MCP OAuth controls. The
+activation step depends on the host:
+
+- **Claude Desktop Code tab:** install in the current session, then start one
+  new Code session in the same project. The plugin's `SessionStart` hook
+  continues setup on its first actual turn alongside the user's intended task,
+  so there is no special continuation prompt to copy. Use
+  **+ → Connectors → Nuanu Flow → Connect** in that new session if
+  authentication is requested. `/reload-plugins` does not exist in this host.
+- **Claude Code CLI or IDE:** run `/reload-plugins`, authenticate through
+  `/mcp` if needed, and continue in the same conversation.
+
+The direct marketplace equivalent is:
 
 ```text
 /plugin marketplace add nuanu-ai/agent-tools
 /plugin install nuanu-flow@nuanu
 ```
 
-Then use `/mcp` to authenticate if needed and
+In CLI or IDE, use `/mcp` to authenticate if needed and
 `/nuanu-flow:onboarding` to continue setup.
 
 Claude, Claude.ai, Claude Desktop, and Cowork are a separate surface: add
@@ -68,9 +77,11 @@ npm run claude:install:dev
 ```
 
 This creates `nuanu-flow-dev@nuanu-dev` with
-`http://localhost:3001/mcp`, uses `claude mcp login` for browser OAuth, and
-keeps production and development plugin identities distinct. Remove both
-Nuanu Claude variants with `npm run claude:remove`.
+`http://localhost:3001/mcp`, uses interactive Claude Code OAuth in CLI mode,
+and keeps production and development plugin identities distinct. For the
+Desktop Code host, run the installer with `--surface desktop`; it deliberately
+defers native OAuth and attachment to the new Code session. Remove both Nuanu
+Claude variants with `npm run claude:remove`.
 
 ## Install (Codex)
 
@@ -89,7 +100,8 @@ same conversation and start the onboarding check immediately. Installation,
 OAuth, and tool attachment are separate states; setup is complete only after
 the resumed thread successfully calls `onboarding_next`. The bundled
 `SessionStart` hook adds a short task-tracker reminder on future starts and
-resumes; Codex may ask for one-time hook review on the first restart. The
+resumes, while `UserPromptSubmit` delivers remote-worker catch-up; Codex may
+ask for one-time lifecycle-hook review on the first restart. The
 installer never opens the desktop app, asks the user to copy an authorization
 URL, bypasses hook trust, or creates a new chat.
 
@@ -197,18 +209,34 @@ Flow and select Codex, Claude Code, or Generic agent. Every tab follows
 supported, exchanges the short-lived enrollment token over standard input,
 and starts the selected worker without exposing the durable credential.
 
+Codex workers keep a safe live feed in the background task that launched
+them. The worker binds significant milestones to the inherited
+`CODEX_THREAD_ID`; the plugin's `UserPromptSubmit` hook then gives only that
+conversation a compact catch-up on its next user message. It reports task
+start, attention, completion, failure, requeue, and connection state without
+storing raw prompts, assistant deltas, tool arguments, or credentials.
+Current Codex plugins cannot push a spontaneous card into an inactive chat, so
+the product describes this honestly as live background output plus next-turn
+catch-up.
+
 Real Codex acceptance is explicit:
 
 ```bash
 npm run test:acceptance:codex
 npm run test:acceptance:codex:model
+npm run test:acceptance:codex:worker
 ```
 
 The first command installs both variants into a temporary unauthenticated
 Codex home and verifies plugin/MCP isolation. The opt-in command symlinks the
 existing Codex login into temporary mode homes, then exercises the local MCP,
-a fresh second session, skill refresh, and a real App Server worker task. It
-never copies auth files or changes the normal production/development homes.
+a fresh second session, skill refresh, and a real App Server worker task. The
+worker acceptance also verifies exact-session activity isolation, sensitive
+data exclusion, one-time catch-up, and packaged-hook execution. It never
+copies auth files or changes the normal production/development homes.
+`test:acceptance:codex:worker` is the focused model-backed worker path for
+rerunning that contract after the credential-free package acceptance has
+already passed.
 CI runs the credential-free command against the pinned supported Codex CLI;
 the model-backed command remains explicit because it uses the developer's
 existing OpenAI login.

@@ -247,6 +247,75 @@ async function validateHooks(pluginRoot, hooksPath) {
       `Codex SessionStart hook target does not exist: ${path.relative(repoRoot, targetPath)}`,
     );
   }
+
+  const userPromptSubmit = config?.hooks?.UserPromptSubmit;
+  if (
+    !Array.isArray(userPromptSubmit) ||
+    userPromptSubmit.length !== 1
+  ) {
+    add(
+      "Codex hooks config must define exactly one UserPromptSubmit matcher group",
+    );
+    return;
+  }
+  const promptGroup = userPromptSubmit[0];
+  if (promptGroup?.matcher != null) {
+    add("Codex UserPromptSubmit must not define an ignored matcher");
+  }
+  if (
+    !Array.isArray(promptGroup?.hooks) ||
+    promptGroup.hooks.length !== 1
+  ) {
+    add("Codex UserPromptSubmit must define exactly one command hook");
+    return;
+  }
+  const promptHook = promptGroup.hooks[0];
+  if (promptHook?.type !== "command") {
+    add("Codex UserPromptSubmit hook type must be command");
+  }
+  if (
+    typeof promptHook?.timeout !== "number" ||
+    !Number.isFinite(promptHook.timeout) ||
+    promptHook.timeout <= 0 ||
+    promptHook.timeout > 1
+  ) {
+    add(
+      "Codex UserPromptSubmit hook timeout must be greater than zero and at most one second",
+    );
+  }
+  if (
+    typeof promptHook?.additionalContextLimit !== "number" ||
+    !Number.isFinite(promptHook.additionalContextLimit) ||
+    promptHook.additionalContextLimit <= 0 ||
+    promptHook.additionalContextLimit > 500
+  ) {
+    add(
+      "Codex UserPromptSubmit additionalContextLimit must be between 1 and 500",
+    );
+  }
+  if (typeof promptHook?.command !== "string") {
+    add("Codex UserPromptSubmit hook command must be a string");
+    return;
+  }
+  const promptTarget = promptHook.command.match(
+    /\$\{PLUGIN_ROOT\}\/([A-Za-z0-9._/-]+)/,
+  )?.[1];
+  if (!promptTarget) {
+    add(
+      "Codex UserPromptSubmit hook command must target a file under ${PLUGIN_ROOT}",
+    );
+    return;
+  }
+  const promptTargetPath = resolveInside(
+    pluginRoot,
+    promptTarget,
+    "Codex UserPromptSubmit hook target",
+  );
+  if (promptTargetPath && !(await exists(promptTargetPath))) {
+    add(
+      `Codex UserPromptSubmit hook target does not exist: ${path.relative(repoRoot, promptTargetPath)}`,
+    );
+  }
 }
 
 async function validateCodexPlugin(pluginRoot) {
@@ -455,6 +524,7 @@ async function validateProductionHostParity(
   );
   for (const expected of [
     "/reload-plugins",
+    "attachment: new_session_required",
     "attachment: restart_required",
     "onboarding_next",
   ]) {

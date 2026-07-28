@@ -68,6 +68,15 @@ function ownedDevMarketplace(entry, buildRoot) {
 export async function installClaude(modeName, options = {}) {
   const mode = MODES[modeName];
   if (!mode) throw new Error("Mode must be dev or prod");
+  const surface = options.surface || "cli";
+  if (!["cli", "desktop"].includes(surface)) {
+    throw new Error("Claude surface must be cli or desktop");
+  }
+  const isDesktop = surface === "desktop";
+  const interactive =
+    options.interactive ??
+    Boolean(options.command || (process.stdin.isTTY && process.stdout.isTTY));
+  const deferAuth = options.skipAuth || isDesktop || !interactive;
   const env = { ...process.env, ...options.env };
   const runner = options.command || command;
   const run = (args, extra = {}) =>
@@ -143,7 +152,7 @@ export async function installClaude(modeName, options = {}) {
   }
 
   run(["plugin", "validate", modeName === "dev" ? build.pluginRoot : path.join(REPO_ROOT, "plugins/nuanu-flow")]);
-  if (!options.skipAuth) {
+  if (!deferAuth) {
     run(["mcp", "login", mode.mcpName], { inherit: true });
   }
   const verified = runJson(["plugin", "list", "--json"]) || [];
@@ -151,36 +160,50 @@ export async function installClaude(modeName, options = {}) {
     throw new Error(`${mode.pluginId} was not enabled after installation.`);
   }
   return {
-    surface: "claude-code",
+    surface: isDesktop ? "claude-code-desktop" : "claude-code-cli",
     mode: modeName,
     version,
     pluginId: mode.pluginId,
     mcpName: mode.mcpName,
     mcpUrl: modeName === "dev" ? build.mcpUrl : mode.mcpUrl,
-    auth: options.skipAuth ? "skipped" : "oauth",
-    reloadCommand: "/reload-plugins",
+    auth: deferAuth ? "skipped" : "oauth",
+    reloadCommand: isDesktop ? null : "/reload-plugins",
+    nextAction: isDesktop
+      ? "Start one new Claude Desktop Code session in this project. On its first actual turn, the Nuanu Flow SessionStart hook continues setup alongside the user's intended task; use + → Connectors → Nuanu Flow → Connect there if prompted."
+      : deferAuth
+        ? "Run /reload-plugins in an interactive Claude Code conversation, authenticate through /mcp, then verify attachment with onboarding_next. Do not manufacture a pseudo-terminal."
+        : "Run /reload-plugins in this conversation, authenticate through /mcp if prompted, then verify attachment with onboarding_next.",
     lifecycle: createPluginLifecycle({
-      surface: "claude-code",
-      authentication: options.skipAuth ? "skipped" : "connected",
-      attachment: "reload_required",
-      continuation: "same_conversation_command",
+      surface: isDesktop ? "claude-code-desktop" : "claude-code-cli",
+      authentication: deferAuth ? "skipped" : "connected",
+      attachment: isDesktop ? "new_session_required" : "reload_required",
+      continuation: isDesktop ? "new_session" : "same_conversation_command",
     }),
   };
 }
 
 async function main() {
   const mode = process.argv[2];
-  const skipAuth = process.argv.slice(3).includes("--skip-auth");
-  const result = await installClaude(mode, { skipAuth });
+  const args = process.argv.slice(3);
+  const skipAuth = args.includes("--skip-auth");
+  const surfaceIndex = args.indexOf("--surface");
+  const surfaceFromPair =
+    surfaceIndex >= 0 && typeof args[surfaceIndex + 1] === "string"
+      ? args[surfaceIndex + 1]
+      : null;
+  const surfaceFromEquals = args
+    .find((value) => value.startsWith("--surface="))
+    ?.slice("--surface=".length);
+  const surface = surfaceFromPair || surfaceFromEquals || "cli";
+  const result = await installClaude(mode, { skipAuth, surface });
   console.log(`Claude Code: ${result.version}`);
+  console.log(`Surface: ${result.surface}`);
   console.log(`Plugin: ${result.pluginId}`);
   console.log(`MCP: ${result.mcpUrl}`);
   console.log(`Installation: ${result.lifecycle.installation}`);
   console.log(`Authentication: ${result.lifecycle.authentication}`);
   console.log(`Attachment: ${result.lifecycle.attachment}`);
-  console.log(
-    "Run /reload-plugins in this conversation, then verify attachment with onboarding_next.",
-  );
+  console.log(result.nextAction);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

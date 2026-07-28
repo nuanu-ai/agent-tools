@@ -16,7 +16,8 @@ skill for protocol details if anything below is unclear.
      → report the agent's display name and workspace; abort on error or
      `is_active: false`.
 
-2. **Start the daemon in the background** (Bash with run_in_background):
+2. **Start the daemon in the background** (Bash with run_in_background). Keep
+   its output attached to this task; do not redirect it to a file:
 
    ```bash
    node "${CLAUDE_PLUGIN_ROOT}/scripts/worker/worker.mjs"
@@ -30,7 +31,11 @@ skill for protocol details if anything below is unclear.
 3. **Confirm liveness**: within a few seconds the daemon logs its startup and
    first heartbeat. Report to the user: agent name, worker id, transport,
    concurrency, and that the platform dashboard (Workspace → Agents) should
-   now show the agent as online.
+   now show the agent as online. In Codex, when startup also reports
+   `session_activity=attached`, explain that the live feed remains in the
+   background task and significant updates will be summarized in this exact
+   conversation on the user's next message. Do not promise a spontaneous chat
+   message.
 
 4. **Tell the user how to stop it**: the background task can be killed from
    this session, and the daemon drains gracefully on SIGINT/SIGTERM (finishes

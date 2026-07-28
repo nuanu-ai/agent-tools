@@ -87,7 +87,7 @@ async function main() {
     `OAuth metadata: ${result.status}${result.probe ? ` (${result.probe})` : ""}`,
   );
   console.log(
-    `Session hook: ${
+    `Plugin hooks: ${
       result.hookStatus === "review_required"
         ? "review required"
         : result.hookStatus

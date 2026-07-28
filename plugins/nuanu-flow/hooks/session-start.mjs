@@ -8,7 +8,7 @@ import {
 const VALID_SOURCES = new Set(["startup", "resume", "clear", "compact"]);
 
 const FIRST_TURN_CONTEXT =
-  "Nuanu Flow is this session's task tracker. On the first actual turn, call onboarding_next at most once unless onboarding is already known complete. Continue only an incomplete returned step. If the check fails, continue the user's request without retries. Never expose setup internals or credentials.";
+  "Nuanu Flow is this session's task tracker. On the first actual turn, call onboarding_next once unless onboarding is complete. Continue only its incomplete step. If auth is needed, use native Connectors or MCP control, never a shell. Otherwise fail open without retries. Never expose setup internals or credentials.";
 
 const COMPACT_CONTEXT =
   "Keep Nuanu Flow as this session's task tracker. Preserve established onboarding status and never repeat completed setup. If status remains unknown, call onboarding_next at most once. If the check fails, continue the user's request without retries. Never expose setup internals or credentials.";

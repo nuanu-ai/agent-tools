@@ -63,8 +63,7 @@ test("Claude development package is isolated and points only to localhost", asyn
   }
 });
 
-test("Claude local installer uses native marketplace, plugin, MCP login, and current-session reload", async () => {
-  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-claude-install-"));
+function createFakeClaude() {
   const calls = [];
   let marketplaces = [];
   let plugins = [];
@@ -93,6 +92,12 @@ test("Claude local installer uses native marketplace, plugin, MCP login, and cur
     if (args[0] === "mcp" && args[1] === "login") return "";
     throw new Error(`Unexpected fake Claude command: ${args.join(" ")}`);
   };
+  return { calls, command };
+}
+
+test("Claude CLI installer uses native marketplace, plugin, MCP login, and current-session reload", async () => {
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-claude-install-"));
+  const { calls, command } = createFakeClaude();
 
   try {
     const result = await installClaude("dev", {
@@ -104,7 +109,7 @@ test("Claude local installer uses native marketplace, plugin, MCP login, and cur
     assert.equal(result.mcpName, "plugin:nuanu-flow-dev:mcp");
     assert.equal(result.reloadCommand, "/reload-plugins");
     assert.deepEqual(result.lifecycle, {
-      surface: "claude-code",
+      surface: "claude-code-cli",
       installation: "installed",
       authentication: "connected",
       attachment: "reload_required",
@@ -115,6 +120,61 @@ test("Claude local installer uses native marketplace, plugin, MCP login, and cur
     assert.deepEqual(
       calls.find((args) => args[0] === "mcp" && args[1] === "login"),
       ["mcp", "login", "plugin:nuanu-flow-dev:mcp"]
+    );
+  } finally {
+    await fs.rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test("Claude Desktop installer defers auth and attachment to one automatic new Code session", async () => {
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-claude-desktop-install-"));
+  const { calls, command } = createFakeClaude();
+
+  try {
+    const result = await installClaude("dev", {
+      command,
+      surface: "desktop",
+      buildRoot: path.join(temporary, "claude-dev"),
+      env: { NUANU_DEV_MCP_URL: "http://localhost:3001/mcp" },
+    });
+    assert.equal(result.surface, "claude-code-desktop");
+    assert.equal(result.reloadCommand, null);
+    assert.equal(result.auth, "skipped");
+    assert.match(result.nextAction, /Start one new Claude Desktop Code session/);
+    assert.match(result.nextAction, /SessionStart hook continues setup/);
+    assert.deepEqual(result.lifecycle, {
+      surface: "claude-code-desktop",
+      installation: "installed",
+      authentication: "skipped",
+      attachment: "new_session_required",
+      continuation: "new_session",
+    });
+    assert.equal(
+      calls.some((args) => args[0] === "mcp" && args[1] === "login"),
+      false,
+    );
+  } finally {
+    await fs.rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test("non-interactive Claude CLI installation defers OAuth to native /mcp without a pseudo-terminal", async () => {
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-claude-non-tty-install-"));
+  const { calls, command } = createFakeClaude();
+
+  try {
+    const result = await installClaude("dev", {
+      command,
+      interactive: false,
+      buildRoot: path.join(temporary, "claude-dev"),
+      env: { NUANU_DEV_MCP_URL: "http://localhost:3001/mcp" },
+    });
+    assert.equal(result.auth, "skipped");
+    assert.match(result.nextAction, /authenticate through \/mcp/);
+    assert.match(result.nextAction, /Do not manufacture a pseudo-terminal/);
+    assert.equal(
+      calls.some((args) => args[0] === "mcp" && args[1] === "login"),
+      false,
     );
   } finally {
     await fs.rm(temporary, { recursive: true, force: true });

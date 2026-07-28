@@ -43,6 +43,26 @@ shelling out to a one-shot CLI run. This is the best foundation when the
 worker needs Codex harness behavior: thread lifecycle, streamed events,
 approval handling, and future rich-client features.
 
+## Activity in the originating Codex session
+
+Keep the worker as a background process attached to the task that launched it.
+Its output is a safe live feed: connection changes, task start, category-level
+tool progress, attention requests, completion, failure, and requeue. It never
+prints assistant deltas, hidden reasoning, raw tool arguments, task
+instructions, or credentials as activity.
+
+Codex exposes the originating conversation as `CODEX_THREAD_ID`; the worker
+inherits it and writes a bounded private activity inbox for only that session.
+The plugin's `UserPromptSubmit` hook consumes significant unread events and
+adds a short catch-up to the user's next turn, including the first prompt after
+reopening Codex. Never guess the owner from the current directory or the most
+recent session, and never broadcast activity to other Codex conversations.
+
+The current Codex App uses a private stdio App Server connection. The worker
+must not edit rollout files, resume the visible thread from its separate App
+Server process, or promise spontaneous in-chat cards. A host-native live card
+requires an explicit Codex plugin activity API.
+
 ## Fallback mode
 
 For simple batch execution:
@@ -66,6 +86,8 @@ Codex's `--output-last-message` file.
 | `NUANU_CODEX_CWD`                      | Working directory for task execution, defaults to the OS temp directory.                                         |
 | `NUANU_CODEX_APP_SERVER_ARGS`          | App Server command, defaults to `app-server --stdio`.                                                            |
 | `NUANU_CODEX_APP_SERVER_APPROVAL_MODE` | `deny` by default; set `approve` only in controlled environments.                                                |
+| `NUANU_OWNER_SESSION_ID`               | Optional explicit owner override; Codex normally supplies `CODEX_THREAD_ID`.                                      |
+| `NUANU_ACTIVITY_DATA_DIR`               | Optional private activity-inbox directory, mainly for isolated tests.                                             |
 
 The worker exposes each task's short-lived `agent_key` as the selected
 mode's agent-key variable inside Codex, so MCP/API writes made while doing the

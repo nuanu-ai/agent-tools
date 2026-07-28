@@ -55,7 +55,12 @@ test("hook doctor distinguishes review, trusted, and disabled states", async () 
       FAKE_CODEX_STATE: statePath,
       FAKE_CODEX_LOG: logPath,
     };
-    assert.equal((await readStatus(base)).status, "review_required");
+    const review = await readStatus(base);
+    assert.equal(review.status, "review_required");
+    assert.deepEqual(
+      review.hooks.map((hook) => hook.eventName).sort(),
+      ["session_start", "user_prompt_submit"],
+    );
     assert.equal(
       (
         await readStatus({

@@ -3,18 +3,21 @@ const AUTHENTICATION_STATES = new Set(["connected", "skipped"]);
 const ATTACHMENT_STATES = new Set([
   "attached",
   "reload_required",
+  "new_session_required",
   "restart_required",
   "verification_required",
 ]);
 const CONTINUATION_STATES = new Set([
   "automatic",
   "same_conversation_command",
+  "new_session",
   "same_thread_resume",
   "verify_in_current_thread",
 ]);
 const ATTACHMENT_CONTINUATIONS = new Map([
   ["attached", "automatic"],
   ["reload_required", "same_conversation_command"],
+  ["new_session_required", "new_session"],
   ["restart_required", "same_thread_resume"],
   ["verification_required", "verify_in_current_thread"],
 ]);
@@ -74,6 +77,8 @@ export function attachmentAction(lifecycle) {
       return "none";
     case "reload_required":
       return "reload";
+    case "new_session_required":
+      return "new_session";
     case "restart_required":
       return "restart";
     case "verification_required":

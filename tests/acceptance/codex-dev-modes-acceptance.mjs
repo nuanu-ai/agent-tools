@@ -20,6 +20,9 @@ import {
   setup,
   writeModeMcpConfig,
 } from "../../scripts/codex/setup.mjs";
+import {
+  activityInternals,
+} from "../../plugins/nuanu-flow/scripts/activity/remote-worker-activity.mjs";
 
 const repoRoot = REPO_ROOT;
 const codexBin = process.env.CODEX_BIN || "codex";
@@ -261,9 +264,21 @@ async function assertPackagedSessionHook(pluginRoot, label) {
   );
   const group = hookConfig.hooks?.SessionStart?.[0];
   const handler = group?.hooks?.[0];
+  const promptGroup = hookConfig.hooks?.UserPromptSubmit?.[0];
+  const promptHandler = promptGroup?.hooks?.[0];
   assert.equal(group?.matcher, "startup|resume|clear|compact");
   assert.equal(handler?.timeout, 1);
   assert.match(handler?.command || "", /session-start\.mjs/);
+  assert.equal(promptGroup?.matcher, undefined);
+  assert.equal(promptHandler?.timeout, 1);
+  assert.equal(promptHandler?.additionalContextLimit, 500);
+  assert.match(
+    promptHandler?.command || "",
+    /user-prompt-submit\.mjs/,
+  );
+  await fs.access(
+    path.join(pluginRoot, "hooks/user-prompt-submit.mjs"),
+  );
   const scriptPath = path.join(pluginRoot, "hooks/session-start.mjs");
   const durations = [];
   for (const source of ["startup", "resume", "clear", "compact"]) {
@@ -530,6 +545,36 @@ async function withTimeout(promise, timeoutMs, label) {
   }
 }
 
+async function waitForValue(check, timeoutMs, label) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const value = await check();
+    if (value) return value;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`${label} timed out after ${timeoutMs}ms`);
+}
+
+async function readActivityRecords(activityDirectory, sessionId) {
+  const eventDirectory = path.join(
+    activityInternals.sessionDirectory(activityDirectory, sessionId),
+    "events",
+  );
+  try {
+    const names = (await fs.readdir(eventDirectory))
+      .filter((name) => name.endsWith(".json"))
+      .sort();
+    return Promise.all(
+      names.map(async (name) =>
+        JSON.parse(await fs.readFile(path.join(eventDirectory, name), "utf8")),
+      ),
+    );
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
 async function stopChild(child) {
   if (child.exitCode != null) return;
   child.kill("SIGTERM");
@@ -545,6 +590,7 @@ async function runRealWorker({
   buildEnv,
   mcp,
   tempRoot,
+  pluginRoot,
 }) {
   const task = {
     task_id: "codex-app-server-acceptance",
@@ -568,6 +614,8 @@ async function runRealWorker({
     agent_key: "per-task-acceptance-key",
   };
   const worker = await startWorkerFixture(task);
+  const ownerSessionId = "codex-remote-worker-acceptance-owner";
+  const activityDirectory = path.join(tempRoot, "worker-activity");
   const child = spawn(
     process.execPath,
     [
@@ -591,6 +639,9 @@ async function runRealWorker({
         NUANU_POLL_INTERVAL_MS: "500",
         NUANU_HEARTBEAT_INTERVAL_MS: "5000",
         NUANU_ADAPTER_TIMEOUT_MS: "240000",
+        CODEX_THREAD_ID: ownerSessionId,
+        NUANU_ACTIVITY_DATA_DIR: activityDirectory,
+        NUANU_AGENT_NAME: "Acceptance Agent",
       },
       stdio: ["ignore", "pipe", "pipe"],
     },
@@ -621,6 +672,7 @@ async function runRealWorker({
         ),
     );
     assert.match(stdout, /adapter=codex-app-server/);
+    assert.match(stdout, /session_activity=attached/);
     assert.equal(stderr, "");
     const taskCall = mcp.toolCalls.find(
       (call) => call.agentKey === "per-task-acceptance-key",
@@ -631,6 +683,86 @@ async function runRealWorker({
       "",
       "real App Server MCP call must not inherit the interactive user token",
     );
+    const activityRecords = await waitForValue(async () => {
+      const records = await readActivityRecords(
+        activityDirectory,
+        ownerSessionId,
+      );
+      return records.some((event) => event.kind === "task.completed")
+        ? records
+        : null;
+    }, 10_000, "real App Server activity completion");
+    const serializedActivity = JSON.stringify(activityRecords);
+    assert.doesNotMatch(serializedActivity, /flow_dev_identity/);
+    assert.doesNotMatch(serializedActivity, /per-task-acceptance-key/);
+    assert.doesNotMatch(serializedActivity, new RegExp(mcp.nonce));
+    assert(
+      activityRecords.some((event) => event.kind === "task.started"),
+    );
+    assert(
+      activityRecords.some((event) => event.kind === "task.completed"),
+    );
+
+    const hookScript = path.join(
+      pluginRoot,
+      "hooks/user-prompt-submit.mjs",
+    );
+    const hookPayload = (sessionId) =>
+      JSON.stringify({
+        session_id: sessionId,
+        transcript_path: null,
+        cwd: repoRoot,
+        hook_event_name: "UserPromptSubmit",
+        turn_id: "acceptance-turn",
+        prompt: "Continue with my request",
+        model: "acceptance",
+        permission_mode: "default",
+      });
+    const hookOptions = {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        NUANU_ACTIVITY_DATA_DIR: activityDirectory,
+      },
+    };
+    let hook = spawnSync(
+      process.execPath,
+      [hookScript],
+      {
+        ...hookOptions,
+        input: hookPayload("different-acceptance-session"),
+      },
+    );
+    assert.equal(hook.status, 0, hook.stderr);
+    assert.equal(hook.stdout, "");
+    hook = spawnSync(
+      process.execPath,
+      [hookScript],
+      {
+        ...hookOptions,
+        input: hookPayload(ownerSessionId),
+      },
+    );
+    assert.equal(hook.status, 0, hook.stderr);
+    const hookOutput = parseJsonOutput(
+      "remote-worker activity hook",
+      hook.stdout,
+    );
+    assert.match(
+      hookOutput.hookSpecificOutput?.additionalContext || "",
+      /Acceptance Agent completed “Real Codex App Server”/,
+    );
+    hook = spawnSync(
+      process.execPath,
+      [hookScript],
+      {
+        ...hookOptions,
+        input: hookPayload(ownerSessionId),
+      },
+    );
+    assert.equal(hook.status, 0, hook.stderr);
+    assert.equal(hook.stdout, "");
   } catch (error) {
     error.message +=
       `\nWrapper stdout:\n${stdout.slice(-5000)}` +
@@ -764,6 +896,7 @@ async function runModelBackedAcceptance(mcp, options = {}) {
         buildEnv,
         mcp,
         tempRoot,
+        pluginRoot: firstBuild.pluginRoot,
       });
       console.log("model-backed: App Server worker wrapper passed");
       return;
@@ -870,6 +1003,7 @@ async function runModelBackedAcceptance(mcp, options = {}) {
       buildEnv,
       mcp,
       tempRoot,
+      pluginRoot: refreshed.pluginRoot,
     });
 
     const prodAfter = actualCodex(
@@ -899,7 +1033,12 @@ async function runModelBackedAcceptance(mcp, options = {}) {
 async function main() {
   const unknownArgs = process.argv
     .slice(2)
-    .filter((arg) => arg !== "--model" && arg !== "--worker-only");
+    .filter(
+      (arg) =>
+        arg !== "--model" &&
+        arg !== "--worker-only" &&
+        arg !== "--skip-credential-free",
+    );
   if (unknownArgs.length) {
     throw new Error(`Unknown acceptance argument: ${unknownArgs[0]}`);
   }
@@ -907,7 +1046,9 @@ async function main() {
   console.log(`acceptance Codex: ${version}`);
   const mcp = await startMcpFixture();
   try {
-    await runCredentialFreeAcceptance(mcp);
+    if (!process.argv.includes("--skip-credential-free")) {
+      await runCredentialFreeAcceptance(mcp);
+    }
     if (!process.argv.includes("--model")) {
       console.log(
         "model-backed: skipped (run npm run test:acceptance:codex:model)",

@@ -142,6 +142,50 @@ Decisions inbox. A pick approves the decision, so route forward on
   namespaced output (`{{branchA.field}}`, `{{branchB.field}}`) and synthesizes
   the combined result — that step is your AI merge; downstream reads its output.
 
+## Visual layout contract
+
+The compiler owns BPMN coordinates, but graph structure and author order express
+the intended layout:
+
+- Treat a fork and its matching same-kind join as one structured block. Put the
+  fork first, then each branch in the desired **top-to-bottom order**, then the
+  join. Keep the fork's outgoing edges in that same branch order.
+- A direct deny/reject end is an **exit lane**, not part of the forward flow.
+  Connect it directly from the decision; never route it through a parallel
+  gateway or reuse a distant end event from another decision.
+- Give separate semantic exits separate end nodes. Reusing one end across
+  distant decisions creates long return wires and makes the diagram ambiguous.
+- Keep refine edges as explicit back-edges. The compiler routes them through
+  dedicated outer return lanes, away from the main flow.
+
+Canonical parallel ordering:
+
+```jsonc
+{
+  "nodes": [
+    { "id": "fork", "type": "gateway", "config": { "kind": "parallel" } },
+    { "id": "compare_gtm", "type": "agent_task", "config": { "agent_employee_id": "AG1", "instruction": "…" } },
+    { "id": "compare_product", "type": "agent_task", "config": { "agent_employee_id": "AG1", "instruction": "…" } },
+    { "id": "map_landscape", "type": "agent_task", "config": { "agent_employee_id": "AG1", "instruction": "…" } },
+    { "id": "compare_pricing", "type": "agent_task", "config": { "agent_employee_id": "AG1", "instruction": "…" } },
+    { "id": "assess_funding", "type": "agent_task", "config": { "agent_employee_id": "AG1", "instruction": "…" } },
+    { "id": "join", "type": "gateway", "config": { "kind": "parallel", "join_timeout": "PT30M" } }
+  ],
+  "edges": [
+    { "from": "fork", "to": "compare_gtm" },
+    { "from": "fork", "to": "compare_product" },
+    { "from": "fork", "to": "map_landscape" },
+    { "from": "fork", "to": "compare_pricing" },
+    { "from": "fork", "to": "assess_funding" },
+    { "from": "compare_gtm", "to": "join" },
+    { "from": "compare_product", "to": "join" },
+    { "from": "map_landscape", "to": "join" },
+    { "from": "compare_pricing", "to": "join" },
+    { "from": "assess_funding", "to": "join" }
+  ]
+}
+```
+
 ## Patterns
 
 - **AI triage** — an exclusive `gateway` with `{mode:"ai",prompt:"…"}` and named-`branch`
@@ -184,8 +228,9 @@ follows it. Requires NUANU_URL + NUANU_TOKEN env.
   `resolution`/`selected_option`/`feedback`) — an undeclared field interpolates
   to an empty string.
 - `validate_process_graph` returns non-blocking `warnings` (duplicate edges,
-  missing deny routes, bad variable references, unknown agents) — treat them
-  as authoring bugs and fix before activating.
+  missing deny routes, bad variable references, unknown agents, or
+  `LAYOUT_EDGE_*` collisions) — treat them as authoring bugs and fix every
+  warning before activating.
 - You never write BPMN XML, namespaces, or condition expressions — the
   compiler does. Author the graph; read it back with `get_process_template`
   (it returns the same graph).

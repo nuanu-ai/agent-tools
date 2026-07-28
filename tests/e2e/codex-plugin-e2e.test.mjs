@@ -104,6 +104,26 @@ test("Codex plugin metadata points at skills and OAuth-ready Flow MCP config", a
   await fs.access(path.join(pluginRoot, manifest.skills));
   await fs.access(path.join(pluginRoot, manifest.hooks));
   await fs.access(path.join(pluginRoot, ".mcp.json"));
+  const hooks = await readJson(path.join(pluginRoot, manifest.hooks));
+  assert.equal(hooks.hooks.SessionStart.length, 1);
+  assert.equal(hooks.hooks.UserPromptSubmit.length, 1);
+  assert.match(
+    hooks.hooks.UserPromptSubmit[0].hooks[0].command,
+    /user-prompt-submit\.mjs/,
+  );
+  assert.equal(
+    hooks.hooks.UserPromptSubmit[0].hooks[0].additionalContextLimit,
+    500,
+  );
+  await fs.access(
+    path.join(pluginRoot, "hooks/user-prompt-submit.mjs"),
+  );
+  await fs.access(
+    path.join(
+      pluginRoot,
+      "scripts/activity/remote-worker-activity.mjs",
+    ),
+  );
 });
 
 test("Codex auth doctor detects disabled OAuth metadata", async () => {

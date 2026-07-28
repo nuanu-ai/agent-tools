@@ -8,6 +8,13 @@ const CLIENT_INFO = {
 };
 
 const TRUSTED_STATUSES = new Set(["trusted", "approved", "managed"]);
+const EXPECTED_EVENTS = new Set(["sessionstart", "userpromptsubmit"]);
+
+function normalizedEventName(value) {
+  return String(value || "")
+    .replace(/[^A-Za-z]/g, "")
+    .toLowerCase();
+}
 
 function hookStatusFromRows(rows, pluginId) {
   const hooks = (Array.isArray(rows) ? rows : [])
@@ -15,14 +22,18 @@ function hookStatusFromRows(rows, pluginId) {
     .filter(
       (hook) =>
         hook?.pluginId === pluginId &&
-        String(hook?.eventName || "")
-          .replace(/[^A-Za-z]/g, "")
-          .toLowerCase() === "sessionstart",
+        EXPECTED_EVENTS.has(normalizedEventName(hook?.eventName)),
     );
-  if (hooks.length === 0) {
+  const discovered = new Set(
+    hooks.map((hook) => normalizedEventName(hook.eventName)),
+  );
+  const missing = [...EXPECTED_EVENTS].filter(
+    (eventName) => !discovered.has(eventName),
+  );
+  if (missing.length > 0) {
     return {
       status: "unsupported",
-      detail: "Nuanu Flow SessionStart hook was not discovered",
+      detail: `Nuanu Flow lifecycle hooks were not discovered: ${missing.join(", ")}`,
       hooks: [],
     };
   }
@@ -37,10 +48,11 @@ function hookStatusFromRows(rows, pluginId) {
   return {
     status: ready ? "trusted" : "review_required",
     detail: ready
-      ? "Nuanu Flow SessionStart hook is trusted"
-      : "Nuanu Flow SessionStart hook needs one-time review",
+      ? "Nuanu Flow lifecycle hooks are trusted"
+      : "Nuanu Flow lifecycle hooks need one-time review",
     hooks: hooks.map((hook) => ({
       key: hook.key || "",
+      eventName: hook.eventName || "",
       enabled: hook.enabled !== false,
       trustStatus: hook.trustStatus || "",
       currentHash: hook.currentHash || "",

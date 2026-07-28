@@ -31,6 +31,72 @@ function extractTextFromItem(item) {
   return typeof item.text === "string" ? item.text.trim() : "";
 }
 
+function itemActivity(item, phase) {
+  const type = item?.type || "";
+  const summaries = {
+    commandExecution:
+      phase === "started" ? "Running a command" : "Command finished",
+    fileChange:
+      phase === "started" ? "Preparing file changes" : "Files updated",
+    mcpToolCall:
+      phase === "started" ? "Using a connected tool" : "Connected tool finished",
+    dynamicToolCall:
+      phase === "started" ? "Using a tool" : "Tool finished",
+    webSearch:
+      phase === "started" ? "Searching the web" : "Web search finished",
+    imageGeneration:
+      phase === "started" ? "Generating an image" : "Image generation finished",
+  };
+  const safeSummary = summaries[type];
+  return safeSummary
+    ? { kind: "task.progress", safe_summary: safeSummary }
+    : null;
+}
+
+export function classifyAppServerActivity(msg) {
+  const method = msg?.method || "";
+  if (method === "turn/started") {
+    return { kind: "task.started", safe_summary: "Codex execution started" };
+  }
+  if (method === "item/started") {
+    return itemActivity(msg.params?.item, "started");
+  }
+  if (method === "item/completed") {
+    return itemActivity(msg.params?.item, "completed");
+  }
+  if (
+    method === "item/commandExecution/requestApproval" ||
+    method === "item/fileChange/requestApproval" ||
+    method === "execCommandApproval" ||
+    method === "applyPatchApproval" ||
+    method === "item/permissions/requestApproval"
+  ) {
+    return {
+      kind: "task.attention",
+      safe_summary: "An approval was requested and handled by worker policy",
+    };
+  }
+  if (
+    method === "mcpServer/elicitation/request" ||
+    method === "item/tool/requestUserInput"
+  ) {
+    return {
+      kind: "task.attention",
+      safe_summary: "The headless task requested user input",
+    };
+  }
+  return null;
+}
+
+function emitActivity(onActivity, event) {
+  if (!event || typeof onActivity !== "function") return;
+  try {
+    onActivity(event);
+  } catch {
+    // Activity reporting must never change task execution.
+  }
+}
+
 export function extractAgentOutputFromTurn(turn) {
   const items = Array.isArray(turn?.items) ? turn.items : [];
   for (let i = items.length - 1; i >= 0; i--) {
@@ -88,7 +154,13 @@ function serverRequestResponse(msg, cfg) {
   };
 }
 
-export function runCodexAppServerTask(task, cfg, prompt, taskEnv) {
+export function runCodexAppServerTask(
+  task,
+  cfg,
+  prompt,
+  taskEnv,
+  { onActivity } = {},
+) {
   return new Promise((resolve) => {
     const args = [...cfg.codexAppServerArgs];
     const env = taskEnv || { ...process.env };
@@ -178,10 +250,13 @@ export function runCodexAppServerTask(task, cfg, prompt, taskEnv) {
       }
 
       if (Object.prototype.hasOwnProperty.call(msg, "id") && msg.method) {
+        emitActivity(onActivity, classifyAppServerActivity(msg));
         const response = serverRequestResponse(msg, cfg);
         write({ id: msg.id, ...response });
         return;
       }
+
+      emitActivity(onActivity, classifyAppServerActivity(msg));
 
       if (msg.method === "item/agentMessage/delta") {
         deltaOutput += msg.params?.delta || "";

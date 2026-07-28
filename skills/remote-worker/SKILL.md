@@ -72,6 +72,13 @@ the task's **per-task
 own Flow MCP calls are attributed to the agent. Results post back
 automatically; SIGINT/SIGTERM drains gracefully.
 
+The daemon also renders a safe live activity feed. When launched from Codex,
+it binds significant events to that exact conversation through the inherited
+`CODEX_THREAD_ID`. The installed plugin summarizes unread completion,
+failure, requeue, disconnection, and attention events on the next user prompt,
+including the first prompt after reopening the session. This catch-up is
+intentionally not described as a spontaneous chat notification.
+
 Because the plugin's MCP config forwards `NUANU_AGENT_KEY` as `X-Agent-Key`,
 a worker-spawned Claude session with this plugin installed is **already
 authenticated as the ambient agent** — no OAuth prompt, no setup inside task

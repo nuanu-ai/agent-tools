@@ -1,7 +1,7 @@
 {
   "format_version": 1,
-  "plugin_version": "0.3.4",
-  "bundle_sha256": "bddfe365861519b733f8f412563691997499b099379d7f1e20395344dee5a620",
+  "plugin_version": "0.3.5",
+  "bundle_sha256": "cd7b49f3b21564e547c9c443e6346ff374797f59134c0810ba985f721c9976c8",
   "sources": [
     {
       "path": "plugins/nuanu-flow/scripts/worker/portable-worker.mjs",
@@ -13,11 +13,11 @@
     },
     {
       "path": "plugins/nuanu-flow/skills/bpmn-processes/SKILL.md",
-      "sha256": "2da25239140f1f7ff6cb0716734d35f57888df62060a27c8cf730416ec755c15"
+      "sha256": "24ed9384f5a5c0b89159e7f10b8c440356174ce04aa2e6a9095216bcb72cd1cf"
     },
     {
       "path": "plugins/nuanu-flow/skills/create-agent/SKILL.md",
-      "sha256": "7b1cde4e423dce08f2516d6e5ca78787dfe6b458a58f3c8409c3235b8c628304"
+      "sha256": "7fa40acac682b8947a90324ee5afccd405e63b08e5767a54d2f1fc606bd9bb7d"
     },
     {
       "path": "plugins/nuanu-flow/skills/create-agent/references/agent-design.md",
@@ -37,7 +37,7 @@
     },
     {
       "path": "plugins/nuanu-flow/skills/remote-worker/SKILL.md",
-      "sha256": "632ca33a066496035cf7c704e19a2f255d2773910ab13aecf3a212350405941e"
+      "sha256": "d952d51c45637905b70557434f7f24c45f38dce0188b8a7f7b4c5e820cf7a89a"
     },
     {
       "path": "plugins/nuanu-flow/skills/work-items/SKILL.md",

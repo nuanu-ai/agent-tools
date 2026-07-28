@@ -14,6 +14,7 @@
     "test:e2e": "node --test tests/e2e/*.test.mjs",
     "test:acceptance:codex": "node tests/acceptance/codex-dev-modes-acceptance.mjs",
     "test:acceptance:codex:model": "node tests/acceptance/codex-dev-modes-acceptance.mjs --model",
+    "test:acceptance:codex:worker": "node tests/acceptance/codex-dev-modes-acceptance.mjs --model --worker-only --skip-credential-free",
     "test:acceptance:codex:reload": "node tests/acceptance/codex-hot-reload-acceptance.mjs",
     "test:acceptance:claude": "node tests/acceptance/claude-plugin-acceptance.mjs",
     "test:acceptance:claude:live": "node tests/acceptance/claude-plugin-acceptance.mjs --live-model",

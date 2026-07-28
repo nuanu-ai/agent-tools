@@ -1,5 +1,6 @@
 import os from "node:os";
 
+import { defaultActivityDirectory } from "../activity/remote-worker-activity.mjs";
 import { createDefaultCredentialStore } from "./credentials.mjs";
 
 function required(name, value) {
@@ -60,6 +61,14 @@ export function loadConfig({ env = process.env, credentialStore = createDefaultC
     pollIntervalMs: Math.max(500, int(env, "NUANU_POLL_INTERVAL_MS", 2000)),
     heartbeatIntervalMs: Math.max(5000, int(env, "NUANU_HEARTBEAT_INTERVAL_MS", 15000)),
     lockSeconds: Math.max(30, int(env, "NUANU_LOCK_SECONDS", 300)),
+    activity: {
+      directory: defaultActivityDirectory(env),
+      ownerSessionId:
+        env.NUANU_OWNER_SESSION_ID || env.CODEX_THREAD_ID || "",
+      agentId: env.NUANU_AGENT_ID || stored?.agent?.id || "",
+      agentName:
+        env.NUANU_AGENT_NAME || stored?.agent?.display_name || "Remote agent",
+    },
     adapter: {
       type: (env.NUANU_ADAPTER || "claude-code").toLowerCase(),
       claudeBin: env.NUANU_CLAUDE_BIN || "claude",

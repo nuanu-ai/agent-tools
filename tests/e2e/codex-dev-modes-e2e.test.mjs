@@ -1280,6 +1280,7 @@ test("buildWorkerLaunch maps development credentials into a child-only App Serve
     NUANU_DEV_TOKEN: "dev-token",
     NUANU_DEV_AGENT_KEY: "local-agent-key",
     NUANU_DEV_WORKSPACE: "local-workspace",
+    CODEX_THREAD_ID: "session-worker-owner",
   };
   const dev = buildWorkerLaunch("dev", {
     codexHome: "/tmp/codex-base",
@@ -1302,6 +1303,7 @@ test("buildWorkerLaunch maps development credentials into a child-only App Serve
   assert.equal(dev.env.CODEX_HOME, "/tmp/codex-base/nuanu-flow/dev");
   assert.equal(dev.env.NUANU_CODEX_BASE_HOME, "/tmp/codex-base");
   assert.equal(dev.env.NUANU_CODEX_AGENT_KEY_ENV, "NUANU_DEV_AGENT_KEY");
+  assert.equal(dev.env.CODEX_THREAD_ID, "session-worker-owner");
   assert.equal(dev.env.NUANU_TOKEN, undefined);
   assert.equal(dev.env.NUANU_DEV_TOKEN, undefined);
   assert.match(dev.banner, /NUANU FLOW LOCAL DEVELOPMENT WORKER/);

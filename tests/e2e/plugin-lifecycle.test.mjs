@@ -24,6 +24,17 @@ test("plugin lifecycle keeps installation, authentication, and attachment distin
   assert.equal(attachmentAction(lifecycle), "verify");
 });
 
+test("plugin lifecycle models a host-required new session without calling it a restart", () => {
+  const lifecycle = createPluginLifecycle({
+    surface: "claude-code-desktop",
+    authentication: "skipped",
+    attachment: "new_session_required",
+    continuation: "new_session",
+  });
+
+  assert.equal(attachmentAction(lifecycle), "new_session");
+});
+
 test("plugin lifecycle rejects unsupported or ambiguous states", () => {
   assert.throws(
     () =>

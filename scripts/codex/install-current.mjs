@@ -342,13 +342,13 @@ function printReport(report) {
   console.log("");
   if (report.hookStatus === "review_required") {
     console.log(
-      "On restart, review and trust the Nuanu Flow SessionStart hook once when Codex asks.",
+      "On restart, review and trust the Nuanu Flow lifecycle hooks once when Codex asks.",
     );
     console.log("You can also inspect it later with /hooks.");
     console.log("");
   } else if (report.hookStatus === "unsupported") {
     console.log(
-      "The startup hook is unavailable; the resume prompt and MCP instructions will still continue setup.",
+      "The lifecycle hooks are unavailable; the resume prompt and MCP instructions will still continue setup.",
     );
     console.log("");
   }

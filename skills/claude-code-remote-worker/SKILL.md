@@ -24,9 +24,19 @@ token through standard input, and launches the bundled worker with
 `NUANU_ADAPTER=claude-code`.
 
 The installed plugin contributes the same Nuanu Flow skills, SessionStart
-context, and remote HTTP MCP server as the Codex plugin. Claude Code can apply
-a newly installed plugin in the current conversation with `/reload-plugins`;
-do not ask for a new terminal or a new conversation.
+context, and remote HTTP MCP server as the Codex plugin. Activation depends on
+the host:
+
+- Claude Code CLI or IDE can apply a newly installed plugin in the current
+  conversation with `/reload-plugins`.
+- The Claude Desktop Code tab does not implement `/reload-plugins`. For
+  interactive MCP use, start one new Code session in the same project; the
+  SessionStart hook continues setup on its first actual turn and native
+  Connectors owns OAuth. Never send a Desktop user to Terminal.
+
+The bundled worker scripts can enroll and launch immediately after the plugin
+files are installed, so remote-worker mode must not wait for either interactive
+reload path.
 
 ## Headless worker behavior
 

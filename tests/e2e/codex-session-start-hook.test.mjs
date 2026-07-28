@@ -280,6 +280,25 @@ test("plugin validator rejects escaped, missing, slow, and incorrectly matched h
     assert.match(invalid.stderr, /matcher must be startup\|resume\|clear\|compact/);
     assert.match(invalid.stderr, /at most one second/);
     assert.match(invalid.stderr, /target does not exist/);
+
+    await fs.writeFile(hooksPath, originalHooks);
+    const invalidPromptHooks = JSON.parse(originalHooks);
+    invalidPromptHooks.hooks.UserPromptSubmit[0].matcher = "*";
+    invalidPromptHooks.hooks.UserPromptSubmit[0].hooks[0].timeout = 2;
+    invalidPromptHooks.hooks.UserPromptSubmit[0].hooks[0].additionalContextLimit =
+      501;
+    invalidPromptHooks.hooks.UserPromptSubmit[0].hooks[0].command =
+      "node \"${PLUGIN_ROOT}/hooks/missing-prompt.mjs\"";
+    await fs.writeFile(
+      hooksPath,
+      `${JSON.stringify(invalidPromptHooks, null, 2)}\n`,
+    );
+    const invalidPrompt = validate();
+    assert.notEqual(invalidPrompt.status, 0);
+    assert.match(invalidPrompt.stderr, /must not define an ignored matcher/);
+    assert.match(invalidPrompt.stderr, /at most one second/);
+    assert.match(invalidPrompt.stderr, /between 1 and 500/);
+    assert.match(invalidPrompt.stderr, /target does not exist/);
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
   }

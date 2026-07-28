@@ -199,6 +199,22 @@ try {
                   trustStatus:
                     process.env.FAKE_HOOK_TRUST || "untrusted",
                 },
+                {
+                  key: `${plugin.pluginId}:hooks/hooks.json:user_prompt_submit:0:0`,
+                  eventName: "user_prompt_submit",
+                  handlerType: "command",
+                  isManaged: false,
+                  matcher: "",
+                  command:
+                    'node "${PLUGIN_ROOT}/hooks/user-prompt-submit.mjs"',
+                  timeoutSec: 1,
+                  source: "plugin",
+                  pluginId: plugin.pluginId,
+                  enabled: process.env.FAKE_HOOK_DISABLED !== "1",
+                  currentHash: "sha256:fake-prompt",
+                  trustStatus:
+                    process.env.FAKE_HOOK_TRUST || "untrusted",
+                },
               ]
             : [];
         send({

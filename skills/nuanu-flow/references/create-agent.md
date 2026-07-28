@@ -139,11 +139,19 @@ Use the bundled scripts without restarting Codex:
 5. Start `scripts/worker/worker.mjs` in the background with
    `NUANU_ADAPTER=codex-app-server` in Codex or
    `NUANU_ADAPTER=claude-code` in Claude Code. For another harness, ask for its
-   text-in/text-out command and use the generic command adapter. The worker
-   reads the protected credential written by enrollment.
+   text-in/text-out command and use the generic command adapter. Keep its
+   background output attached to the current task instead of redirecting it to
+   a file. The worker reads the protected credential written by enrollment.
+   In Codex it inherits the current `CODEX_THREAD_ID`; never synthesize a
+   session ID or bind by working directory.
 6. Wait only for `remote agent connected — heartbeat OK`, then return control
-   to the user. Report the agent, workspace, worker process/session ID, and
-   how to stop it.
+   to the user. Report the agent, workspace, worker process/session ID, how to
+   reopen the live activity output, and how to stop it. If startup reports
+   `session_activity=attached`, explain that this exact Codex conversation will
+   summarize completed, failed, requeued, disconnected, or attention-required
+   work on the user's next message. Do not promise a spontaneous chat card;
+   current Codex hooks provide catch-up at lifecycle points, not background
+   message injection.
 
 This worker is session-scoped. Keep it running in the background, and stop it
 gracefully with SIGINT or SIGTERM when the user asks.
