@@ -53,18 +53,18 @@ can run; review the Nuanu Flow hook when prompted and never bypass that trust
 step.
 
 Codex App prefers the native Workspace Plugin directory, Connect action, and
-MCP reload lifecycle. Until the listing is published, an App task with shell
-access may install from the canonical Git marketplace as an internal agent
-action. It must not ask the user to open Terminal or show a CLI resume
-command. After OAuth, the host must reload its MCP configuration and verify
-attachment with a real `onboarding_next` call. Codex App Server can reload MCP
-state into an existing thread, but a plugin cannot invoke the active host's
-control channel or turn prompt text into executable tools. If the App does not
-perform that native reload, try one plugin-mentioned continuation in the same
-conversation and then use the documented one-click plugin-backed task
-fallback. Never loop on a plain continuation. The `SessionStart` hook can add
-guidance in the fallback task but cannot add MCP tool schemas to a running
-thread.
+MCP lifecycle. Until the listing is published, an App task with shell access
+may install from the canonical Git marketplace as an internal agent action. It
+must not ask the user to open Terminal or show a CLI resume command. After
+OAuth, call `onboarding_next` immediately when it is available. If it is not,
+select the installed **Nuanu Flow** plugin from the App's `@` mention picker,
+add `Continue Nuanu Flow setup`, and send that plugin-attached message in the
+same conversation. Do not refer to a native **Continue** button or request a
+plain `continue`. A plugin cannot invoke the active host's control channel or
+turn prompt text into executable tools. Use the documented one-click
+plugin-backed task only if that explicit same-chat attachment fails. The
+`SessionStart` hook can add guidance in the fallback task but cannot add MCP
+tool schemas to a running thread.
 
 ## Install skills without the plugin
 

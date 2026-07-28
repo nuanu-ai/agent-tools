@@ -18,7 +18,8 @@ action:
 
 - never ask the user to open Terminal, run a command, or use `codex resume`
   inside Codex App;
-- let the app own OAuth completion and MCP configuration reload;
+- let the app own OAuth completion and use automatic MCP attachment when the
+  host provides it;
 - distinguish plugin installation, OAuth authentication, and MCP tool
   attachment; none implies either of the others;
 - continue the active conversation only after a real `onboarding_next` call
@@ -34,20 +35,21 @@ Codex profile. The agent, not the user, runs the public `codex plugin` and
 `codex mcp` commands. Preserve unrelated configuration and never launch a
 child Codex process or `codex app`.
 
-After OAuth, let Codex perform its supported MCP/plugin configuration reload,
-then continue on the next turn with a real `onboarding_next` call. App Server
-can reload MCP state into an existing thread, but plugin code has no supported
-access to the active host's control channel. Adding tool descriptions to a
-prompt does not register their executable dispatcher.
+After OAuth, call `onboarding_next` immediately if it is available. Plugin code
+has no supported access to the active host's control channel, and adding tool
+descriptions to a prompt does not register their executable dispatcher.
 
-If the current task still has its old capability set, ask once for the
-plugin-mentioned continuation documented by the hosted Codex App guide. Do
-not send or request a plain `continue`. Only when that explicit attachment
-attempt fails may you offer the guide's one-click plugin-backed task fallback.
-The bundled `SessionStart` hook can continue onboarding in that task but cannot
-add MCP tool schemas to an already-running one. Never display a CLI resume
-command. If the listing is absent and the conversation has no shell execution
-capability, report that specific host limitation.
+If the current task still has its old capability set, ask once for the user to
+select the installed **Nuanu Flow** plugin from the Codex App `@` mention
+picker, add `Continue Nuanu Flow setup`, and send that plugin-attached message
+in the same chat. Do not claim that the App shows a native **Continue** button,
+and do not send or request a plain `continue`. Only when that explicit
+attachment attempt fails may you offer the hosted guide's one-click
+plugin-backed task fallback. The bundled `SessionStart` hook can continue
+onboarding in that task but cannot add MCP tool schemas to an already-running
+one. Never display a CLI resume command. If the listing is absent and the
+conversation has no shell execution capability, report that specific host
+limitation.
 
 ## Terminal-first setup
 

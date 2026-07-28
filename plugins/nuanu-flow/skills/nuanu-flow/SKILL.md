@@ -65,9 +65,10 @@ the consent-time choice), `NUANU_MCP_URL` (Claude endpoint override). Run
 `/nuanu-flow:setup` in Claude Code or load `codex-setup` in Codex for a guided
 check.
 
-For Codex App, use the plugin-mentioned installer prompt published in
-`https://flow.nuanu.com/install.md`. For Codex CLI, use the versionless hosted
-installer URL. After the host has reloaded or resumed, prove tool attachment by
+For every host, start with the universal installer prompt published in
+`https://flow.nuanu.com/install.md`. In Codex App, mention the installed plugin
+only after installation when the hosted guide requires a same-chat attachment
+attempt. After the host has attached or resumed, prove tool attachment by
 calling `onboarding_next` once before claiming setup is ready.
 
 ## Object model

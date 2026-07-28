@@ -97,14 +97,14 @@ Codex App prefers the native Workspace Plugin directory and **Connect / Sign
 in** flow. Until the native listing is published, an App task with shell
 access uses the same canonical Git marketplace as an internal agent action;
 the user is never asked to open Terminal or run `codex resume`. After OAuth,
-the host must reload MCP state and prove attachment with a real
-`onboarding_next` call in the same thread. Codex App Server supports a
-same-thread MCP configuration reload, but plugin code cannot invoke the active
-host's control channel or create executable tools by placing schemas in the
-prompt. If that App build does not perform the native reload, use one
-plugin-mentioned continuation attempt and then the documented one-click
-plugin-backed task fallback—never a plain `continue` loop. See
-`https://flow.nuanu.com/connect/codex-app.md`.
+call `onboarding_next` immediately when it is available. If it is not, select
+the installed **Nuanu Flow** plugin from the App's `@` mention picker, add
+`Continue Nuanu Flow setup`, and send that plugin-attached message in the same
+chat. Do not refer to a native **Continue** button or ask for a plain
+`continue`. Plugin code cannot invoke the active host's control channel or
+create executable tools by placing schemas in the prompt. Use the documented
+one-click plugin-backed task only if the explicit same-chat attachment fails.
+See `https://flow.nuanu.com/connect/codex-app.md`.
 
 After a workspace and project are confirmed, the `project-setup` skill can
 create a commit-safe `.nuanu-flow.json` at the Git root. Future sessions read
