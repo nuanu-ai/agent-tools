@@ -55,6 +55,7 @@ test("Claude development package is isolated and points only to localhost", asyn
     assert.match(manifest.displayName, /\[DEV\]/);
     assert.equal(mcp.mcpServers.mcp.url, "http://localhost:3001/mcp");
     assert.equal(mcp.mcpServers.mcp.headers["X-Agent-Key"], "${NUANU_DEV_AGENT_KEY:-}");
+    assert.equal(mcp.mcpServers.mcp.headers["X-Agent-Client"], "Claude Code [DEV]");
     assert.equal(marketplace.name, "nuanu-dev");
     assert.equal(marketplace.plugins[0].name, "nuanu-flow-dev");
   } finally {
@@ -104,9 +105,9 @@ test("Claude local installer uses native marketplace, plugin, MCP login, and cur
     assert.equal(result.reloadCommand, "/reload-plugins");
     assert.deepEqual(result.lifecycle, {
       surface: "claude-code",
-      plugin: "installed",
-      oauth: "connected",
-      activation: "reload_required",
+      installation: "installed",
+      authentication: "connected",
+      attachment: "reload_required",
       continuation: "same_conversation_command",
     });
     assert(calls.some((args) => args[0] === "plugin" && args[1] === "marketplace" && args[2] === "add"));

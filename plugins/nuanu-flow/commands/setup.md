@@ -19,14 +19,14 @@ then print one compact status report at the end.
 
 1. **Check env vars** — run EXACTLY this snippet (POSIX-portable; do not
    rewrite it with shell-specific syntax like zsh `${(P)v}`, and never print
-   full secret values):
+   secret values or prefixes):
 
    ```bash
    for v in NUANU_TOKEN NUANU_WORKSPACE NUANU_MCP_URL NUANU_URL NUANU_AGENT_KEY; do
      val=$(printenv "$v")
      if [ -n "$val" ]; then
        case "$v" in
-         NUANU_TOKEN|NUANU_AGENT_KEY) echo "$v: set ($(printf '%.10s' "$val")...)" ;;
+         NUANU_TOKEN|NUANU_AGENT_KEY) echo "$v: set" ;;
          *) echo "$v: set = $val" ;;
        esac
      else
@@ -63,6 +63,7 @@ then print one compact status report at the end.
    will need them and where to get a key (app → the remote agent's settings →
    keys; shown once at creation).
 
-4. **Report**: a short checklist (✅/❌ per item) plus, for anything missing, a
-   ready-to-paste `export NAME=…` snippet with placeholder values. Do not
-   write to any shell profile or file — the user applies it themselves.
+4. **Report**: a short checklist (✅/❌ per item). For interactive OAuth, do
+   not show token variables, commands, or placeholder exports. Only when the
+   user explicitly requested manual CI or worker setup, show the minimum
+   relevant placeholder export. Do not write to a shell profile or file.

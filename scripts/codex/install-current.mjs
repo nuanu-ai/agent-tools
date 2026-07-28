@@ -18,6 +18,10 @@ import {
   modeConfig,
   runCodex,
 } from "./modes.mjs";
+import {
+  attachmentAction,
+  createPluginLifecycle,
+} from "../plugin-lifecycle.mjs";
 
 function parseJson(stdout, label) {
   try {
@@ -272,7 +276,8 @@ export async function installCurrentProfile(modeName, options = {}) {
     pluginId: mode.pluginId,
     timeoutMs: options.hookStatusTimeoutMs,
   });
-  const activation = actions.length > 0 ? "reopen_required" : "ready";
+  const attachment =
+    actions.length > 0 ? "restart_required" : "verification_required";
 
   return {
     surface: "codex-cli",
@@ -287,13 +292,15 @@ export async function installCurrentProfile(modeName, options = {}) {
     build,
     actions,
     resumeCommand: resumeCommand(env),
-    lifecycle: {
+    lifecycle: createPluginLifecycle({
       surface: "codex-cli",
-      plugin: "installed",
-      oauth: "connected",
-      activation,
-      continuation: activation === "ready" ? "automatic" : "same_thread_resume",
-    },
+      authentication: "connected",
+      attachment,
+      continuation:
+        attachment === "restart_required"
+          ? "same_thread_resume"
+          : "verify_in_current_thread",
+    }),
   };
 }
 
@@ -321,7 +328,9 @@ function printReport(report) {
   console.log(`Codex: ${report.codexVersion}`);
   console.log(`Plugin: ${report.pluginId}`);
   console.log(`MCP: ${report.mcpUrl}`);
-  console.log("Authentication: OAuth active");
+  console.log(`Installation: ${report.lifecycle.installation}`);
+  console.log(`Authentication: ${report.lifecycle.authentication}`);
+  console.log(`Attachment: ${report.lifecycle.attachment}`);
   console.log(
     `Hook: ${
       report.hookStatus === "review_required"
@@ -343,16 +352,19 @@ function printReport(report) {
     );
     console.log("");
   }
-  if (report.lifecycle.activation === "reopen_required") {
+  const action = attachmentAction(report.lifecycle);
+  if (action === "restart") {
     console.log("Codex CLI loads new MCP tools at session startup.");
     console.log(
       "Exit Codex, then run this once in the same terminal; setup will continue automatically:",
     );
     console.log("");
     console.log(report.resumeCommand);
-  } else {
-    console.log("Nuanu Flow is ready in this Codex CLI session.");
-    console.log('Continue with: "Continue Nuanu Flow setup"');
+  } else if (action === "verify") {
+    console.log("Nuanu Flow is installed and OAuth is active.");
+    console.log(
+      "Tool attachment is a separate host state; verify it with onboarding_next before claiming setup is ready.",
+    );
   }
 }
 
@@ -363,7 +375,7 @@ async function main() {
 
 Install Nuanu Flow into the current Codex CLI profile, open only the browser
 OAuth page, and print the exact command for resuming this conversation after
-the CLI restart required to load newly added MCP tools.
+the CLI restart when newly added MCP tools require it.
 
 Options:
   --force            Force regeneration of the development package.

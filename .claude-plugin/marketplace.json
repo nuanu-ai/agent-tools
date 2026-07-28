@@ -5,7 +5,7 @@
     {
       "name": "nuanu-flow",
       "source": "./plugins/nuanu-flow",
-      "description": "Nuanu Flow for coding agents: MCP tools, domain skills (work items, BPMN processes, artifacts, project setup), and a remote agent worker runtime.",
+      "description": "Nuanu Flow for coding agents: MCP tools, domain skills (Flow items, BPMN processes, artifacts, project setup), and a remote agent worker runtime.",
       "category": "productivity",
       "tags": ["project-management", "bpmn", "agents", "mcp"]
     }

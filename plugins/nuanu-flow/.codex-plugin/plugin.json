@@ -1,6 +1,6 @@
 {
   "name": "nuanu-flow",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Install and onboard Nuanu Flow from one prompt, then work with projects, processes, artifacts, decisions, and remote agents.",
   "author": {
     "name": "Nuanu",
@@ -54,8 +54,8 @@
     "privacyPolicyURL": "https://flow.nuanu.com/legals/privacy-policy",
     "termsOfServiceURL": "https://flow.nuanu.com/legals/terms-and-conditions",
     "defaultPrompt": [
-      "Show my Nuanu Flow work items and suggest my next action.",
-      "Create a Nuanu Flow work item from this bug report.",
+      "Show my Nuanu Flow items and suggest my next action.",
+      "Create a Nuanu Flow item from this bug report.",
       "Continue Nuanu Flow setup."
     ]
   }

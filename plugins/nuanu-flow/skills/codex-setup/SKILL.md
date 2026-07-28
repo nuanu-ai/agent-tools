@@ -19,8 +19,10 @@ action:
 - never ask the user to open Terminal, run a command, or use `codex resume`
   inside Codex App;
 - let the app own OAuth completion and MCP configuration reload;
-- continue the active conversation with `Continue Nuanu Flow setup` and a real
-  `onboarding_next` call once `nuanu-flow` is ready;
+- distinguish plugin installation, OAuth authentication, and MCP tool
+  attachment; none implies either of the others;
+- continue the active conversation only after a real `onboarding_next` call
+  proves that `nuanu-flow` is attached;
 - do not call private App Server methods or the still-unstable
   `plugin/install` API.
 
@@ -32,16 +34,20 @@ Codex profile. The agent, not the user, runs the public `codex plugin` and
 `codex mcp` commands. Preserve unrelated configuration and never launch a
 child Codex process or `codex app`.
 
-After OAuth, use a supported MCP/plugin reload when the App exposes it, then
-continue on the next turn with a real `onboarding_next` call. If the running
-task still has its old capability set and no reload action is exposed, do not
-ask the user to reopen that task: it can retain the pre-install capability
-snapshot. Ask once for a new App task with `Continue Nuanu Flow setup`; the
-bundled `SessionStart` hook will continue onboarding there. The hook injects
-startup context but cannot add MCP tool schemas to an already-running task.
-Never display a CLI resume command. If the listing is absent and the
-conversation has no shell execution capability, report that specific host
-limitation.
+After OAuth, let Codex perform its supported MCP/plugin configuration reload,
+then continue on the next turn with a real `onboarding_next` call. App Server
+can reload MCP state into an existing thread, but plugin code has no supported
+access to the active host's control channel. Adding tool descriptions to a
+prompt does not register their executable dispatcher.
+
+If the current task still has its old capability set, ask once for the
+plugin-mentioned continuation documented by the hosted Codex App guide. Do
+not send or request a plain `continue`. Only when that explicit attachment
+attempt fails may you offer the guide's one-click plugin-backed task fallback.
+The bundled `SessionStart` hook can continue onboarding in that task but cannot
+add MCP tool schemas to an already-running one. Never display a CLI resume
+command. If the listing is absent and the conversation has no shell execution
+capability, report that specific host limitation.
 
 ## Terminal-first setup
 
@@ -56,14 +62,16 @@ authorization page in the default browser. Never open that printed URL a
 second time and never open a `codex://` link; that launches the desktop app.
 
 Codex CLI loads new MCP tools only at process startup. After OAuth completes,
-the installer returns a structured lifecycle result. Only when it reports
-`activation: reopen_required`, tell the user to exit Codex and run the exact
-`codex resume <thread-id> "Continue Nuanu Flow setup"` command printed by the
-installer in the same terminal. This resumes the same conversation and starts
-the onboarding check without another typed message. If Codex asks for
-one-time review of the bundled Nuanu Flow `SessionStart` hook, tell the user to
-review and trust that exact hook. Never bypass hook trust. Do not request a
-fresh terminal, create a new chat, or launch a child Codex process.
+the installer returns a structured lifecycle result with separate
+`installation`, `authentication`, and `attachment` fields. Only when it
+reports `attachment: restart_required`, tell the user to exit Codex and run
+the exact `codex resume <thread-id> "Continue Nuanu Flow setup"` command
+printed by the installer in the same terminal. This resumes the same
+conversation and starts the onboarding check without another typed message.
+Do not claim `attachment: attached` until `onboarding_next` succeeds. If Codex
+asks for one-time review of the bundled Nuanu Flow `SessionStart` hook, tell the
+user to review and trust that exact hook. Never bypass hook trust. Do not
+request a fresh terminal, create a new chat, or launch a child Codex process.
 
 For production, register the canonical Git-backed `nuanu` marketplace, install
 `nuanu-flow@nuanu` with the Codex CLI, and run

@@ -371,7 +371,7 @@ function validateDevelopmentPackage(manifest, marketplace) {
 
 async function validateClaudePlugin(pluginRoot) {
   const manifest = await readJson(path.join(pluginRoot, ".claude-plugin/plugin.json"), "Claude plugin manifest");
-  if (!manifest) return;
+  if (!manifest) return null;
   for (const key of ["name", "displayName", "description", "repository", "license"]) {
     requireString(manifest, key, "Claude plugin manifest");
   }
@@ -380,6 +380,120 @@ async function validateClaudePlugin(pluginRoot) {
 
   const mcp = await readJson(path.join(pluginRoot, ".mcp.json"), "Claude MCP config");
   validateMcpServers(mcp?.mcpServers, "Claude MCP config mcpServers");
+  return { manifest, mcp };
+}
+
+function defaultInterpolatedValue(value) {
+  if (typeof value !== "string") return value;
+  return value.match(/^\$\{[^:}]+:-([^}]+)\}$/)?.[1] || value;
+}
+
+async function validateProductionHostParity(
+  pluginRoot,
+  codexManifest,
+  claudePlugin,
+) {
+  const claudeManifest = claudePlugin?.manifest;
+  if (
+    codexManifest?.name !== "nuanu-flow" ||
+    claudeManifest?.name !== "nuanu-flow"
+  ) {
+    return;
+  }
+
+  if (codexManifest.version !== claudeManifest.version) {
+    add(
+      `Codex and Claude plugin versions must match (${codexManifest.version} != ${claudeManifest.version})`,
+    );
+  }
+  if (codexManifest.repository !== claudeManifest.repository) {
+    add("Codex and Claude plugin repositories must match");
+  }
+
+  const codexServers = Object.values(codexManifest.mcpServers || {});
+  const claudeServers = Object.values(
+    claudePlugin?.mcp?.mcpServers || {},
+  );
+  const codexUrl = codexServers[0]?.url;
+  const claudeUrl = defaultInterpolatedValue(claudeServers[0]?.url);
+  if (
+    codexServers.length !== 1 ||
+    claudeServers.length !== 1 ||
+    codexUrl !== claudeUrl
+  ) {
+    add(
+      `Codex and Claude production MCP endpoints must match (${String(
+        codexUrl || "missing",
+      )} != ${String(claudeUrl || "missing")})`,
+    );
+  }
+  for (const url of [codexUrl, claudeUrl]) {
+    if (
+      typeof url === "string" &&
+      /(^|\/\/)(localhost|127\.0\.0\.1|\[::1\])(?=[:/]|$)/.test(url)
+    ) {
+      add("Production plugin manifests must not contain a localhost MCP URL");
+    }
+  }
+
+  const activeGuidance = [
+    "README.md",
+    "plugins/nuanu-flow/README.md",
+    "plugins/nuanu-flow/skills/codex-setup/SKILL.md",
+    "plugins/nuanu-flow/skills/nuanu-flow/SKILL.md",
+  ];
+  for (const relative of activeGuidance) {
+    const body = await fs.readFile(path.join(repoRoot, relative), "utf8");
+    if (/(?:~?149 tools|reopen_required)/.test(body)) {
+      add(`${relative} contains a stale tool count or lifecycle state`);
+    }
+  }
+
+  const readme = await fs.readFile(
+    path.join(pluginRoot, "README.md"),
+    "utf8",
+  );
+  for (const expected of [
+    "/reload-plugins",
+    "attachment: restart_required",
+    "onboarding_next",
+  ]) {
+    if (!readme.includes(expected)) {
+      add(`Plugin README must document ${expected}`);
+    }
+  }
+
+  const orientation = await fs.readFile(
+    path.join(pluginRoot, "skills/nuanu-flow/SKILL.md"),
+    "utf8",
+  );
+  if (
+    orientation.includes("→ **Work items**") ||
+    orientation.includes("- Work items have:")
+  ) {
+    add("Nuanu Flow orientation must use the product term Flow items");
+  }
+  const productCopy = [
+    ...(codexManifest.interface?.defaultPrompt || []),
+    claudeManifest.description || "",
+  ].join("\n");
+  if (/\bwork items?\b/i.test(productCopy)) {
+    add("Host-facing plugin copy must use the product term Flow items");
+  }
+
+  const setupCommand = await fs.readFile(
+    path.join(pluginRoot, "commands/setup.md"),
+    "utf8",
+  );
+  if (
+    setupCommand.includes("printf '%.10s'") ||
+    setupCommand.includes("ready-to-paste `export")
+  ) {
+    add("Setup guidance must not print secret prefixes or unsolicited exports");
+  }
+  if (!setupCommand.includes("`nuanu-flow` MCP server")) {
+    add("Setup guidance must use the canonical nuanu-flow MCP server name");
+  }
 }
 
 async function validateClaudeMarketplace() {
@@ -421,7 +535,8 @@ Options:
   const manifest = await validateCodexPlugin(pluginRoot);
   const marketplace = await validateCodexMarketplace(marketplacePath);
   validateDevelopmentPackage(manifest, marketplace);
-  await validateClaudePlugin(pluginRoot);
+  const claudePlugin = await validateClaudePlugin(pluginRoot);
+  await validateProductionHostParity(pluginRoot, manifest, claudePlugin);
   await validateClaudeMarketplace();
 
   if (errors.length) {

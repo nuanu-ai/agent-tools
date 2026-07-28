@@ -9,6 +9,7 @@ import {
   REPO_ROOT,
   buildClaudeDevPackage,
 } from "./dev-package.mjs";
+import { createPluginLifecycle } from "../plugin-lifecycle.mjs";
 
 const MODES = {
   prod: {
@@ -158,13 +159,12 @@ export async function installClaude(modeName, options = {}) {
     mcpUrl: modeName === "dev" ? build.mcpUrl : mode.mcpUrl,
     auth: options.skipAuth ? "skipped" : "oauth",
     reloadCommand: "/reload-plugins",
-    lifecycle: {
+    lifecycle: createPluginLifecycle({
       surface: "claude-code",
-      plugin: "installed",
-      oauth: options.skipAuth ? "skipped" : "connected",
-      activation: "reload_required",
+      authentication: options.skipAuth ? "skipped" : "connected",
+      attachment: "reload_required",
       continuation: "same_conversation_command",
-    },
+    }),
   };
 }
 
@@ -175,8 +175,12 @@ async function main() {
   console.log(`Claude Code: ${result.version}`);
   console.log(`Plugin: ${result.pluginId}`);
   console.log(`MCP: ${result.mcpUrl}`);
-  console.log(`Authentication: ${result.auth}`);
-  console.log("Run /reload-plugins in this conversation to activate Nuanu Flow.");
+  console.log(`Installation: ${result.lifecycle.installation}`);
+  console.log(`Authentication: ${result.lifecycle.authentication}`);
+  console.log(`Attachment: ${result.lifecycle.attachment}`);
+  console.log(
+    "Run /reload-plugins in this conversation, then verify attachment with onboarding_next.",
+  );
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

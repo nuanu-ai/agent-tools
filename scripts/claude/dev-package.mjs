@@ -140,9 +140,11 @@ export async function buildClaudeDevPackage(options = {}) {
               ...server,
               url: mcpUrl,
               headers: {
+                ...server.headers,
                 "X-Plane-User-Token": "${NUANU_DEV_TOKEN:-}",
                 "X-Agent-Key": "${NUANU_DEV_AGENT_KEY:-}",
                 "X-Plane-Workspace": "${NUANU_DEV_WORKSPACE:-}",
+                "X-Agent-Client": "Claude Code [DEV]",
               },
             },
           },

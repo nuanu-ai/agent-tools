@@ -1,8 +1,8 @@
 # Nuanu Flow coding-agent plugin
 
-Work with Nuanu Flow from a coding agent: the Flow MCP server (149 tools,
-compact 2-tool surface by default), domain skills, Claude slash commands, Codex
-plugin metadata, and a bundled remote-agent worker daemon.
+Work with Nuanu Flow from a coding agent: the full Flow MCP catalog (exposed
+through a compact 2-tool surface by default), domain skills, Claude slash
+commands, Codex plugin metadata, and a bundled remote-agent worker daemon.
 
 ## Install for Claude Code
 
@@ -43,7 +43,9 @@ Read and install https://flow.nuanu.com/install.md
 Codex handles marketplace installation in the terminal and opens only the
 browser OAuth page. After authentication, restart the CLI once and run the
 printed `codex resume <thread-id> "Continue Nuanu Flow setup"` command in the
-same terminal only when the installer reports `reopen_required`. The prompt starts the resumed conversation's first turn, where
+same terminal only when the installer reports
+`attachment: restart_required`. The prompt starts the resumed conversation's
+first turn, where
 the `onboarding` skill continues exactly the first unmet requirement. The
 bundled `SessionStart` hook keeps Nuanu Flow available as the task tracker on
 future starts and resumes. Codex requires one-time review before a plugin hook
@@ -54,11 +56,15 @@ Codex App prefers the native Workspace Plugin directory, Connect action, and
 MCP reload lifecycle. Until the listing is published, an App task with shell
 access may install from the canonical Git marketplace as an internal agent
 action. It must not ask the user to open Terminal or show a CLI resume
-command. After OAuth, use the App's supported MCP reload when exposed. If the
-App exposes no reload action, start one new task instead of reopening the
-pre-install task, which can retain its old capability snapshot. The
-`SessionStart` hook continues onboarding in that new task but cannot add MCP
-tools to an already-running one. Both paths avoid private App Server APIs.
+command. After OAuth, the host must reload its MCP configuration and verify
+attachment with a real `onboarding_next` call. Codex App Server can reload MCP
+state into an existing thread, but a plugin cannot invoke the active host's
+control channel or turn prompt text into executable tools. If the App does not
+perform that native reload, try one plugin-mentioned continuation in the same
+conversation and then use the documented one-click plugin-backed task
+fallback. Never loop on a plain continuation. The `SessionStart` hook can add
+guidance in the fallback task but cannot add MCP tool schemas to a running
+thread.
 
 ## Install skills without the plugin
 

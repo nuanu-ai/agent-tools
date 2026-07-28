@@ -76,7 +76,7 @@ test("Codex plugin metadata points at skills and OAuth-ready Flow MCP config", a
   assert.equal(manifest.hooks, "./hooks/hooks.json");
   assert.equal(typeof manifest.mcpServers, "object");
   assert.equal(manifest.interface.displayName, "Nuanu Flow");
-  assert(manifest.interface.defaultPrompt.some((line) => line.includes("work items")));
+  assert(manifest.interface.defaultPrompt.some((line) => line.includes("Flow items")));
 
   assert.equal(mcp["nuanu-flow"].type, "http");
   assert.equal(
@@ -141,11 +141,15 @@ test("public plugin exposes the one-prompt onboarding and remote enrollment flow
   assert.match(pluginReadme, /App task with shell\s+access may install from the canonical Git marketplace/);
   assert.match(codexSetup, /do not stop solely for that reason/);
   assert.match(codexSetup, /The agent, not the user, runs the public `codex plugin` and\s+`codex mcp` commands/);
-  assert.match(codexSetup, /Ask once for a new App task/);
-  assert.match(codexSetup, /cannot add MCP tool schemas to an already-running task/);
+  assert.match(codexSetup, /ask once for the\s+plugin-mentioned continuation/);
+  assert.match(codexSetup, /App Server\s+can reload MCP state into an existing thread/);
+  assert.match(codexSetup, /Adding tool descriptions to a\s+prompt does not register their executable dispatcher/);
+  assert.match(codexSetup, /cannot\s+add MCP tool schemas to an already-running one/);
   assert.match(codexSetup, /keep the current agent turn open and poll that same\s+process/);
   assert.match(codexSetup, /not a reason to finish the turn or ask the user to\s+reply `done`/);
   assert.doesNotMatch(codexSetup, /reopen the current task\s+from App history/);
+  assert.doesNotMatch(codexSetup, /reopen_required/);
+  assert.match(codexSetup, /attachment: restart_required/);
   assert.match(codexSetup, /Codex CLI loads new MCP tools only at process startup/);
   assert.match(
     codexSetup,
@@ -153,7 +157,7 @@ test("public plugin exposes the one-prompt onboarding and remote enrollment flow
   );
   assert.match(
     rootReadme,
-    /Run it in\s+the same terminal to continue the same\s+conversation/,
+    /Run it in the same terminal to continue the\s+same conversation/,
   );
   assert.doesNotMatch(codexSetup, /report that official-directory dependency/);
   assert.match(orientation, /first workspace|zero workspaces/i);

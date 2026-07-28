@@ -43,8 +43,9 @@ Read and install https://flow.nuanu.com/install.md
 ```
 
 Claude Code uses its native marketplace, plugin, and MCP OAuth commands. After
-installation, `/reload-plugins` activates Nuanu Flow in the current
-conversation without a full CLI restart. The direct equivalent is:
+installation and OAuth, `/reload-plugins` attaches Nuanu Flow's MCP tools to
+the current conversation without a full CLI restart. The direct equivalent
+is:
 
 ```text
 /plugin marketplace add nuanu-ai/agent-tools
@@ -82,9 +83,11 @@ Read and install https://flow.nuanu.com/install.md
 Codex installs the plugin from the terminal and opens only the browser OAuth
 page. Because the CLI loads new MCP tools at startup, the installer prints the
 exact `codex resume <thread-id> "Continue Nuanu Flow setup"` command needed
-only when its structured lifecycle result says `reopen_required`. Run it in
-the same terminal to continue the same
-conversation and start the onboarding check immediately. The bundled
+only when its structured lifecycle result says
+`attachment: restart_required`. Run it in the same terminal to continue the
+same conversation and start the onboarding check immediately. Installation,
+OAuth, and tool attachment are separate states; setup is complete only after
+the resumed thread successfully calls `onboarding_next`. The bundled
 `SessionStart` hook adds a short task-tracker reminder on future starts and
 resumes; Codex may ask for one-time hook review on the first restart. The
 installer never opens the desktop app, asks the user to copy an authorization
@@ -94,9 +97,13 @@ Codex App prefers the native Workspace Plugin directory and **Connect / Sign
 in** flow. Until the native listing is published, an App task with shell
 access uses the same canonical Git marketplace as an internal agent action;
 the user is never asked to open Terminal or run `codex resume`. After OAuth,
-the App reloads MCP state when supported. If that build exposes no reload
-action, start one new App task instead of reopening the pre-install task,
-which can retain its old capability snapshot. See
+the host must reload MCP state and prove attachment with a real
+`onboarding_next` call in the same thread. Codex App Server supports a
+same-thread MCP configuration reload, but plugin code cannot invoke the active
+host's control channel or create executable tools by placing schemas in the
+prompt. If that App build does not perform the native reload, use one
+plugin-mentioned continuation attempt and then the documented one-click
+plugin-backed task fallback—never a plain `continue` loop. See
 `https://flow.nuanu.com/connect/codex-app.md`.
 
 After a workspace and project are confirmed, the `project-setup` skill can
@@ -225,7 +232,7 @@ deletes only its marker-scoped test records.
 | Path                               | What                                                                                                                                                                                                                                          |
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `skills/`                          | Generated open-standard Agent Skills. `skills/nuanu-flow` is a self-contained portable fallback with compiled domain references and a simplified worker; the remaining directories expose each canonical skill separately.                    |
-| `plugins/nuanu-flow`               | The Nuanu Flow plugin: hosted MCP server config, domain skills (work items, BPMN processes, artifacts, project setup, remote worker, orientation), Claude slash commands/output style, Codex metadata, and the zero-dependency worker daemon. |
+| `plugins/nuanu-flow`               | The Nuanu Flow plugin: hosted MCP server config, domain skills (Flow items, BPMN processes, artifacts, project setup, remote worker, orientation), Claude slash commands/output style, Codex metadata, and the zero-dependency worker daemon. |
 | `.claude-plugin/marketplace.json`  | The marketplace catalog (name `nuanu`). This repo owns it — edit it here.                                                                                                                                                                     |
 | `.agents/plugins/marketplace.json` | The Codex marketplace catalog (name `nuanu`) for local and remote Codex installs.                                                                                                                                                             |
 | `scripts/sync-skills.mjs`          | Deterministically compiles the canonical plugin skills into `skills/`, flattens portable references, copies the simplified worker, and records source hashes in a generated manifest.                                                         |

@@ -69,9 +69,9 @@ test("current-profile development install delegates browser OAuth to Codex and p
     assert.equal(report.hookStatus, "review_required");
     assert.deepEqual(report.lifecycle, {
       surface: "codex-cli",
-      plugin: "installed",
-      oauth: "connected",
-      activation: "reopen_required",
+      installation: "installed",
+      authentication: "connected",
+      attachment: "restart_required",
       continuation: "same_thread_resume",
     });
     assert.equal(
@@ -120,8 +120,8 @@ test("current-profile development install delegates browser OAuth to Codex and p
     });
     assert.deepEqual(second.actions, []);
     assert.equal(second.hookStatus, "trusted");
-    assert.equal(second.lifecycle.activation, "ready");
-    assert.equal(second.lifecycle.continuation, "automatic");
+    assert.equal(second.lifecycle.attachment, "verification_required");
+    assert.equal(second.lifecycle.continuation, "verify_in_current_thread");
     assert.equal(wrapperBrowserOpenAttempts, 0);
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });

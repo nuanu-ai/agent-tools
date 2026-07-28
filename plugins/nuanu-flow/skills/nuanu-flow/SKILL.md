@@ -30,7 +30,7 @@ The `nuanu-flow` MCP server runs in **compact mode** by default and publishes
 only
 two tools:
 
-- `search_tools(query)` — keyword search over the full catalog (~149 tools);
+- `search_tools(query)` — keyword search over the full catalog;
   returns matching tools' names + schemas.
 - `execute_tool(name, arguments)` — run any catalog tool by name.
 
@@ -65,21 +65,21 @@ the consent-time choice), `NUANU_MCP_URL` (Claude endpoint override). Run
 `/nuanu-flow:setup` in Claude Code or load `codex-setup` in Codex for a guided
 check.
 
-For a versionless Codex install, the only user-facing prompt is:
-`Read and follow https://flow.nuanu.com/install.md`. If the user says
-`Continue Nuanu Flow setup` after the single required restart, load the
-`onboarding` skill and begin by calling `onboarding_next`.
+For Codex App, use the plugin-mentioned installer prompt published in
+`https://flow.nuanu.com/install.md`. For Codex CLI, use the versionless hosted
+installer URL. After the host has reloaded or resumed, prove tool attachment by
+calling `onboarding_next` once before claiming setup is ready.
 
 ## Object model
 
 - **Workspace** (addressed by slug) → **Projects** (short identifier like
-  `ENG`) → **Work items** ("issues", addressed `ENG-42`).
-- Work items have: **states** (grouped `backlog / unstarted / started /
+  `ENG`) → **Flow items** ("issues", addressed `ENG-42`).
+- Flow items have: **states** (grouped `backlog / unstarted / started /
 completed / cancelled`), **priority** (`urgent / high / medium / low /
 none`), assignees, **labels**, **estimates**, sub-items (parent), relations,
   comments, attachments.
 - **Cycles** = time-boxed sprints; **Modules** = feature buckets. Both contain
-  work items.
+  Flow items.
 - **Teams** group members and projects across the workspace. **Objectives**
   are portfolios that roll up projects. **Views** are saved filters.
   **Automations** are event → action rules.
@@ -88,7 +88,7 @@ none`), assignees, **labels**, **estimates**, sub-items (parent), relations,
   **Agent employees** are configured AI agents (local runtime or remote
   workers). **Decisions** are human approve/deny/option gates inside runs.
 - **Artifacts** = versioned files/documents in a registry, bound to entities
-  (projects, runs, work items, …) and organized in logical folders.
+  (projects, runs, Flow items, …) and organized in logical folders.
 
 ## Conventions that apply everywhere
 
