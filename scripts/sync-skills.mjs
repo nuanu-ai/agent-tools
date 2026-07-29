@@ -29,6 +29,7 @@ const canonicalSkills = [
   "create-agent",
   "nuanu-flow",
   "onboarding",
+  "product-help",
   "project-setup",
   "remote-worker",
   "work-items",
@@ -40,6 +41,7 @@ const bundledSkills = [
   "bpmn-processes",
   "create-agent",
   "onboarding",
+  "product-help",
   "project-setup",
   "remote-worker",
   "work-items",
@@ -52,6 +54,18 @@ const bundledSupportingReferences = [
     target: "create-agent-design.md",
   },
   {
+    source: "plugins/nuanu-flow/skills/product-help/references/concepts.md",
+    target: "product-help-concepts.md",
+  },
+  {
+    source: "plugins/nuanu-flow/skills/product-help/references/how-to.md",
+    target: "product-help-how-to.md",
+  },
+  {
+    source: "plugins/nuanu-flow/skills/product-help/references/integrations.md",
+    target: "product-help-integrations.md",
+  },
+  {
     source: "plugins/nuanu-flow/skills/work-items/references/payloads.md",
     target: "work-items-payloads.md",
   },
@@ -59,6 +73,9 @@ const bundledSupportingReferences = [
 
 const supportingReferenceRewrites = new Map([
   ["references/agent-design.md", "create-agent-design.md"],
+  ["references/concepts.md", "product-help-concepts.md"],
+  ["references/how-to.md", "product-help-how-to.md"],
+  ["references/integrations.md", "product-help-integrations.md"],
   ["references/payloads.md", "work-items-payloads.md"],
 ]);
 
@@ -82,10 +99,11 @@ read exactly the relevant bundled reference:
 
 | Job | Bundled reference |
 | --- | --- |
+| Product concepts, UI paths, and integration questions | [product help](references/product-help.md) |
 | First-run account and workspace onboarding | [onboarding](references/onboarding.md) |
 | Existing workspace context, goals, and teammates | [workspace setup](references/workspace-setup.md) |
 | Project scaffolding | [project setup](references/project-setup.md) |
-| Work items, cycles, relations, and comments | [work items](references/work-items.md) |
+| Flow items, cycles, relations, and comments | [work items](references/work-items.md) |
 | BPMN process authoring and operation | [BPMN processes](references/bpmn-processes.md) |
 | Versioned files and documents | [artifacts](references/artifacts.md) |
 | Agent design, creation, or connection | [create agent](references/create-agent.md) |

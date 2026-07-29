@@ -189,3 +189,36 @@ test("public plugin exposes the one-prompt onboarding and remote enrollment flow
   );
   assert.equal(manifest.mcpServers["nuanu-flow"].auth, "oauth");
 });
+
+test("public plugin exposes read-only product Q&A and its references", async () => {
+  const orientation = await fs.readFile(
+    path.join(pluginRoot, "skills/nuanu-flow/SKILL.md"),
+    "utf8",
+  );
+  const productHelpRoot = path.join(
+    pluginRoot,
+    "skills/product-help",
+  );
+  const help = await fs.readFile(
+    path.join(productHelpRoot, "SKILL.md"),
+    "utf8",
+  );
+  const integrations = await fs.readFile(
+    path.join(productHelpRoot, "references/integrations.md"),
+    "utf8",
+  );
+
+  await fs.access(
+    path.join(productHelpRoot, "references/concepts.md"),
+  );
+  await fs.access(
+    path.join(productHelpRoot, "references/how-to.md"),
+  );
+  assert.match(orientation, /`product-help`/);
+  assert.match(help, /Read-only by default/);
+  assert.match(help, /get_agent_creation_options/);
+  assert.match(
+    integrations,
+    /Instagram is not in the curated integration catalog in this build/,
+  );
+});

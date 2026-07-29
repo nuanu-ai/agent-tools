@@ -191,9 +191,10 @@ reply `done`; environment/Keychain credentials remain advanced fallbacks.
 ## What's inside
 
 - **`skills/`** — open-standard Agent Skills: `nuanu-flow` (orientation +
-  routing), `onboarding`, `work-items`, `workspace-setup`, `project-setup`,
-  `bpmn-processes`, `artifacts`, `remote-worker`, plus host-specific Codex and
-  Claude Code remote-worker guidance.
+  routing), `product-help` (read-only product Q&A and UI guidance),
+  `onboarding`, `work-items`, `workspace-setup`, `project-setup`,
+  `bpmn-processes`, `artifacts`, `create-agent`, `remote-worker`, plus
+  host-specific Codex and Claude Code remote-worker guidance.
 - **standalone `skills/nuanu-flow`** — generated portable distribution with
   flattened copies of the domain references, a source-hash manifest, and
   `scripts/worker.mjs`. Generate it from the canonical plugin skills with

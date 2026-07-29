@@ -1,6 +1,6 @@
 ---
 name: nuanu-flow
-description: Start here when working with Nuanu Flow (Plane-based work management platform). Explains the object model (workspaces, projects, work items, cycles, processes, artifacts, agents), how to call Flow MCP tools, required auth env vars, and which detailed skill to load for each job.
+description: Start here when working with Nuanu Flow (Plane-based work management platform). Routes product questions and UI how-tos, explains the object model (workspaces, projects, Flow items, cycles, processes, artifacts, agents), and covers Flow MCP calling and authentication.
 ---
 
 # Working with Nuanu Flow
@@ -120,9 +120,10 @@ none`), assignees, **labels**, **estimates**, sub-items (parent), relations,
 
 | Job                                                                  | Skill                 |
 | -------------------------------------------------------------------- | --------------------- |
+| Explain a feature, UI path, product term, or external integration    | `product-help`        |
 | First workspace, new account, or zero-workspace setup                | `onboarding`          |
 | Enrich an existing empty workspace with company context and goals    | `workspace-setup`     |
-| Create/search/triage/update work items, sprints, relations, comments | `work-items`          |
+| Create/search/triage/update Flow items, sprints, relations, comments | `work-items`          |
 | Scaffold a new project (states, labels, estimates, members, views)   | `project-setup`       |
 | Author or operate a BPMN process / approval chain / automation flow  | `bpmn-processes`      |
 | Store, version, search, or link files and documents                  | `artifacts`           |
@@ -160,10 +161,11 @@ read exactly the relevant bundled reference:
 
 | Job | Bundled reference |
 | --- | --- |
+| Product concepts, UI paths, and integration questions | [product help](references/product-help.md) |
 | First-run account and workspace onboarding | [onboarding](references/onboarding.md) |
 | Existing workspace context, goals, and teammates | [workspace setup](references/workspace-setup.md) |
 | Project scaffolding | [project setup](references/project-setup.md) |
-| Work items, cycles, relations, and comments | [work items](references/work-items.md) |
+| Flow items, cycles, relations, and comments | [work items](references/work-items.md) |
 | BPMN process authoring and operation | [BPMN processes](references/bpmn-processes.md) |
 | Versioned files and documents | [artifacts](references/artifacts.md) |
 | Agent design, creation, or connection | [create agent](references/create-agent.md) |

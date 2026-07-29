@@ -13,8 +13,8 @@ other agent supported by `skills`:
 npx skills add nuanu-ai/agent-tools --skill nuanu-flow
 ```
 
-The installed `nuanu-flow` skill includes the router, compiled domain
-references, and a simplified zero-dependency remote worker. It is the
+The installed `nuanu-flow` skill includes the router, product Q&A, compiled
+operational references, and a simplified zero-dependency remote worker. It is the
 recommended fallback when the native plugin is unavailable. To install the
 entire development collection as separate skills instead:
 
@@ -259,8 +259,8 @@ deletes only its marker-scoped test records.
 
 | Path                               | What                                                                                                                                                                                                                                          |
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `skills/`                          | Generated open-standard Agent Skills. `skills/nuanu-flow` is a self-contained portable fallback with compiled domain references and a simplified worker; the remaining directories expose each canonical skill separately.                    |
-| `plugins/nuanu-flow`               | The Nuanu Flow plugin: hosted MCP server config, domain skills (Flow items, BPMN processes, artifacts, project setup, remote worker, orientation), Claude slash commands/output style, Codex metadata, and the zero-dependency worker daemon. |
+| `skills/`                          | Generated open-standard Agent Skills. `skills/nuanu-flow` is a self-contained portable fallback with product Q&A, compiled operational references, and a simplified worker; the remaining directories expose each canonical skill separately.         |
+| `plugins/nuanu-flow`               | The Nuanu Flow plugin: hosted MCP server config, product Q&A, domain skills (Flow items, BPMN processes, artifacts, project setup, remote worker, orientation), Claude slash commands/output style, Codex metadata, and the zero-dependency worker daemon. |
 | `.claude-plugin/marketplace.json`  | The marketplace catalog (name `nuanu`). This repo owns it — edit it here.                                                                                                                                                                     |
 | `.agents/plugins/marketplace.json` | The Codex marketplace catalog (name `nuanu`) for local and remote Codex installs.                                                                                                                                                             |
 | `scripts/sync-skills.mjs`          | Deterministically compiles the canonical plugin skills into `skills/`, flattens portable references, copies the simplified worker, and records source hashes in a generated manifest.                                                         |
