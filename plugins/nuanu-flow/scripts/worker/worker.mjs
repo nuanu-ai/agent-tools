@@ -9,10 +9,6 @@
 import { loadConfig } from "./config.mjs";
 import { NuanuClient } from "./client.mjs";
 import { makeAdapter } from "./adapter.mjs";
-import {
-  createWorkerActivity,
-  safeTaskTitle,
-} from "./activity.mjs";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const log = (...a) => console.log(`[${new Date().toISOString()}]`, ...a);
@@ -20,13 +16,6 @@ const log = (...a) => console.log(`[${new Date().toISOString()}]`, ...a);
 const cfg = loadConfig();
 const client = new NuanuClient(cfg.baseUrl, cfg.agentKey);
 const adapter = makeAdapter(cfg.adapter);
-const activity = createWorkerActivity({
-  config: {
-    ...cfg.activity,
-    workerId: cfg.workerId,
-  },
-  log,
-});
 
 let running = true;
 let inFlight = 0;
@@ -43,14 +32,10 @@ async function heartbeatLoop() {
         // and for humans watching the log: the token is live and the platform
         // now shows this agent as online.
         log("remote agent connected — heartbeat OK");
-        activity.emit({ kind: "worker.connected" });
       }
     } catch (e) {
-      if (heartbeatOk) {
-        activity.emit({ kind: "worker.disconnected" });
-      }
       heartbeatOk = false;
-      log("heartbeat failed; retrying");
+      log("heartbeat failed:", e.message);
     }
     await sleep(cfg.heartbeatIntervalMs);
   }
@@ -58,82 +43,26 @@ async function heartbeatLoop() {
 
 async function handleTask(task) {
   const label = `${String(task.task_id).slice(0, 8)} ${task.step_id}`;
-  const title = safeTaskTitle(task);
-  const startedAt = Date.now();
-  log("claimed", label, "-", title);
-  activity.emit({
-    kind: "task.claimed",
-    task_id: task.task_id,
-    run_id: task.run_id,
-    safe_title: title,
-    flow_url: task.flow_url,
-  });
+  log("claimed", label, "-", (task.instruction || "").slice(0, 70));
   try {
-    const result = await adapter.handle(task, {
-      onActivity(event) {
-        activity.emit({
-          ...event,
-          task_id: task.task_id,
-          run_id: task.run_id,
-          safe_title: title,
-          flow_url: task.flow_url,
-        });
-      },
-    });
+    const result = await adapter.handle(task);
     if (result.status === "ok") {
       await client.complete(task.task_id, { output: result.output, options: result.options, workerId: cfg.workerId });
       const runId = result.meta?.session_id || result.meta?.thread_id;
       log("completed", label, runId ? `(session ${String(runId).slice(0, 8)})` : "");
-      activity.emit({
-        kind: "task.completed",
-        task_id: task.task_id,
-        run_id: task.run_id,
-        safe_title: title,
-        duration_ms: Date.now() - startedAt,
-        flow_url: task.flow_url,
-      });
     } else {
       // The agent ran but reported an error -> terminal error signal to the engine.
       await client.completeError(task.task_id, result.error, cfg.workerId);
-      log("completed-with-error", label, "- remote execution failed");
-      activity.emit({
-        kind: "task.failed",
-        task_id: task.task_id,
-        run_id: task.run_id,
-        safe_title: title,
-        safe_summary: "Remote execution failed",
-        duration_ms: Date.now() - startedAt,
-        flow_url: task.flow_url,
-      });
+      log("completed-with-error", label, "-", String(result.error).slice(0, 140));
     }
   } catch (e) {
     // The worker/adapter itself failed -> requeue for another attempt.
-    log("worker error on", label, "-> requeue");
+    log("worker error on", label, "-", e.message, "-> requeue");
     try {
       await client.fail(task.task_id, { error: e.message, requeue: true, workerId: cfg.workerId });
-      activity.emit({
-        kind: "task.requeued",
-        task_id: task.task_id,
-        run_id: task.run_id,
-        safe_title: title,
-        safe_summary: "The task was returned to Flow for another attempt",
-        duration_ms: Date.now() - startedAt,
-        flow_url: task.flow_url,
-      });
     } catch (e2) {
-      log("task requeue reporting also failed");
-      activity.emit({
-        kind: "task.failed",
-        task_id: task.task_id,
-        run_id: task.run_id,
-        safe_title: title,
-        safe_summary: "Remote execution failed",
-        duration_ms: Date.now() - startedAt,
-        flow_url: task.flow_url,
-      });
+      log("fail() also errored:", e2.message);
     }
-  } finally {
-    await activity.flush();
   }
 }
 
@@ -161,7 +90,7 @@ async function pumpOnce() {
         // 401 is expected while the agent's token isn't live yet (the create
         // form pregenerates it) or was revoked — keep polling either way.
         if (e.status === 401) log("fetch-and-lock unauthorized — token not active yet or revoked; retrying");
-        else log("fetch-and-lock failed; retrying");
+        else log("fetch-and-lock failed:", e.message);
         break;
       }
       if (!tasks.length) break;
@@ -198,7 +127,7 @@ async function gatewayLoop() {
     try {
       ({ ticket } = await client.wsTicket());
     } catch (e) {
-      log("ws-ticket failed; retrying");
+      log("ws-ticket failed:", e.message);
       if (running) await sleep(3000);
       continue;
     }
@@ -207,7 +136,7 @@ async function gatewayLoop() {
       try {
         ws = new WebSocket(`${cfg.gatewayUrl}?ticket=${encodeURIComponent(ticket)}`);
       } catch (e) {
-        log("gateway connect error; retrying");
+        log("gateway connect error:", e.message);
         return resolve();
       }
       const ping = setInterval(() => {
@@ -254,13 +183,12 @@ async function gatewayLoop() {
 function shutdown(sig) {
   if (!running) return;
   log(`received ${sig}; draining ${inFlight} in-flight task(s)...`);
-  activity.emit({ kind: "worker.stopped" });
   running = false;
   const started = Date.now();
   const timer = setInterval(() => {
     if (inFlight === 0 || Date.now() - started > 30000) {
       clearInterval(timer);
-      activity.flush().finally(() => process.exit(0));
+      process.exit(0);
     }
   }, 250);
 }
@@ -271,9 +199,6 @@ log("nuanu-worker starting");
 log(`  url=${cfg.baseUrl}  worker_id=${cfg.workerId}`);
 log(
   `  adapter=${adapter.name}  transport=${cfg.transport}  maxConcurrency=${cfg.maxConcurrency}  lock=${cfg.lockSeconds}s`
-);
-log(
-  `  session_activity=${activity.attached ? "attached" : "unavailable (no Codex session id)"}`
 );
 if (cfg.transport === "gateway") log(`  gateway=${cfg.gatewayUrl}`);
 heartbeatLoop();

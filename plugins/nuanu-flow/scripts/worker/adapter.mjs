@@ -221,14 +221,8 @@ export function makeAdapter(cfg) {
   if (type === "codex-app-server" || type === "app-server") {
     return {
       name: "codex-app-server",
-      async handle(task, context = {}) {
-        return runCodexAppServerTask(
-          task,
-          cfg,
-          buildCodexPrompt(task),
-          codexTaskEnv(task, cfg),
-          context,
-        );
+      async handle(task) {
+        return runCodexAppServerTask(task, cfg, buildCodexPrompt(task), codexTaskEnv(task, cfg));
       },
     };
   }

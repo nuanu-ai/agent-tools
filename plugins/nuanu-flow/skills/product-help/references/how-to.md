@@ -90,8 +90,12 @@ when the process has a route back to the producing step.
 2. Choose a local or remote runtime.
 3. Define the agent's role, prompt, model, skills, and least-privilege
    integrations.
-4. For a local agent, save and test it in a bounded task.
-5. For a remote agent, follow the generated enrollment prompt on the machine
+4. For a local agent, choose **Create draft** or **Create and publish v1**.
+   Draft-only agents cannot be assigned to production Processes or schedules.
+5. Use **Save draft** for ordinary edits, **Test draft** for an isolated
+   draft-hash preview, and **Review & publish** only at an intentional release
+   boundary. The Versions section supports comparison and restore-to-draft.
+6. For a remote agent, follow the generated enrollment prompt on the machine
    that will run the worker.
 
 External accounts must be connected under **Integrations** before they can be

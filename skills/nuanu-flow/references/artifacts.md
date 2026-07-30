@@ -18,7 +18,7 @@ Call tools via `execute_tool("<name>", {...})`.
   (+`agent_id`, lands as temp scratch), `"kb"` (+`topic`), `"personal"`
   (+`user_id`). The server derives folder, scope, and typed entity links.
 - **Entity links**: artifacts bind to `project | process_run | process_task |
-  work_item | user | team | agent | …` with a relation
+work_item | user | team | agent | …` with a relation
   `about | source | output | attachment`.
 
 ## Discipline (the failure modes to avoid)
@@ -42,11 +42,11 @@ AND uploads v1:
 
 ```js
 execute_tool("create_artifact", {
-  name: "competitor-research.md",        // extension drives MIME inference
+  name: "competitor-research.md", // extension drives MIME inference
   content: "…markdown/text/JSON…",
   tags: ["research", "competitors"],
-  context: { kind: "run", run_id: "…" }
-})
+  context: { kind: "run", run_id: "…" },
+});
 ```
 
 Text, markdown, JSON, CSV, HTML all work inline. Omitting `content` just
@@ -63,6 +63,21 @@ inputs, `about` for subject matter, `attachment` for misc.
 
 **Promote**: `commit_artifact` (optional explicit `folder`/`scope`) — drops
 the TTL and files it permanently.
+
+## Process review and file delivery
+
+If the user asks to **show, send, or attach an artifact as a file** in a
+Process Decision or its Telegram delivery, load `bpmn-processes`; this is
+Process authoring, not a plain registry lookup.
+
+The Decision must embed the producing step with
+`{{artifact <producerStepId>}}`, keep `deliver_artifacts:true`, and include
+`delivery_channels:["in_app","telegram"]` when Telegram is requested. Nuanu
+Flow then freezes the exact Artifact version for the Decision viewer and sends
+that same byte-backed file through Telegram. Do not replace the helper with the
+artifact's source text, filename, an “available in the run” notice, manual
+download instructions, or a made-up permanent URL. Do not add a notification
+node solely to deliver a Decision artifact.
 
 ## Tools Used
 

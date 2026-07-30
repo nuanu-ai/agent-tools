@@ -31,8 +31,7 @@ API base URL (ends with `/api`). If no token was given, ask the user for it.
    clear message if `is_active` is false.
 
 3. **Start the worker daemon in the background** (Bash with run_in_background),
-   passing the resolved values explicitly so no prior exports are needed. Keep
-   output attached to this task rather than redirecting it to a file:
+   passing the resolved values explicitly so no prior exports are needed:
 
    ```bash
    NUANU_URL="<resolved-url>" NUANU_AGENT_KEY="<token>" node "${CLAUDE_PLUGIN_ROOT}/scripts/worker/worker.mjs"
@@ -50,13 +49,7 @@ API base URL (ends with `/api`). If no token was given, ask the user for it.
 
    > ✅ Remote agent connected: **<display_name>** (workspace `<workspace>`) —
    > polling for tasks. Assign this agent to an agent task in a process and
-   > start a run; this session's worker will pick it up. Live activity stays
-   > attached to this task, and significant updates are summarized when you
-   > next message in this Codex conversation.
-
-   Only include the last sentence when startup reports
-   `session_activity=attached`. This is next-turn catch-up, not a spontaneous
-   in-chat notification.
+   > start a run; this session's worker will pick it up.
 
    If the log shows `fetch-and-lock unauthorized — token not active yet or
 revoked` instead, the agent hasn't been created yet — say the worker is

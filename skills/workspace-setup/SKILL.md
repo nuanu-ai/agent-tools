@@ -31,6 +31,8 @@ and get a confirmation before proceeding.
 ## 2. Company wiki page
 
 The wiki page is the workspace's shared context — members and agents read it.
+Follow the dedicated `wiki` skill for duplicate checks, HTML content, tree
+placement, publishing safeguards, and read-back verification.
 
 - Check first: `list_wiki_pages` (workspace scope). If a company page already
   exists, `update_wiki_page` instead of duplicating.

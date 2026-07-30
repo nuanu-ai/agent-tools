@@ -1,7 +1,7 @@
 {
   "format_version": 1,
   "plugin_version": "0.3.6",
-  "bundle_sha256": "2689215ce2f87d9eca979ed95f46ee6c5fb56e8e71033c816da03e6ccc60d49c",
+  "bundle_sha256": "9b487f2273eb4debe77d5a731e01bda9581ec5a790686308a833948c1740283d",
   "sources": [
     {
       "path": "plugins/nuanu-flow/scripts/worker/portable-worker.mjs",
@@ -9,11 +9,11 @@
     },
     {
       "path": "plugins/nuanu-flow/skills/artifacts/SKILL.md",
-      "sha256": "6e22ec487dbe92aea2d0468df5af7c827e4125303b8b51f4321b7935d05b2de6"
+      "sha256": "ba6b3c136f94c2e3223e4c059bd160b6d722d7a89979041861e92a16214aff40"
     },
     {
       "path": "plugins/nuanu-flow/skills/bpmn-processes/SKILL.md",
-      "sha256": "24ed9384f5a5c0b89159e7f10b8c440356174ce04aa2e6a9095216bcb72cd1cf"
+      "sha256": "9abb49901a1a878a95611340d958051d46de256f7b7f2ca436f346b01d940d02"
     },
     {
       "path": "plugins/nuanu-flow/skills/create-agent/SKILL.md",
@@ -37,11 +37,11 @@
     },
     {
       "path": "plugins/nuanu-flow/skills/product-help/references/concepts.md",
-      "sha256": "2bcf7429e04c607d73fd35655b88044af5010d35b9fb73b11c9dc29bb263fec7"
+      "sha256": "5151412a6924e59fb63626c78aa6d6f43d0ce4aebbee34169e603748c27d664a"
     },
     {
       "path": "plugins/nuanu-flow/skills/product-help/references/how-to.md",
-      "sha256": "ef9e05056632e7526a187ccee5c22d644eacfb5ede69e811e56b2b754f39de82"
+      "sha256": "134c2973813dc579055918f63d0bfd9d297f0d865a8d1426340c3c05e78a4c71"
     },
     {
       "path": "plugins/nuanu-flow/skills/product-help/references/integrations.md",
@@ -49,7 +49,7 @@
     },
     {
       "path": "plugins/nuanu-flow/skills/project-setup/SKILL.md",
-      "sha256": "b4e2988f13be8aa8f673a7103dcaea4079755a18b736d969132956ab43c134db"
+      "sha256": "3f023184fe93fbb7d30d5a3589743e757e2b7b22fd782bd22b1daf5336b64f52"
     },
     {
       "path": "plugins/nuanu-flow/skills/remote-worker/SKILL.md",
@@ -65,7 +65,7 @@
     },
     {
       "path": "plugins/nuanu-flow/skills/workspace-setup/SKILL.md",
-      "sha256": "edc4effe4f340540bb2ad2b0a5bf06b2f742831d3e6a9c277d7c848583e8cdf6"
+      "sha256": "95de87cb1d5f597de1dd1ad3cd106890e064998d86823ed57ac7923f7d4f0a79"
     }
   ]
 }

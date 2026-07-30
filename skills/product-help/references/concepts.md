@@ -118,6 +118,14 @@ skills, and explicitly allowed integrations.
 - A **local agent** runs through Nuanu Flow's managed runtime.
 - A **remote agent** is connected to an external coding-agent worker.
 
+For local agents, editable configuration is a **draft**. Saving does not
+create a version. **Publish version** creates an immutable executable version,
+and new production work pins one exact version. Existing conversations,
+running Processes, retries, refinements, and pinned schedules do not drift
+when a newer version is published. Restoring an older version copies it into
+the draft; publishing that draft creates a new monotonic version rather than
+rewriting history.
+
 Connecting an integration to a user account and granting it to an agent are
 separate actions. Agents only receive the integrations selected in their
 configuration.

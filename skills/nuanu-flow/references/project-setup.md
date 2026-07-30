@@ -52,6 +52,11 @@ references).
 - Event rules: `create_automation` (+ `toggle_automation` to enable) for
   things like auto-assign on create.
 
+If the user also wants a project brief, specification, runbook, or notes,
+delegate that documentation to the `wiki` skill and target this project with
+`project_id` or its exact `project_identifier`. Project Wiki is the same Wiki
+entity and tool family, not a separate Pages product.
+
 ## 8. Bind the Git repository (recommended)
 
 After the user has confirmed both the workspace and project, offer to create
