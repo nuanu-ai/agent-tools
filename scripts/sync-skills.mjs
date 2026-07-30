@@ -29,9 +29,12 @@ const canonicalSkills = [
   "create-agent",
   "nuanu-flow",
   "onboarding",
+  "process-refine",
   "product-help",
   "project-setup",
   "remote-worker",
+  "telegram",
+  "wiki",
   "work-items",
   "workspace-setup",
 ];
