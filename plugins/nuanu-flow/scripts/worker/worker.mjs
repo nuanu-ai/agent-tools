@@ -9,6 +9,7 @@
 import { loadConfig } from "./config.mjs";
 import { NuanuClient } from "./client.mjs";
 import { makeAdapter } from "./adapter.mjs";
+import { createAgentInbox, routeGatewayMessage } from "./agent-awareness.mjs";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const log = (...a) => console.log(`[${new Date().toISOString()}]`, ...a);
@@ -16,16 +17,27 @@ const log = (...a) => console.log(`[${new Date().toISOString()}]`, ...a);
 const cfg = loadConfig();
 const client = new NuanuClient(cfg.baseUrl, cfg.agentKey);
 const adapter = makeAdapter(cfg.adapter);
+const inbox = createAgentInbox({
+  client,
+  onError: (error) => log("agent inbox delivery failed:", error.message),
+});
 
 let running = true;
 let inFlight = 0;
+const activeProcessRuns = new Map();
+let lastInboxPollAt = 0;
 
 let heartbeatOk = false;
 
 async function heartbeatLoop() {
   while (running) {
     try {
-      await client.heartbeat(cfg.workerId);
+      const activeRunId = activeProcessRuns.values().next().value;
+      await client.heartbeat(cfg.workerId, {
+        status: inFlight > 0 ? "working" : "idle",
+        activity_label: inFlight > 0 ? "Running delegated task" : "",
+        related_object: activeRunId ? { type: "process", id: activeRunId } : null,
+      });
       if (!heartbeatOk) {
         heartbeatOk = true;
         // Positive signal for launchers (e.g. /nuanu-flow:launch-remote-agent)
@@ -43,6 +55,7 @@ async function heartbeatLoop() {
 
 async function handleTask(task) {
   const label = `${String(task.task_id).slice(0, 8)} ${task.step_id}`;
+  activeProcessRuns.set(task.task_id, task.run_id);
   log("claimed", label, "-", (task.instruction || "").slice(0, 70));
   try {
     const result = await adapter.handle(task);
@@ -63,6 +76,8 @@ async function handleTask(task) {
     } catch (e2) {
       log("fail() also errored:", e2.message);
     }
+  } finally {
+    activeProcessRuns.delete(task.task_id);
   }
 }
 
@@ -112,6 +127,10 @@ async function pollLoop() {
   const interval = cfg.transport === "gateway" ? Math.max(cfg.pollIntervalMs, 15000) : cfg.pollIntervalMs;
   while (running) {
     await pumpOnce();
+    if (Date.now() - lastInboxPollAt >= 15000) {
+      lastInboxPollAt = Date.now();
+      inbox.notify();
+    }
     await sleep(interval);
   }
 }
@@ -152,7 +171,13 @@ async function gatewayLoop() {
       };
       ws.addEventListener("open", () => {
         log("gateway connected");
-        pumpOnce();
+        routeGatewayMessage(
+          { type: "connected" },
+          {
+            pumpTasks: () => void pumpOnce(),
+            notifyInbox: () => inbox.notify(),
+          }
+        );
       });
       ws.addEventListener("message", (ev) => {
         let msg;
@@ -161,7 +186,10 @@ async function gatewayLoop() {
         } catch {
           return;
         }
-        if (msg.type === "task" || msg.type === "connected") pumpOnce();
+        routeGatewayMessage(msg, {
+          pumpTasks: () => void pumpOnce(),
+          notifyInbox: () => inbox.notify(),
+        });
       });
       ws.addEventListener("close", () => {
         log("gateway disconnected");

@@ -4,13 +4,14 @@
  * only its own agent's tasks. See docs/REMOTE_AGENTS.md.
  */
 export class NuanuClient {
-  constructor(baseUrl, agentKey) {
+  constructor(baseUrl, agentKey, fetchImpl = fetch) {
     this.baseUrl = baseUrl;
     this.agentKey = agentKey;
+    this.fetch = fetchImpl;
   }
 
   async _request(path, { method = "GET", body } = {}) {
-    const res = await fetch(`${this.baseUrl}${path}`, {
+    const res = await this.fetch(`${this.baseUrl}${path}`, {
       method,
       headers: {
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
@@ -41,14 +42,31 @@ export class NuanuClient {
     return this._request("/agent-worker/whoami/");
   }
 
-  heartbeat(workerId) {
-    return this._post("/agent-worker/heartbeat/", { worker_id: workerId });
+  heartbeat(workerId, status = {}) {
+    return this._post("/agent-worker/heartbeat/", { worker_id: workerId, ...status });
   }
 
   // Mint a short-lived, single-use ticket for the gateway WebSocket so the durable
   // agent key never appears in the (proxy-logged) WS URL. Returns { ticket, expires_in }.
   wsTicket() {
     return this._post("/agent-worker/ws-ticket/", {});
+  }
+
+  listAgentInbox(workspaceSlug, { importance, limit } = {}) {
+    const query = new URLSearchParams();
+    if (importance) query.set("importance", importance);
+    if (limit !== undefined) query.set("limit", String(limit));
+    const suffix = query.size > 0 ? `?${query}` : "";
+    return this._request(`/workspaces/${workspaceSlug}/agent-bus/inbox/${suffix}`).then(
+      (response) => response.results || []
+    );
+  }
+
+  acknowledgeAgentMessages(workspaceSlug, messageIds, state) {
+    return this._post(`/workspaces/${workspaceSlug}/agent-bus/inbox/ack/`, {
+      message_ids: messageIds,
+      state,
+    });
   }
 
   fetchAndLock({ workerId, maxTasks, lockSeconds }) {

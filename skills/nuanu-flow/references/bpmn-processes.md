@@ -6,6 +6,14 @@ decision gates advance a run step by step. You author a process as a
 compiles the graph to BPMN and draws the diagram; invalid graphs return
 structural errors to fix.
 
+**Validation is an authoring loop, not a user approval gate.** Once the user
+has asked you to create or update a process, you are already authorized to fix
+structural errors and warnings in that requested graph. Repair them and
+revalidate immediately; do not stop at an error report or ask whether to
+proceed. Ask the user only when the business outcome itself is ambiguous (for
+example, an unspecified deny destination), not when a node merely needs to be
+connected, removed, renamed, or rewired to satisfy validation.
+
 For evidence-based comparison or self-improvement across process variants,
 load `process-refine`; this skill remains responsible for normal authoring and
 one-off operation.
@@ -17,6 +25,7 @@ guide at runtime via `get_bpmn_authoring_guide`.
 
 ```jsonc
 {
+  "version": 2,
   "name": "Purchase Approval",
   "nodes": [
     /* … */
@@ -32,10 +41,10 @@ names are the labels people see in the process editor.
 
 ### Node types
 
-| `type`         | What it does                                                                                                                                                                                                                                                                                                     | Key `config`                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `type`         | What it does                                                                                                                                                                                                                                                                                                     | Key graph shape                                                                                                                                                                                                                                                                                                                                                                                              |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `start`        | Entry point (exactly one).                                                                                                                                                                                                                                                                                       | `trigger`: `{mode:"manual"}` \| `{mode:"schedule",cron:"0 9 * * *"}` \| `{mode:"event",event:"issue_created"}`                                                                                                                                                                                                                                                                                               |
-| `end`          | Terminates a branch (≥1).                                                                                                                                                                                                                                                                                        | —                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `start`        | Entry point (exactly one). A Column Process has a server-generated immutable project/state Start contract; never create or alter it yourself.                                                                                                                                                                    | General Process: top-level node field `trigger:{mode:"manual"}` or `trigger:{mode:"schedule",cron:"0 9 * * *"}` — never put `trigger` inside `config`. Column Process: preserve the returned `config.project_process_start` exactly.                                                                                                                                                                         |
+| `end`          | Terminates a branch (≥1). A Column Process End declares the intended next project status; the Flow item's execution mode decides whether it is applied.                                                                                                                                                          | Column Process v3: `config.project_status:{target_state_id:"EXACT_STATE_UUID"\|null}`. `null` keeps the current status.                                                                                                                                                                                                                                                                                      |
 | `human_task`   | Pauses; creates a task a person must complete.                                                                                                                                                                                                                                                                   | `name`, `priority`, `assignee_ids:[…]`, `assign:{mode:"function",function_id,scope}`, `completion_requirements:[…]`                                                                                                                                                                                                                                                                                          |
 | `agent_task`   | Runs an AI agent, captures its output.                                                                                                                                                                                                                                                                           | `agent_employee_id`, `instruction` (Handlebars) — plus node-level `output:[{name,type}]` for structured fields. To store a genuine PDF after success: `artifact_output:"pdf"`, `artifact_content_field:"<output field>"`, `artifact_name:"Report.pdf"`                                                                                                                                                       |
 | `decision`     | Pauses; asks a person to approve / deny / refine / pick an option; the choice routes the flow.                                                                                                                                                                                                                   | `title`, `description` (the question), `body` (the proposal, Handlebars; embed a produced file with `{{artifact stepId}}`), `approval_mode:"any"\|"consensus"`; assign people with `assignee_ids:[…]` or a function with `assign:{mode:"function",function_id,scope}`; choices: `options_mode:"agent"` + `options_from:"<agentStepId>"` for agent-proposed rich options, or static `options:[{value,label}]` |
@@ -66,13 +75,112 @@ anywhere a string is accepted (instructions, messages, conditions) as
 
 Conditions read the same paths: `{"var":"approve.resolution","op":"eq","value":"approve"}`.
 
+## Project Processes — Column and General
+
+There are two project Process kinds:
+
+- **Column Process** — bound to one exact project state. It can participate in
+  one continuous Flow-item journey across multiple state entries and runs.
+- **General Process** — project-scoped but not state-owning. V1 supports only
+  explicit Manual and Schedule triggers; a schedule needs an explicit cron.
+  It never gains journey control implicitly.
+
+### Create and edit a Column Process
+
+1. Read the project states and ask which exact state owns the Column Process.
+2. Call `create_project_process_binding` with `kind:"column"`, the exact
+   `project_state_id`. The server creates a valid v3 skeleton and owns its
+   binding metadata.
+3. Read the returned binding and then `get_process_template`. Its Start node
+   contains a generated contract like this:
+
+```jsonc
+{
+  "id": "start",
+  "type": "start",
+  "config": {
+    "project_process_start": {
+      "binding_id": "…",
+      "project_id": "…",
+      "state_id": "…",
+    },
+  },
+}
+```
+
+Preserve that Start node and all three values exactly. Do not delete it, copy
+it into a generic template, or change its state through graph editing. Raw
+BPMN replacement is not supported for Column Processes.
+
+4. Insert tasks, agents, Decisions, gates, notifications, and artifacts between
+   Start and End. Put human approval **inside the BPMN** as a Decision before
+   the relevant End; the End status target is not a second approval gate.
+5. Give every successful End a `config.project_status`:
+
+```jsonc
+{
+  "id": "approved",
+  "type": "end",
+  "name": "Move to QA",
+  "config": {
+    "project_status": {
+      "target_state_id": "EXACT_QA_STATE_UUID",
+    },
+  },
+}
+```
+
+Use the exact target status UUID from Project Settings. Use
+`{"target_state_id":null}` to keep the current status. The same BPMN graph is
+used by Manual, Assist, and Auto Flow items.
+
+6. Validate the complete graph, update the template, read it back, then call
+   `activate_project_process_binding` only when activation was requested.
+   `activate_process_template` is for ordinary workspace templates and must not
+   bypass binding validation.
+
+### Modes and safety
+
+| Flow-item mode | When the item enters a bound status      | When the Process reaches an End                                          |
+| -------------- | ---------------------------------------- | ------------------------------------------------------------------------ |
+| **Manual**     | Does not start automatically.            | Records the intended status but does not move the item.                  |
+| **Assist**     | Starts the shared Process automatically. | Records the intended status but leaves the move to a person.             |
+| **Auto**       | Starts the shared Process automatically. | Applies the intended status and may continue into the next bound status. |
+
+The mode belongs to the Flow item, not the binding or BPMN graph. Each run
+freezes the item's mode when it starts, so changing the selector applies only
+to a later run. The system stops a journey before a 13th automatic status
+transition; this safety limit is not user-configurable.
+
+### Run, poll, and hand control back
+
+- Use `run_flow_item_column_process` for one explicit start. It uses the Flow
+  item's current mode; there is no action discriminator. Reuse an
+  `idempotency_key` when retrying the same request.
+- Read `get_flow_item_process_control`, then poll
+  `get_project_process_journey` after runs and Decisions. A journey spans the
+  related Column Process runs; its counters, state visits, and transition
+  receipts are the authority for automation budgets and applied outcomes.
+- A `409 process_control_conflict` is not permission to mutate control. Show
+  its `journey_id`, `process_run_id`, and `allowed_actions`; let the user choose.
+- `stop_flow_item_process` and `take_over_flow_item_process` cancel active
+  process work without silently changing the selected item mode. Explain that
+  effect, obtain explicit confirmation, and only then pass the tool's
+  confirmation flag. Never invoke either as silent conflict recovery.
+
+For a General binding, call `create_project_process_binding` with
+`kind:"general"` plus an explicit Manual or Schedule trigger. Author its
+ordinary template using the normal validation lifecycle below. A General
+Process has no generated project Start, no Flow-item status End, and no
+journey unless a separate explicit controlled action creates one.
+
 ## Worked example — quote → approve → fulfil / reject
 
 ```jsonc
 {
   "name": "Purchase Approval",
   "nodes": [
-    { "id": "start", "type": "start", "trigger": { "mode": "manual" } },
+    { "id": "start", "type": "start", "name": "Start", "trigger": { "mode": "manual" } },
     {
       "id": "quote",
       "type": "agent_task",
@@ -93,10 +201,11 @@ Conditions read the same paths: `{"var":"approve.resolution","op":"eq","value":"
     {
       "id": "fulfil",
       "type": "agent_task",
+      "name": "Fulfil quote",
       "config": { "agent_employee_id": "AG1", "instruction": "Fulfil {{quote.amount}}" },
     },
-    { "id": "end_ok", "type": "end" },
-    { "id": "end_no", "type": "end" },
+    { "id": "end_ok", "type": "end", "name": "Fulfilled" },
+    { "id": "end_no", "type": "end", "name": "Rejected" },
   ],
   "edges": [
     { "from": "start", "to": "quote" },
@@ -260,12 +369,16 @@ Before validation, verify the complete graph—not just its shape:
 
 ## Lifecycle
 
-1. Read the guide, call `list_agents`, and read the current template (or list
-   templates before creating a separate one).
+1. Read the guide and the current template (or list templates before creating a
+   separate one). Call `list_agents` before assigning an `agent_task` or AI
+   gateway; a human-only graph does not need an agent lookup.
 2. `validate_process_graph` with the complete graph. Treat its response as a
    repair loop, not a report:
    - if `errors` or `warnings` are non-empty, map every message to the affected
      node or edge, fix the graph, and call `validate_process_graph` again;
+   - reachability errors mean either connect the orphan to the intended path or
+     remove it when it is redundant; never leave an unused End Event in the
+     graph;
    - repeat until `ready_to_save:true` **and** both `errors` and `warnings` are
      empty;
    - do not ask whether to fix a validation warning, summarize the process as
@@ -273,6 +386,14 @@ Before validation, verify the complete graph—not just its shape:
      MCP create/update also rejects warning-bearing graphs.
 3. `create_process_template` with the validated graph (or
    `update_process_template`), then read it back with `get_process_template`.
+   Template metadata and graph content are separate: to rename a template,
+   prefer the mutation's top-level `name` argument. For friendly model
+   authoring, MCP mirrors a non-empty `graph.name` into template metadata only
+   when top-level `name` is omitted; an explicit top-level value wins. Verify
+   both the returned `name` and `graph` in the read-back; navigating to the
+   editor is not verification.
+   For a Column Process, create the binding first, preserve the generated Start,
+   and use only `update_process_template` for its graph.
 4. `activate_process_template` only when the user explicitly asks; read it back
    before claiming it is active. `deactivate_process_template` pauses new runs.
 5. `trigger_process_run` with `template_id` + optional `context_data` (becomes
@@ -301,7 +422,7 @@ follows it. Requires NUANU_URL + NUANU_TOKEN env.
 
 - Exactly one `start`; every node reachable from it; every `end` reachable.
 - Give an `otherwise` branch to any gateway that can "fall through".
-- **Call `list_agents` first** and use only ids it returns for
+- **Before assigning an agent, call `list_agents`** and use only ids it returns for
   `agent_employee_id` (agent tasks AND AI-judge gateways) — a stale/foreign id
   fails the step at runtime, and activation is refused for unresolvable agents.
 - Reference only variables produced **upstream** of the node using them, and
@@ -316,7 +437,10 @@ follows it. Requires NUANU_URL + NUANU_TOKEN env.
 - You never write BPMN XML, namespaces, or condition expressions — the
   compiler does. Author the graph; read it back with `get_process_template`
   (it returns the same graph).
+- A generated `project_process_start` is server-owned and immutable. Every
+  Column Process End has a `project_status.target_state_id`; item modes, target
+  states, stop, and takeover remain explicit choices.
 
 ## Tools Used
 
-`list_agents`, `list_workspace_members`, `create_process_template`, `update_process_template`, `get_process_template`, `list_process_templates`, `delete_process_template`, `validate_process_graph`, `activate_process_template`, `deactivate_process_template`, `trigger_process_run`, `get_process_run`, `get_process_run_status`, `list_process_runs`, `list_process_tasks`, `get_process_task`, `update_process_task`, `complete_process_task`, `submit_process_decision`, `get_bpmn_authoring_guide`
+`list_agents`, `list_workspace_members`, `list_project_process_bindings`, `get_project_process_binding`, `create_project_process_binding`, `activate_project_process_binding`, `pause_project_process_binding`, `list_project_process_journeys`, `get_project_process_journey`, `run_flow_item_column_process`, `get_flow_item_process_control`, `stop_flow_item_process`, `take_over_flow_item_process`, `create_process_template`, `update_process_template`, `get_process_template`, `list_process_templates`, `delete_process_template`, `validate_process_graph`, `activate_process_template`, `deactivate_process_template`, `trigger_process_run`, `get_process_run`, `get_process_run_status`, `list_process_runs`, `list_process_tasks`, `get_process_task`, `update_process_task`, `complete_process_task`, `submit_process_decision`, `get_bpmn_authoring_guide`
