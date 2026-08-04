@@ -1,7 +1,7 @@
 {
   "format_version": 1,
   "plugin_version": "0.3.6",
-  "bundle_sha256": "acc964c29ab6e504909f346e669661a280239bc5a18eeaf05f26ea41c15be3ee",
+  "bundle_sha256": "01c9c91b5f04dd1419bbbf602cc5f5975e1cfd084347469ea728cbe595571a6f",
   "sources": [
     {
       "path": "plugins/nuanu-flow/scripts/worker/portable-worker.mjs",
@@ -57,7 +57,7 @@
     },
     {
       "path": "plugins/nuanu-flow/skills/work-items/SKILL.md",
-      "sha256": "9f13ad45f6c6137472647c36c2cd3df3b57d9362d2336989fe8755e88106ef31"
+      "sha256": "14ae9fefde26854aa19d7a1435fb777eae7eb2177222bf1f563b6c90ba2dfe9f"
     },
     {
       "path": "plugins/nuanu-flow/skills/work-items/references/payloads.md",
