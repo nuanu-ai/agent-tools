@@ -14,6 +14,12 @@ Call tools via `execute_tool("<name>", {...})`. The flow is deliberately
 conversational-first: **brief → wiki → objectives + milestones → members →
 hand-off**. Do not create anything before step 1 is done.
 
+A canonical operation name in this skill is guidance, not a current descriptor.
+Summary candidates are not cacheable descriptors. Before direct execution, use
+a matching cached full descriptor; otherwise make one `search_tools` lookup and
+refine by canonical name or request `detail: "full"` to obtain the schema and
+`schemaDigest`.
+
 ## 1. Brief the user (no tools yet)
 
 Interview, don't assume. You need, at minimum:

@@ -8,6 +8,12 @@ description: Use when a user asks to set up Nuanu Flow, continue first-run setup
 Run first-time setup as a resumable, server-driven conversation. Call catalog
 tools through `execute_tool("<name>", {...})`.
 
+A canonical operation name in this skill is guidance, not a current descriptor.
+Summary candidates are not cacheable descriptors. Before direct execution, use
+a matching cached full descriptor; otherwise make one `search_tools` lookup and
+refine by canonical name or request `detail: "full"` to obtain the schema and
+`schemaDigest`.
+
 When this skill is entered from the post-install startup prompt, do not ask the
 user to type another continuation message. Start the resumable loop
 immediately. If the thread already establishes that onboarding is complete,

@@ -22,7 +22,7 @@ export function buildPrompt(task) {
 
 export function buildCodexPrompt(task) {
   return [
-    "Codex defers MCP tools. When the task needs an MCP tool, use tool_search to find and load it before calling it.",
+    "Codex may defer MCP tools. For Nuanu Flow, use tool_search to load the two stable public gateway tools search_tools and execute_tool when they are deferred. Never materialize or call a nested operation name as an MCP tool; pass it only to execute_tool. Treat a descriptor as current only when its connector ID and endpoint origin, non-secret workspace/tenant selector digest, catalogRevision, schemaDigest, and operation name match the current connection. A prose operation name is never a descriptor, and tokens or secret header values must never be identity inputs. Cache and provenance enforcement belong to the client or connector host; this worker prompt and the MCP server do not implement that client-side cache. A current descriptor may execute directly. If it is missing or stale, or execute_tool returns catalog_revision_mismatch or unknown_operation, search once and retry at most once. Do not refresh or retry for validation_error, business/auth errors, transport failures, timeouts, or ambiguous post-dispatch failures.",
     buildPrompt(task),
   ].join("\n\n");
 }

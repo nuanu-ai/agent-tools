@@ -11,6 +11,12 @@ belongs here, bound to the entities it's about.
 
 Call tools via `execute_tool("<name>", {...})`.
 
+A canonical operation name in this skill is guidance, not a current descriptor.
+Summary candidates are not cacheable descriptors. Before direct execution, use
+a matching cached full descriptor; otherwise make one `search_tools` lookup and
+refine by canonical name or request `detail: "full"` to obtain the schema and
+`schemaDigest`.
+
 ## The model
 
 - **Statuses**: `draft` (registered, bytes pending) → `temp` (scratch,

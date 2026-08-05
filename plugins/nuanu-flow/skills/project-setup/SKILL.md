@@ -8,6 +8,12 @@ description: Scaffold a new Nuanu Flow project end to end — create the project
 Call tools via `execute_tool("<name>", {...})`. Run the steps in this order —
 later steps reference IDs from earlier ones.
 
+A canonical operation name in this skill is guidance, not a current descriptor.
+Summary candidates are not cacheable descriptors. Before direct execution, use
+a matching cached full descriptor; otherwise make one `search_tools` lookup and
+refine by canonical name or request `detail: "full"` to obtain the schema and
+`schemaDigest`.
+
 ## 1. Create the project
 
 `create_project` with `name` and `identifier` (short, UPPERCASE, stable —

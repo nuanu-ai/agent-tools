@@ -8,6 +8,12 @@ description: Create, search, triage, and update Flow items in Nuanu Flow (issues
 Call tools via `execute_tool("<name>", {...})` (see the `nuanu-flow`
 orientation skill). Full payload/filter reference: `references/payloads.md`.
 
+A canonical operation name in this skill is guidance, not a current descriptor.
+Summary candidates are not cacheable descriptors. Before direct execution, use
+a matching cached full descriptor; otherwise make one `search_tools` lookup and
+refine by canonical name or request `detail: "full"` to obtain the schema and
+`schemaDigest`.
+
 ## Top gotchas (read before writing)
 
 1. **`description_html` is HTML, not markdown.** Send `<p>…</p>`,

@@ -26,6 +26,12 @@ one-off operation.
 Call tools via `execute_tool("<name>", {...})`. The server also exposes this
 guide at runtime via `get_bpmn_authoring_guide`.
 
+A canonical operation name in this skill is guidance, not a current descriptor.
+Summary candidates are not cacheable descriptors. Before direct execution, use
+a matching cached full descriptor; otherwise make one `search_tools` lookup and
+refine by canonical name or request `detail: "full"` to obtain the schema and
+`schemaDigest`.
+
 ## The graph
 
 ```jsonc
