@@ -27,6 +27,7 @@ const canonicalSkills = [
   "codex-remote-worker",
   "codex-setup",
   "create-agent",
+  "human-input",
   "nuanu-flow",
   "onboarding",
   "process-refine",
