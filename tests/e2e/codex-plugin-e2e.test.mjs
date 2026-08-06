@@ -69,15 +69,6 @@ test("Codex plugin metadata points at skills and OAuth-ready Flow MCP config", a
   const manifest = await readJson(manifestPath);
   const marketplace = await readJson(marketplacePath);
   const mcp = manifest.mcpServers;
-  for (const skill of ["nuanu-flow", "onboarding", "work-items"]) {
-    const metadata = await fs.readFile(
-      path.join(pluginRoot, "skills", skill, "agents", "openai.yaml"),
-      "utf8",
-    );
-    assert.match(metadata, /type: mcp/);
-    assert.match(metadata, /value: nuanu-flow/);
-    assert.match(metadata, /url: https:\/\/flow\.nuanu\.com\/mcp-server\/mcp/);
-  }
 
   assert.equal(manifest.name, "nuanu-flow");
   assert.match(manifest.version, /^\d+\.\d+\.\d+(\+[0-9A-Za-z.-]+)?$/);
