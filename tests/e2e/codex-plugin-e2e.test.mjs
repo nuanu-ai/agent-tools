@@ -9,7 +9,6 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const pluginRoot = path.join(repoRoot, "plugins/nuanu-flow");
 const manifestPath = path.join(pluginRoot, ".codex-plugin/plugin.json");
-const appManifestPath = path.join(pluginRoot, ".app.json");
 const marketplacePath = path.join(repoRoot, ".agents/plugins/marketplace.json");
 const installPrompt = "Read and install https://flow.nuanu.com/install.md";
 const remoteGuideUrl = "https://flow.nuanu.com/connect/remote-agent.md";
@@ -68,7 +67,6 @@ function runNode(args, { timeoutMs = 10000 } = {}) {
 
 test("Codex plugin metadata points at skills and OAuth-ready Flow MCP config", async () => {
   const manifest = await readJson(manifestPath);
-  const appManifest = await readJson(appManifestPath);
   const marketplace = await readJson(marketplacePath);
   const mcp = manifest.mcpServers;
 
@@ -76,14 +74,8 @@ test("Codex plugin metadata points at skills and OAuth-ready Flow MCP config", a
   assert.match(manifest.version, /^\d+\.\d+\.\d+(\+[0-9A-Za-z.-]+)?$/);
   assert.equal(manifest.skills, "./skills");
   assert.equal(manifest.hooks, "./hooks/hooks.json");
-  assert.equal(manifest.apps, "./.app.json");
-  assert.deepEqual(appManifest, {
-    apps: {
-      "nuanu-flow": {
-        id: "asdk_app_6a756fd9e2a48191ab2aa86ed60a30cd",
-      },
-    },
-  });
+  assert.equal(manifest.apps, undefined);
+  await assert.rejects(fs.access(path.join(pluginRoot, ".app.json")));
   assert.equal(typeof manifest.mcpServers, "object");
   assert.equal(manifest.interface.displayName, "Nuanu Flow");
   assert(manifest.interface.defaultPrompt.some((line) => line.includes("Flow items")));

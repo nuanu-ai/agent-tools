@@ -74,6 +74,13 @@ plugin-backed task only if that explicit same-chat attachment fails. The
 `SessionStart` hook can add guidance in the fallback task but cannot add MCP
 tool schemas to a running thread.
 
+The production marketplace bundle intentionally declares the direct OAuth MCP
+server without an `.app.json` dependency while the Nuanu Flow app listing is
+still in development. A development-only app ID is not resolvable for other
+accounts and can prevent Codex from attaching the otherwise healthy direct MCP
+server. Restore the app dependency only after the listing is published and
+verified from a non-developer account.
+
 ## Install skills without the plugin
 
 Install the self-contained portable fallback into any agent supported by
