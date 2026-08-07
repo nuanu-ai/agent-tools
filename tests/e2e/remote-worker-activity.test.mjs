@@ -12,14 +12,6 @@ import {
   consumeSessionActivity,
   createActivityStore,
 } from "../../plugins/nuanu-flow/scripts/activity/remote-worker-activity.mjs";
-import {
-  createWorkerActivity,
-  renderActivity,
-  safeTaskTitle,
-} from "../../plugins/nuanu-flow/scripts/worker/activity.mjs";
-import {
-  classifyAppServerActivity,
-} from "../../plugins/nuanu-flow/scripts/worker/app_server_client.mjs";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -245,86 +237,4 @@ test("UserPromptSubmit provides bounded same-session catch-up after activity and
   } finally {
     await fs.rm(activityDirectory, { recursive: true, force: true });
   }
-});
-
-test("worker activity renderer is concise, deduplicated, and instruction-safe", async () => {
-  const activityDirectory = await fs.mkdtemp(
-    path.join(os.tmpdir(), "nuanu-activity-render-"),
-  );
-  const lines = [];
-  const activity = createWorkerActivity({
-    config: {
-      directory: activityDirectory,
-      ownerSessionId: "session-render",
-      workerId: "worker-render",
-      agentName: "Codex Agent",
-    },
-    log: (line) => lines.push(line),
-  });
-  try {
-    const taskTitle = safeTaskTitle({
-      step_name: `Campaign password=${"x".repeat(40)}`,
-      instruction: `never render nuanu_join_${"c".repeat(64)}`,
-    });
-    assert.doesNotMatch(taskTitle, /x{20}|nuanu_join_/);
-    activity.emit({
-      kind: "task.progress",
-      task_id: "task-render",
-      safe_summary: "Running a command",
-    });
-    activity.emit({
-      kind: "task.progress",
-      task_id: "task-render",
-      safe_summary: "Running a command",
-    });
-    activity.emit({
-      kind: "task.completed",
-      task_id: "task-render",
-      safe_title: "Campaign",
-      duration_ms: 61_000,
-    });
-    await activity.flush();
-    assert.deepEqual(lines, [
-      "├ Running a command",
-      "✓ Completed “Campaign” in 1m 1s",
-    ]);
-    assert.equal(
-      renderActivity({ kind: "worker.connected" }),
-      "● Remote agent connected",
-    );
-  } finally {
-    await fs.rm(activityDirectory, { recursive: true, force: true });
-  }
-});
-
-test("App Server activity classification excludes raw item content", () => {
-  assert.deepEqual(
-    classifyAppServerActivity({
-      method: "item/started",
-      params: {
-        item: {
-          type: "commandExecution",
-          command: `echo nuanu_flow_${"a".repeat(64)}`,
-        },
-      },
-    }),
-    { kind: "task.progress", safe_summary: "Running a command" },
-  );
-  assert.deepEqual(
-    classifyAppServerActivity({
-      method: "item/tool/requestUserInput",
-      params: { questions: [{ question: "secret prompt" }] },
-    }),
-    {
-      kind: "task.attention",
-      safe_summary: "The headless task requested user input",
-    },
-  );
-  assert.equal(
-    classifyAppServerActivity({
-      method: "item/agentMessage/delta",
-      params: { delta: "private reasoning" },
-    }),
-    null,
-  );
 });

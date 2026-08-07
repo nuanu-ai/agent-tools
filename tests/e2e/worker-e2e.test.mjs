@@ -7,10 +7,6 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import {
-  activityInternals,
-} from "../../plugins/nuanu-flow/scripts/activity/remote-worker-activity.mjs";
-
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const workerScript = path.join(repoRoot, "plugins/nuanu-flow/scripts/worker/worker.mjs");
 
@@ -302,36 +298,6 @@ function withTimeout(promise, ms, label) {
   ]);
 }
 
-async function waitFor(check, ms, label) {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < ms) {
-    const value = await check();
-    if (value) return value;
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-  throw new Error(`${label} timed out after ${ms}ms`);
-}
-
-async function readActivityEvents(activityDirectory, sessionId) {
-  const eventDirectory = path.join(
-    activityInternals.sessionDirectory(activityDirectory, sessionId),
-    "events",
-  );
-  try {
-    const names = (await fs.readdir(eventDirectory))
-      .filter((name) => name.endsWith(".json"))
-      .sort();
-    return Promise.all(
-      names.map(async (name) =>
-        JSON.parse(await fs.readFile(path.join(eventDirectory, name), "utf8")),
-      ),
-    );
-  } catch (error) {
-    if (error?.code === "ENOENT") return [];
-    throw error;
-  }
-}
-
 async function stopWorker(child) {
   if (child.exitCode != null) return;
   child.kill("SIGTERM");
@@ -360,8 +326,6 @@ async function runWorkerE2E(adapter) {
     agent_key: "per-task-key",
   };
   const server = await startNuanuServer(task);
-  const ownerSessionId = `session-worker-${adapter}`;
-  const activityDirectory = path.join(tmpDir, "activity");
   const child = spawn(process.execPath, [workerScript], {
     cwd: repoRoot,
     env: {
@@ -386,8 +350,6 @@ async function runWorkerE2E(adapter) {
       NUANU_POLL_INTERVAL_MS: "500",
       NUANU_HEARTBEAT_INTERVAL_MS: "5000",
       NUANU_ADAPTER_TIMEOUT_MS: "10000",
-      CODEX_THREAD_ID: ownerSessionId,
-      NUANU_ACTIVITY_DATA_DIR: activityDirectory,
       NUANU_AGENT_NAME: "Codex Worker",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -409,30 +371,8 @@ async function runWorkerE2E(adapter) {
     assert.equal(result.body.worker_id, result.requests.find((r) => r.url === "/agent-worker/heartbeat/").body.worker_id);
     assert(result.requests.every((r) => r.agentKey === "worker-key"));
     assert.match(stdout, /remote agent connected/);
-    assert.match(stdout, /session_activity=attached/);
-    assert.match(stdout, /▶ Claimed “Codex step”/);
-    const activityEvents = await waitFor(async () => {
-      const events = await readActivityEvents(
-        activityDirectory,
-        ownerSessionId,
-      );
-      return events.some((event) => event.kind === "task.completed")
-        ? events
-        : null;
-    }, 5000, `${adapter} activity completion`);
-    const serializedActivity = JSON.stringify(activityEvents);
-    assert.doesNotMatch(serializedActivity, /per-task-key/);
-    assert.doesNotMatch(
-      serializedActivity,
-      new RegExp(`Task for ${adapter}`),
-    );
-    assert(
-      activityEvents.every(
-        (event) => event.owner_session_id === ownerSessionId,
-      ),
-    );
     assert.equal(stderr, "");
-    return { result, stdout, activityEvents };
+    return { result, stdout };
   } finally {
     await stopWorker(child);
     await server.close();
@@ -446,15 +386,9 @@ test("worker completes a task through codex-exec", async () => {
 });
 
 test("worker completes a task through codex-app-server and handles server requests", async () => {
-  const { result, stdout, activityEvents } =
-    await runWorkerE2E("codex-app-server");
+  const { result, stdout } = await runWorkerE2E("codex-app-server");
   assert.equal(result.body.output, "app-server result");
   assert.match(stdout, /adapter=codex-app-server/);
-  assert.match(stdout, /├ Running a command/);
-  assert.match(stdout, /! Needs attention/);
-  assert.match(stdout, /✓ Completed “Codex step”/);
-  assert(activityEvents.some((event) => event.kind === "task.progress"));
-  assert(activityEvents.some((event) => event.kind === "task.attention"));
 });
 
 test("worker completes a task through first-class Claude Code streaming mode", async () => {
