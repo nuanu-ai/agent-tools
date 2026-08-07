@@ -148,6 +148,30 @@ function validateMcpServers(servers, label) {
   }
 }
 
+async function validateApps(pluginRoot, appsPath) {
+  if (appsPath !== "./.app.json") {
+    add("Codex plugin apps path must resolve to .app.json");
+    return;
+  }
+  const appManifest = await readJson(path.join(pluginRoot, ".app.json"), "Codex app companion");
+  if (!isObject(appManifest?.apps) || Object.keys(appManifest.apps).length === 0) {
+    add("Codex app companion apps must be a non-empty object");
+    return;
+  }
+  for (const [alias, app] of Object.entries(appManifest.apps)) {
+    if (!alias.trim() || !isObject(app)) {
+      add("Codex app companion entries must have non-empty aliases and object values");
+      continue;
+    }
+    if (
+      typeof app.id !== "string" ||
+      !/^(asdk_app_|connector_|templated_apps_)[A-Za-z0-9][A-Za-z0-9_-]*$/.test(app.id)
+    ) {
+      add(`Codex app companion ${alias} has an invalid app id`);
+    }
+  }
+}
+
 async function validateSkills(pluginRoot, skillsPath) {
   requireRelativePath(skillsPath, "Codex plugin skills path");
   const root = path.resolve(pluginRoot, skillsPath || "./skills");
@@ -341,6 +365,14 @@ async function validateCodexPlugin(pluginRoot) {
       add("Codex plugin hooks must be a single relative path");
     } else {
       await validateHooks(pluginRoot, manifest.hooks);
+    }
+  }
+
+  if (manifest.apps) {
+    if (typeof manifest.apps !== "string") {
+      add("Codex plugin apps must be a single relative path");
+    } else {
+      await validateApps(pluginRoot, manifest.apps);
     }
   }
 
