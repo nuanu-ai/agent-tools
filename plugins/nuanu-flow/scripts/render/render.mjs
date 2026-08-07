@@ -8,7 +8,7 @@
 //
 // Env:
 //   NUANU_URL or NUANU_API_URL — Django API base INCLUDING /api (e.g. https://flow.nuanu.com/api)
-//   NUANU_TOKEN                — personal API token (plane_api_…)
+//   NUANU_TOKEN                — personal API token (nuanu_api_…)
 //   NUANU_WORKSPACE            — default workspace slug (overridden by --workspace)
 //
 // Output is plain append-only stdout (no alt-screen), safe to embed in an
@@ -366,7 +366,7 @@ if (verb === "demo") {
 const ws = args.workspace || process.env.NUANU_WORKSPACE;
 
 if (!API) fail("set NUANU_URL (or NUANU_API_URL) to the API base including /api");
-if (!TOKEN) fail("set NUANU_TOKEN to a personal API token (plane_api_…)");
+if (!TOKEN) fail("set NUANU_TOKEN to a personal API token (nuanu_api_…)");
 if (!verb || !target) fail("usage: render.mjs run|watch <runId> | board <projectId> [--workspace <slug>] | demo");
 if (!ws) fail("pass --workspace <slug> or set NUANU_WORKSPACE");
 

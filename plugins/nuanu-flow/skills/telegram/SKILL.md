@@ -7,7 +7,8 @@ description: Use when a user wants to connect, verify, resume, or test a persona
 
 Guide the human through one short-lived link, keep checking the authoritative
 Nuanu Flow state, and distinguish link preparation, verified connection, and
-test delivery. Call catalog tools through `execute_tool("<name>", {...})`.
+test delivery. Call pure reads through `execute_read_tool("<name>", {...})`
+and mutations through `execute_tool("<name>", {...})`.
 
 Ambient agent sessions cannot link Telegram. If a Telegram tool reports the
 human-session guard, ask the user to continue from a human-authenticated proxy
@@ -18,7 +19,7 @@ Do not start both flows by assumption.
 
 ## Personal account
 
-1. Start or resume with `execute_tool("get_telegram_identity", {})`.
+1. Start or resume with `execute_read_tool("get_telegram_identity", {})`.
 2. Treat the account as connected only when `linked && is_verified`. If it is
    connected, report the returned username when present.
    Do not send a test message automatically. Offer it as a separate check.
@@ -85,4 +86,4 @@ Do not start both flows by assumption.
 
 ## Tools Used
 
-`execute_tool`, `get_telegram_identity`, `prepare_telegram_identity_link`, `send_telegram_test_message`, `list_communication_channels`, `create_communication_channel`, `get_communication_channel`, `prepare_communication_channel_link`, `list_projects`, `list_teams`
+`execute_read_tool`, `execute_tool`, `get_telegram_identity`, `prepare_telegram_identity_link`, `send_telegram_test_message`, `list_communication_channels`, `create_communication_channel`, `get_communication_channel`, `prepare_communication_channel_link`, `list_projects`, `list_teams`

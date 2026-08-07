@@ -1,7 +1,8 @@
 # Project setup
 
-Call tools via `execute_tool("<name>", {...})`. Run the steps in this order —
-later steps reference IDs from earlier ones.
+Call pure reads via `execute_read_tool("<name>", {...})` and mutations via
+`execute_tool("<name>", {...})`. Run the steps in this order — later steps
+reference IDs from earlier ones.
 
 A canonical operation name in this skill is guidance, not a current descriptor.
 Summary candidates are not cacheable descriptors. Before direct execution, use

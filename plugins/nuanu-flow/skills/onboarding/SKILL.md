@@ -6,7 +6,8 @@ description: Use when a user asks to set up Nuanu Flow, continue first-run setup
 # Nuanu Flow onboarding
 
 Run first-time setup as a resumable, server-driven conversation. Call catalog
-tools through `execute_tool("<name>", {...})`.
+reads through `execute_read_tool("<name>", {...})` and mutations through
+`execute_tool("<name>", {...})`.
 
 A canonical operation name in this skill is guidance, not a current descriptor.
 Summary candidates are not cacheable descriptors. Before direct execution, use
@@ -24,7 +25,7 @@ do not repeat the check or any completed mutation.
 Always start, including after an interrupted session, with:
 
 ```text
-execute_tool("onboarding_next", {})
+execute_read_tool("onboarding_next", {})
 ```
 
 When the account has several workspaces, show only the returned workspace
@@ -124,4 +125,4 @@ the workspace and project identifier are confirmed.
 
 ## Tools Used
 
-`execute_tool`, `onboarding_next`, `update_onboarding_profile`, `create_workspace`, `list_wiki_pages`, `create_wiki_page`, `update_wiki_page`, `invite_workspace_members`, `update_onboarding_progress`, `complete_onboarding`
+`execute_read_tool`, `execute_tool`, `onboarding_next`, `update_onboarding_profile`, `create_workspace`, `list_wiki_pages`, `create_wiki_page`, `update_wiki_page`, `invite_workspace_members`, `update_onboarding_progress`, `complete_onboarding`

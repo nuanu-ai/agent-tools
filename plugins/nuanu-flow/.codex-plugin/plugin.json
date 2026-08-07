@@ -1,6 +1,6 @@
 {
   "name": "nuanu-flow",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "description": "Install and onboard Nuanu Flow from one prompt, then work with projects, processes, artifacts, decisions, and remote agents.",
   "author": {
     "name": "Nuanu",

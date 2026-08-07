@@ -43,7 +43,7 @@ by deployment and workspace.
 For “Can I connect/use provider X?”:
 
 1. If the workspace slug is already known and Flow MCP is available, call
-   `execute_tool("get_agent_creation_options", {"workspace_slug":"..."})`.
+   `execute_read_tool("get_agent_creation_options", {"workspace_slug":"..."})`.
 2. Match the provider by exact integration `slug` or display `name`.
 3. Report separately whether it is listed and whether `connected` is true.
 4. Use the returned `integrations_url` when present.
@@ -72,4 +72,4 @@ request or handle their provider password, OAuth code, or token.
 
 ## Tools Used
 
-`execute_tool`, `get_agent_creation_options`
+`execute_read_tool`, `get_agent_creation_options`

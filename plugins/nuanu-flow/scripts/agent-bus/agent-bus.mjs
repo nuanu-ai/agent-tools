@@ -1,11 +1,13 @@
 /**
- * Background delivery adapter for informational agent-bus messages.
+ * General Nuanu Flow communication-bus adapter.
  *
- * The worker never forwards message bodies into the task pump. A wake only
- * schedules an authenticated inbox fetch and marks the returned IDs delivered.
- * Consumption remains a separate, explicitly delegated operation.
+ * The adapter owns transient informational-message delivery for any host that
+ * supplies an authenticated client. It does not claim work, start a model
+ * turn, advance a Process, or keep a second roster/message store. A gateway
+ * wake schedules an HTTP inbox fetch and marks transport delivery only;
+ * explicit MCP inbox consumption remains a separate model-visible action.
  */
-export function createAgentInbox({ client, onError = () => {} }) {
+export function createAgentBusAdapter({ client, onError = () => {} }) {
   let workspacePromise;
   let scheduled = false;
   let pending = false;
@@ -45,6 +47,13 @@ export function createAgentInbox({ client, onError = () => {} }) {
     });
   };
 
+  const routeGatewayMessage = (message) => {
+    if (!message || typeof message !== "object") return false;
+    if (message.type !== "connected" && message.type !== "inbox_available") return false;
+    notify();
+    return true;
+  };
+
   const whenIdle = async () => {
     while (scheduled || inFlight) {
       if (scheduled) await new Promise((resolve) => queueMicrotask(resolve));
@@ -52,11 +61,5 @@ export function createAgentInbox({ client, onError = () => {} }) {
     }
   };
 
-  return { notify, whenIdle };
-}
-
-export function routeGatewayMessage(message, { pumpTasks, notifyInbox }) {
-  if (!message || typeof message !== "object") return;
-  if (message.type === "connected" || message.type === "task") pumpTasks();
-  if (message.type === "connected" || message.type === "inbox_available") notifyInbox();
+  return { notify, routeGatewayMessage, whenIdle };
 }

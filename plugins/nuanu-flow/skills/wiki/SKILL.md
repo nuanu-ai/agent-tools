@@ -10,7 +10,8 @@ runbooks, project specifications, research notes, and other pages people edit
 in Nuanu Flow. Wiki pages are not Artifacts: Artifacts are versioned files and
 run outputs, while Wiki pages are living documents with a hierarchy and editor.
 
-Call tools through `execute_tool("<name>", {...})`.
+Call pure reads through `execute_read_tool("<name>", {...})` and mutations
+through `execute_tool("<name>", {...})`.
 
 ## 1. Resolve the owning scope
 

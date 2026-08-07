@@ -10,9 +10,10 @@ workspace and is not the state machine for first-run setup. For a new account,
 zero workspaces, or an interrupted first-run flow, use the `onboarding` skill
 first.
 
-Call tools via `execute_tool("<name>", {...})`. The flow is deliberately
-conversational-first: **brief → wiki → objectives + milestones → members →
-hand-off**. Do not create anything before step 1 is done.
+Call pure reads via `execute_read_tool("<name>", {...})` and mutations via
+`execute_tool("<name>", {...})`. The flow is deliberately conversational-first:
+**brief → wiki → objectives + milestones → members → hand-off**. Do not create
+anything before step 1 is done.
 
 A canonical operation name in this skill is guidance, not a current descriptor.
 Summary candidates are not cacheable descriptors. Before direct execution, use

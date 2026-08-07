@@ -5,8 +5,9 @@ description: Create, search, triage, and update Flow items in Nuanu Flow (issues
 
 # Flow items (issues)
 
-Call tools via `execute_tool("<name>", {...})` (see the `nuanu-flow`
-orientation skill). Full payload/filter reference: `references/payloads.md`.
+Call pure reads via `execute_read_tool("<name>", {...})` and mutations via
+`execute_tool("<name>", {...})` (see the `nuanu-flow` orientation skill). Full
+payload/filter reference: `references/payloads.md`.
 
 A canonical operation name in this skill is guidance, not a current descriptor.
 Summary candidates are not cacheable descriptors. Before direct execution, use
@@ -121,6 +122,12 @@ finish_before | finish_after`; external URLs via `create_issue_link`.
 Large/binary → `create_issue_attachment_upload` (presigned POST) → upload
 bytes → `complete_issue_attachment_upload`.
 
+**Implementation plan**: this is an optional ordered checklist stored directly
+on the Flow item, not a separate Plan entity. Use `get_implementation_plan`,
+`set_implementation_plan`, and `update_implementation_plan_item`. Each item is
+`{id, text, checked}`; keep IDs stable and pass `[]` to clear the checklist.
+A plan is valid with or without a Spec, and an ordinary Flow item needs neither.
+
 **Lifecycle**: `archive_issue` / `restore_issue` / `delete_issue`;
 subscriptions via `subscribe_issue` / `unsubscribe_issue`.
 
@@ -130,4 +137,4 @@ NUANU_URL + NUANU_TOKEN env); otherwise render a markdown table.
 
 ## Tools Used
 
-`create_issue`, `bulk_create_issues`, `update_issue`, `delete_issue`, `get_issue`, `list_issues`, `search_issues`, `assign_issue`, `bulk_update_issues`, `bulk_archive_issues`, `bulk_delete_issues`, `archive_issue`, `restore_issue`, `list_archived_issues`, `list_deleted_issues`, `get_archived_issue`, `list_sub_issues`, `get_issue_activity`, `add_issue_comment`, `get_issue_comments`, `update_issue_comment`, `delete_issue_comment`, `add_issue_reaction`, `remove_issue_reaction`, `add_comment_reaction`, `remove_comment_reaction`, `create_issue_relation`, `remove_issue_relation`, `list_issue_relations`, `create_issue_link`, `update_issue_link`, `delete_issue_link`, `list_issue_links`, `upload_small_issue_attachment`, `create_issue_attachment_upload`, `complete_issue_attachment_upload`, `list_issue_attachments`, `delete_issue_attachment`, `subscribe_issue`, `unsubscribe_issue`, `get_issue_subscription`, `add_issue_to_cycle`, `create_module`, `add_issue_to_module`, `list_cycles`, `get_cycle`, `list_modules`, `get_module`, `list_states`, `list_labels`, `list_estimates`, `create_estimate`, `list_workspace_members`, `add_issue_label`
+`create_issue`, `bulk_create_issues`, `update_issue`, `delete_issue`, `get_issue`, `list_issues`, `search_issues`, `assign_issue`, `get_implementation_plan`, `set_implementation_plan`, `update_implementation_plan_item`, `bulk_update_issues`, `bulk_archive_issues`, `bulk_delete_issues`, `archive_issue`, `restore_issue`, `list_archived_issues`, `list_deleted_issues`, `get_archived_issue`, `list_sub_issues`, `get_issue_activity`, `add_issue_comment`, `get_issue_comments`, `update_issue_comment`, `delete_issue_comment`, `add_issue_reaction`, `remove_issue_reaction`, `add_comment_reaction`, `remove_comment_reaction`, `create_issue_relation`, `remove_issue_relation`, `list_issue_relations`, `create_issue_link`, `update_issue_link`, `delete_issue_link`, `list_issue_links`, `upload_small_issue_attachment`, `create_issue_attachment_upload`, `complete_issue_attachment_upload`, `list_issue_attachments`, `delete_issue_attachment`, `subscribe_issue`, `unsubscribe_issue`, `get_issue_subscription`, `add_issue_to_cycle`, `create_module`, `add_issue_to_module`, `list_cycles`, `get_cycle`, `list_modules`, `get_module`, `list_states`, `list_labels`, `list_estimates`, `create_estimate`, `list_workspace_members`, `add_issue_label`
