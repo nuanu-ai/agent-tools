@@ -106,6 +106,22 @@ test("Codex plugin metadata points at skills and OAuth-ready Flow MCP config", a
   await fs.access(path.join(pluginRoot, manifest.skills));
   await fs.access(path.join(pluginRoot, manifest.hooks));
   await fs.access(path.join(pluginRoot, ".mcp.json"));
+  const skillNames = await fs.readdir(path.join(pluginRoot, manifest.skills));
+  for (const skillName of skillNames) {
+    const skillRoot = path.join(pluginRoot, manifest.skills, skillName);
+    const stat = await fs.stat(skillRoot);
+    if (!stat.isDirectory()) continue;
+    const agentConfig = await fs.readFile(
+      path.join(skillRoot, "agents/openai.yaml"),
+      "utf8",
+    );
+    assert.match(agentConfig, /type: "mcp"/);
+    assert.match(agentConfig, /value: "nuanu-flow"/);
+    assert.match(
+      agentConfig,
+      /url: "https:\/\/flow\.nuanu\.com\/mcp-server\/mcp"/,
+    );
+  }
   const hooks = await readJson(path.join(pluginRoot, manifest.hooks));
   assert.equal(hooks.hooks.SessionStart.length, 1);
   assert.equal(hooks.hooks.UserPromptSubmit.length, 1);
