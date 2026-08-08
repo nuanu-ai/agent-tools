@@ -14,6 +14,7 @@ import {
   DEFAULT_BUILD_ROOT,
   REPO_ROOT,
   assertCodexVersion,
+  canonicalFilesystemPath,
   codexHome as resolveCodexHome,
   modeConfig,
   runCodex,
@@ -32,7 +33,11 @@ function parseJson(stdout, label) {
 }
 
 function normalized(value) {
-  return value ? path.resolve(value) : "";
+  return canonicalFilesystemPath(value);
+}
+
+function hasHeaderCredential(mode, env) {
+  return Boolean(env[mode.tokenEnv] || env[mode.agentKeyEnv]);
 }
 
 function isCanonicalProductionMarketplace(entry) {
@@ -65,13 +70,16 @@ function resumeCommand(env = process.env) {
 
 export async function installCurrentProfile(modeName, options = {}) {
   const mode = modeConfig(modeName, options.env || process.env);
+  const remoteAgent = Boolean(options.remoteAgent);
   const repoRoot = options.repoRoot || REPO_ROOT;
   const buildRoot = path.resolve(options.buildRoot || DEFAULT_BUILD_ROOT);
+  const explicitlySelectedHome =
+    options.codexHome || options.env?.CODEX_HOME || process.env.CODEX_HOME;
   const home = path.resolve(
-    resolveCodexHome({
-      codexHome: options.codexHome,
-      env: options.env,
-    }),
+    explicitlySelectedHome ||
+      resolveCodexHome({
+        env: options.env,
+      }),
   );
   const env = {
     ...process.env,
@@ -91,6 +99,9 @@ export async function installCurrentProfile(modeName, options = {}) {
     build = await buildDevPackage({
       pluginRoot:
         options.pluginRoot || path.join(repoRoot, "plugins/nuanu-flow"),
+      workerPluginRoot:
+        options.workerPluginRoot ||
+        path.join(repoRoot, "plugins/nuanu-flow-worker"),
       buildRoot,
       env,
       force: options.force,
@@ -114,11 +125,11 @@ export async function installCurrentProfile(modeName, options = {}) {
   const installed = pluginBody.installed || [];
   const actions = [];
   const otherMode = modeName === "dev" ? modeConfig("prod", env) : modeConfig("dev", env);
-  const conflictingPlugin = installed.find(
-    (plugin) => plugin.pluginId === otherMode.pluginId,
+  const conflictingPlugins = installed.filter((plugin) =>
+    [otherMode.pluginId, otherMode.workerPluginId].includes(plugin.pluginId),
   );
 
-  if (conflictingPlugin) {
+  if (conflictingPlugins.length > 0) {
     const authStatus = await readMcpAuthStatus(otherMode.name, {
       ...options,
       home,
@@ -128,20 +139,27 @@ export async function installCurrentProfile(modeName, options = {}) {
       runCodex(["mcp", "logout", mode.mcpName], codexOptions);
       actions.push(`logged out ${otherMode.label.toLowerCase()} OAuth`);
     }
-    runCodex(
-      ["plugin", "remove", conflictingPlugin.pluginId, "--json"],
-      codexOptions,
-    );
-    actions.push(`removed conflicting ${conflictingPlugin.pluginId}`);
+    for (const conflictingPlugin of conflictingPlugins) {
+      runCodex(
+        ["plugin", "remove", conflictingPlugin.pluginId, "--json"],
+        codexOptions,
+      );
+      actions.push(`removed conflicting ${conflictingPlugin.pluginId}`);
+    }
   }
 
   const marketplace = marketplaces.find(
     (entry) => entry.name === mode.marketplace,
   );
-  const selectedPlugin = installed.find(
-    (plugin) => plugin.pluginId === mode.pluginId,
+  const desiredPluginIds = remoteAgent
+    ? [mode.pluginId, mode.workerPluginId]
+    : [mode.pluginId];
+  const selectedPlugins = desiredPluginIds
+    .map((pluginId) => installed.find((plugin) => plugin.pluginId === pluginId))
+    .filter(Boolean);
+  let installPluginIds = desiredPluginIds.filter(
+    (pluginId) => !selectedPlugins.some((plugin) => plugin.pluginId === pluginId),
   );
-  let installPlugin = !selectedPlugin;
 
   if (modeName === "dev") {
     if (marketplace && !isOwnedDevelopmentMarketplace(marketplace, buildRoot)) {
@@ -149,20 +167,26 @@ export async function installCurrentProfile(modeName, options = {}) {
         "Refusing to replace a foreign marketplace named nuanu-dev.",
       );
     }
-    const installedVersion = selectedPlugin?.version || "";
-    if (marketplace && installedVersion !== build.version) {
-      if (selectedPlugin) {
-        runCodex(["plugin", "remove", mode.pluginId, "--json"], codexOptions);
-        actions.push(`removed outdated ${mode.pluginId}`);
+    const hasOutdatedPlugin = selectedPlugins.some(
+      (plugin) => plugin.version !== build.version,
+    );
+    if (marketplace && hasOutdatedPlugin) {
+      for (const selectedPlugin of selectedPlugins) {
+        if (selectedPlugin.version === build.version) continue;
+        runCodex(
+          ["plugin", "remove", selectedPlugin.pluginId, "--json"],
+          codexOptions,
+        );
+        actions.push(`removed outdated ${selectedPlugin.pluginId}`);
       }
       runCodex(
         ["plugin", "marketplace", "remove", mode.marketplace, "--json"],
         codexOptions,
       );
       actions.push(`refreshed ${mode.marketplace} marketplace`);
-      installPlugin = true;
+      installPluginIds = [...desiredPluginIds];
     }
-    if (!marketplace || installedVersion !== build.version) {
+    if (!marketplace || hasOutdatedPlugin) {
       runCodex(
         [
           "plugin",
@@ -202,28 +226,34 @@ export async function installCurrentProfile(modeName, options = {}) {
       );
       actions.push("refreshed canonical nuanu marketplace");
     }
-    installPlugin = true;
+    installPluginIds = [...desiredPluginIds];
   }
 
-  if (installPlugin) {
-    await runCodexWithBrowserAuth(
-      ["plugin", "add", mode.pluginId, "--json"],
-      {
+  for (const pluginId of installPluginIds) {
+    if (remoteAgent) {
+      runCodex(["plugin", "add", pluginId, "--json"], codexOptions);
+    } else {
+      await runCodexWithBrowserAuth(["plugin", "add", pluginId, "--json"], {
         ...options,
         cwd: repoRoot,
         env,
         home,
-      },
-    );
-    actions.push(`installed ${mode.pluginId}`);
+      });
+    }
+    actions.push(`installed ${pluginId}`);
   }
 
-  let authStatus = await readMcpAuthStatus(modeName, {
-    ...options,
-    home,
-    env,
-  });
-  if (authStatus === "not_logged_in") {
+  const headerCredentialPresent = hasHeaderCredential(mode, env);
+  let authStatus = remoteAgent
+    ? "skipped"
+    : headerCredentialPresent
+    ? "environment_credential"
+    : await readMcpAuthStatus(modeName, {
+        ...options,
+        home,
+        env,
+      });
+  if (!remoteAgent && authStatus === "not_logged_in") {
     await runMcpLogin(modeName, {
       ...options,
       home,
@@ -235,9 +265,14 @@ export async function installCurrentProfile(modeName, options = {}) {
       env,
     });
   }
-  if (authStatus !== "o_auth") {
+  const authenticationReady =
+    remoteAgent ||
+    authStatus === "o_auth" ||
+    authStatus === "environment_credential";
+  if (!authenticationReady) {
     throw new Error(
-      `Nuanu Flow OAuth did not become ready (status: ${authStatus}).`,
+      `Nuanu Flow authentication did not become ready (status: ${authStatus}). ` +
+        "Complete OAuth, or provide the documented token or agent-key environment variable.",
     );
   }
 
@@ -246,25 +281,43 @@ export async function installCurrentProfile(modeName, options = {}) {
       .stdout,
     "Codex plugin verification",
   );
-  const verifiedMcp = parseJson(
-    runCodex(["mcp", "list", "--json"], codexOptions).stdout,
-    "Codex MCP verification",
-  );
-  const plugin = (verifiedPlugins.installed || []).find(
-    (entry) => entry.pluginId === mode.pluginId,
+  const verifiedMcp = remoteAgent
+    ? null
+    : parseJson(
+        runCodex(
+          headerCredentialPresent
+            ? ["mcp", "get", mode.mcpName, "--json"]
+            : ["mcp", "list", "--json"],
+          codexOptions,
+        ).stdout,
+        "Codex MCP verification",
+      );
+  const verifiedPluginIds = new Set(
+    (verifiedPlugins.installed || []).map((entry) => entry.pluginId),
   );
   const mcp = Array.isArray(verifiedMcp)
     ? verifiedMcp.find((entry) => entry.name === mode.mcpName)
-    : null;
-  if (!plugin) throw new Error(`Codex did not report ${mode.pluginId} installed.`);
-  if (mcp?.transport?.url !== mode.mcpUrl) {
+    : verifiedMcp?.name === mode.mcpName
+      ? verifiedMcp
+      : null;
+  for (const pluginId of desiredPluginIds) {
+    if (!verifiedPluginIds.has(pluginId)) {
+      throw new Error(`Codex did not report ${pluginId} installed.`);
+    }
+  }
+  if (!remoteAgent && mcp?.transport?.url !== mode.mcpUrl) {
     throw new Error(
       `Nuanu Flow MCP URL mismatch: expected ${mode.mcpUrl}, found ${
         mcp?.transport?.url || "missing"
       }.`,
     );
   }
-  if (mcp.auth_status !== "o_auth") {
+  const verifiedAuthenticationReady = remoteAgent
+    ? true
+    : headerCredentialPresent
+    ? authStatus === "environment_credential"
+    : mcp.auth_status === "o_auth";
+  if (!verifiedAuthenticationReady) {
     throw new Error(
       `Nuanu Flow MCP authentication verification failed: ${mcp.auth_status}.`,
     );
@@ -273,7 +326,7 @@ export async function installCurrentProfile(modeName, options = {}) {
     codexBin: codexOptions.codexBin,
     cwd: repoRoot,
     env,
-    pluginId: mode.pluginId,
+    pluginId: remoteAgent ? mode.workerPluginId : mode.pluginId,
     timeoutMs: options.hookStatusTimeoutMs,
   });
   const attachment =
@@ -285,8 +338,10 @@ export async function installCurrentProfile(modeName, options = {}) {
     codexVersion: String(version.stdout).trim(),
     codexHome: home,
     pluginId: mode.pluginId,
+    pluginIds: desiredPluginIds,
+    remoteAgent,
     mcpUrl: mode.mcpUrl,
-    authStatus: mcp.auth_status,
+    authStatus,
     hookStatus: hook.status,
     hookDetail: hook.detail,
     build,
@@ -294,7 +349,7 @@ export async function installCurrentProfile(modeName, options = {}) {
     resumeCommand: resumeCommand(env),
     lifecycle: createPluginLifecycle({
       surface: "codex-cli",
-      authentication: "connected",
+      authentication: remoteAgent ? "skipped" : "connected",
       attachment,
       continuation:
         attachment === "restart_required"
@@ -315,6 +370,7 @@ function parseArgs(argv) {
   for (let index = 1; index < argv.length; index++) {
     const arg = argv[index];
     if (arg === "--force") options.force = true;
+    else if (arg === "--remote-agent") options.remoteAgent = true;
     else if (arg === "--codex-bin") {
       options.codexBin = argv[++index];
       if (!options.codexBin) throw new Error("--codex-bin requires a value");
@@ -327,6 +383,7 @@ function parseArgs(argv) {
 function printReport(report) {
   console.log(`Codex: ${report.codexVersion}`);
   console.log(`Plugin: ${report.pluginId}`);
+  if (report.remoteAgent) console.log(`Companion: ${report.pluginIds[1]}`);
   console.log(`MCP: ${report.mcpUrl}`);
   console.log(`Installation: ${report.lifecycle.installation}`);
   console.log(`Authentication: ${report.lifecycle.authentication}`);

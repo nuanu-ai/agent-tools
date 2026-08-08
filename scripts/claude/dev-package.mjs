@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,7 +13,11 @@ export const REPO_ROOT = path.resolve(
 );
 export const DEFAULT_BUILD_ROOT = path.join(REPO_ROOT, ".build/claude-dev");
 const SOURCE_PLUGIN_ROOT = path.join(REPO_ROOT, "plugins/nuanu-flow");
-const FORMAT_VERSION = 1;
+const SOURCE_WORKER_PLUGIN_ROOT = path.join(
+  REPO_ROOT,
+  "plugins/nuanu-flow-worker",
+);
+const FORMAT_VERSION = 2;
 
 function localMcpUrl(env) {
   const raw = env.NUANU_DEV_MCP_URL || "http://localhost:3001/mcp";
@@ -66,11 +71,22 @@ async function replaceDirectory(temporary, destination) {
 
 export async function buildClaudeDevPackage(options = {}) {
   const sourceRoot = options.pluginRoot || SOURCE_PLUGIN_ROOT;
+  const sourceWorkerRoot =
+    options.workerPluginRoot || SOURCE_WORKER_PLUGIN_ROOT;
   const buildRoot = path.resolve(options.buildRoot || DEFAULT_BUILD_ROOT);
   const mcpUrl = localMcpUrl(options.env || process.env);
-  const fingerprint = await fingerprintPlugin(sourceRoot);
+  const fingerprint = crypto
+    .createHash("sha256")
+    .update(await fingerprintPlugin(sourceRoot))
+    .update("\0")
+    .update(await fingerprintPlugin(sourceWorkerRoot))
+    .digest("hex");
   const statePath = path.join(buildRoot, "state.json");
   const generatedRoot = path.join(buildRoot, "plugins/nuanu-flow-dev");
+  const generatedWorkerRoot = path.join(
+    buildRoot,
+    "plugins/nuanu-flow-worker-dev",
+  );
   let state = null;
   try {
     state = await readJson(statePath);
@@ -82,7 +98,10 @@ export async function buildClaudeDevPackage(options = {}) {
     state?.formatVersion === FORMAT_VERSION &&
     state?.fingerprint === fingerprint &&
     state?.mcpUrl === mcpUrl &&
-    (await exists(path.join(generatedRoot, ".claude-plugin/plugin.json")))
+    (await exists(path.join(generatedRoot, ".claude-plugin/plugin.json"))) &&
+    (await exists(
+      path.join(generatedWorkerRoot, ".claude-plugin/plugin.json"),
+    ))
   ) {
     return {
       changed: false,
@@ -90,6 +109,7 @@ export async function buildClaudeDevPackage(options = {}) {
       version: state.version,
       marketplaceRoot: buildRoot,
       pluginRoot: generatedRoot,
+      workerPluginRoot: generatedWorkerRoot,
       mcpUrl,
     };
   }
@@ -98,6 +118,9 @@ export async function buildClaudeDevPackage(options = {}) {
     path.join(sourceRoot, ".claude-plugin/plugin.json"),
   );
   const sourceMcp = await readJson(path.join(sourceRoot, ".mcp.json"));
+  const sourceWorkerManifest = await readJson(
+    path.join(sourceWorkerRoot, ".claude-plugin/plugin.json"),
+  );
   const now = (options.now || (() => new Date()))();
   const baseVersion = String(sourceManifest.version || "0.3.0").split("+")[0];
   const version = `${baseVersion}+claude.local-${timestamp(now)}.${fingerprint.slice(0, 12)}`;
@@ -106,11 +129,19 @@ export async function buildClaudeDevPackage(options = {}) {
     `.${path.basename(buildRoot)}.tmp-${process.pid}-${Date.now()}`,
   );
   const temporaryPlugin = path.join(temporary, "plugins/nuanu-flow-dev");
+  const temporaryWorkerPlugin = path.join(
+    temporary,
+    "plugins/nuanu-flow-worker-dev",
+  );
 
   await fs.mkdir(path.dirname(buildRoot), { recursive: true });
   await fs.rm(temporary, { recursive: true, force: true });
   try {
     await fs.cp(sourceRoot, temporaryPlugin, {
+      recursive: true,
+      preserveTimestamps: true,
+    });
+    await fs.cp(sourceWorkerRoot, temporaryWorkerPlugin, {
       recursive: true,
       preserveTimestamps: true,
     });
@@ -123,7 +154,22 @@ export async function buildClaudeDevPackage(options = {}) {
           version,
           displayName: "Nuanu Flow [DEV]",
           description:
-            "Local-development Nuanu Flow tools, skills, hooks, OAuth, and remote workers for Claude Code.",
+            "Local-development Nuanu Flow MCP, domain skills, lifecycle hooks, and Agent communication bus for Claude Code.",
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    await fs.writeFile(
+      path.join(temporaryWorkerPlugin, ".claude-plugin/plugin.json"),
+      `${JSON.stringify(
+        {
+          ...sourceWorkerManifest,
+          name: "nuanu-flow-worker-dev",
+          version,
+          displayName: "Nuanu Flow Worker [DEV]",
+          description:
+            "Local Nuanu Flow remote Agent enrollment, task execution, heartbeat, and diagnostics for Claude Code.",
         },
         null,
         2,
@@ -170,6 +216,14 @@ export async function buildClaudeDevPackage(options = {}) {
               category: "productivity",
               tags: ["nuanu-flow", "mcp", "development"],
             },
+            {
+              name: "nuanu-flow-worker-dev",
+              source: "./plugins/nuanu-flow-worker-dev",
+              description:
+                "Local Nuanu Flow remote Agent worker companion for Claude Code.",
+              category: "productivity",
+              tags: ["nuanu-flow", "remote-agent", "worker", "development"],
+            },
           ],
         },
         null,
@@ -202,6 +256,7 @@ export async function buildClaudeDevPackage(options = {}) {
     version,
     marketplaceRoot: buildRoot,
     pluginRoot: generatedRoot,
+    workerPluginRoot: generatedWorkerRoot,
     mcpUrl,
   };
 }

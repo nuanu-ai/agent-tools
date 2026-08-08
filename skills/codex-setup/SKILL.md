@@ -45,9 +45,10 @@ picker, add `Continue Nuanu Flow setup`, and send that plugin-attached message
 in the same chat. Do not claim that the App shows a native **Continue** button,
 and do not send or request a plain `continue`. Only when that explicit
 attachment attempt fails may you offer the hosted guide's one-click
-plugin-backed task fallback. The bundled `SessionStart` hook can continue
-onboarding in that task but cannot add MCP tool schemas to an already-running
-one. Never display a CLI resume command. If the listing is absent and the
+plugin-backed task fallback. The explicit attached message continues
+onboarding in that task; the `SessionStart` hook only restores a valid local
+repository binding and cannot add MCP tool schemas to an already-running one.
+Never display a CLI resume command. If the listing is absent and the
 conversation has no shell execution capability, report that specific host
 limitation.
 

@@ -1,8 +1,9 @@
 # Nuanu Flow coding-agent plugin
 
-Work with Nuanu Flow from a coding agent: the full Flow MCP catalog (exposed
-through a compact 2-tool surface by default), domain skills, Claude slash
-commands, Codex plugin metadata, and a bundled remote-agent worker daemon.
+Work with Nuanu Flow from a coding agent through one compact three-tool MCP
+surface, the complete domain-skill set, lifecycle hooks, and the general Agent
+communication bus. Remote execution lives in the opt-in `nuanu-flow-worker`
+companion plugin.
 
 ## Install for Claude Code
 
@@ -16,8 +17,8 @@ Claude follows the environment-aware guide and uses its native marketplace
 and MCP OAuth controls. Claude Code CLI and IDE activate the plugin in the
 current conversation with `/reload-plugins`. The Claude Desktop Code tab does
 not implement that command: after installation, start one new Code session in
-the same project. The plugin's `SessionStart` hook continues setup
-on its first actual turn alongside the user's intended task, and native
+the same project and send `Continue Nuanu Flow setup` once. Ordinary later
+sessions do not run an onboarding preflight, and native
 **+ → Connectors → Nuanu Flow → Connect** handles OAuth there. The equivalent
 marketplace commands are:
 
@@ -55,8 +56,8 @@ same terminal only when the installer reports
 `attachment: restart_required`. The prompt starts the resumed conversation's
 first turn, where
 the `onboarding` skill continues exactly the first unmet requirement. The
-bundled `SessionStart` hook keeps Nuanu Flow available as the task tracker on
-future starts and resumes. Codex requires one-time review before a plugin hook
+bundled `SessionStart` hook emits only an optional local repository binding on
+startup, clear, or compact. Codex requires one-time review before a plugin hook
 can run; review the Nuanu Flow hook when prompted and never bypass that trust
 step.
 
@@ -71,7 +72,8 @@ same conversation. Do not refer to a native **Continue** button or request a
 plain `continue`. A plugin cannot invoke the active host's control channel or
 turn prompt text into executable tools. Use the documented one-click
 plugin-backed task only if that explicit same-chat attachment fails. The
-`SessionStart` hook can add guidance in the fallback task but cannot add MCP
+explicit plugin-attached message continues setup in the fallback task. The
+`SessionStart` hook only restores a local repository binding and cannot add MCP
 tool schemas to a running thread.
 
 The production marketplace bundle intentionally declares the direct OAuth MCP
@@ -90,11 +92,10 @@ Install the self-contained portable fallback into any agent supported by
 npx skills add nuanu-ai/agent-tools --skill nuanu-flow
 ```
 
-It contains the Nuanu Flow router, compiled domain references, and a simplified
-zero-dependency polling worker. It can enroll and execute remote jobs without
-MCP, but Agent Skills cannot universally register or authenticate an MCP
-server. Use the combined plugin for native OAuth, MCP tools, startup guidance,
-and the full remote-worker runtime.
+It contains the Nuanu Flow router and compiled domain references. Agent Skills
+cannot universally register or authenticate an MCP server. Use this plugin for
+native OAuth, MCP tools, optional repository binding, and the communication
+bus; use the separate worker companion for native remote execution.
 
 Install every canonical skill separately with
 `npx skills add nuanu-ai/agent-tools --skill '*'`, or refresh the portable
@@ -200,16 +201,12 @@ reply `done`; environment/Keychain credentials remain advanced fallbacks.
 - **`skills/`** — open-standard Agent Skills: `nuanu-flow` (orientation +
   routing), `product-help` (read-only product Q&A and UI guidance),
   `onboarding`, `work-items`, `workspace-setup`, `project-setup`,
-  `bpmn-processes`, `artifacts`, `create-agent`, `remote-worker`, plus
-  host-specific Codex and Claude Code remote-worker guidance.
+  `bpmn-processes`, `artifacts`, and `create-agent`.
 - **standalone `skills/nuanu-flow`** — generated portable distribution with
-  flattened copies of the domain references, a source-hash manifest, and
-  `scripts/worker.mjs`. Generate it from the canonical plugin skills with
+  flattened copies of the domain references and a source-hash manifest.
+  Generate it from the canonical plugin skills with
   `npm run sync:skills`; verify it is current with `npm run check:skills`.
 - **`commands/`** — `/nuanu-flow:setup` (env + connectivity check),
-  `/nuanu-flow:launch-remote-agent <token>` (zero-config: resolve URL, start
-  the worker, confirm connection), `/nuanu-flow:worker` (start the
-  remote-agent daemon from pre-exported env),
   `/nuanu-flow:decisions` (terminal decision inbox — resolve pending
   approvals without opening the app), `/nuanu-flow:run` (terminal diagram of
   a process run, optionally followed live).
@@ -220,9 +217,9 @@ reply `done`; environment/Keychain credentials remain advanced fallbacks.
   `watch <runId> --until done --timeout N` (append-only follow),
   `board <projectId>` (unicode kanban), `demo` (offline preview).
   Uses `NUANU_URL` + `NUANU_TOKEN`.
-- **`scripts/worker/`** — the zero-dependency worker daemon (Node ≥ 20.6),
-  vendored from `apps/worker`. **Canonical source is `apps/worker`** — edit
-  there and re-copy; `apps/mcp`'s test suite hash-checks the two.
+- **`scripts/agent-bus/`** — the content-free presence, roster, and transient
+  message adapter used by interactive Agents and the worker companion. It does
+  not enroll, claim, lease, execute, or complete remote tasks.
 - **`.mcp.json`** — Claude Code MCP config.
 - **`.codex-plugin/plugin.json`** — Codex plugin metadata with inline
   OAuth-first Flow MCP config, env-header fallbacks, and write-tool approval
@@ -253,19 +250,24 @@ Optional but recommended — clickable footer badges for work-item IDs
 2. Select Codex, Claude Code, or Generic agent and copy its generated one-line
    prompt. It follows `http://localhost:3000/connect/remote-agent.md` locally
    or `https://flow.nuanu.com/connect/remote-agent.md` in production, installs
-   and OAuth-authenticates the native plugin when supported, exchanges the
+   the matching `nuanu-flow` and `nuanu-flow-worker` pair, exchanges the
    single-use enrollment token without exposing the durable credential, and
-   starts the selected worker.
+   starts the selected worker. Remote-agent mode does not run human OAuth or
+   workspace onboarding.
 
-Advanced manual alternative: set `NUANU_URL` and `NUANU_AGENT_KEY`, then use
-`/nuanu-flow:worker` — or headless:
-`node plugins/nuanu-flow/scripts/worker/worker.mjs`
+Advanced manual alternative: set `NUANU_URL` and `NUANU_AGENT_KEY`, resolve
+both enabled plugin roots, then start the companion with the exact bus path:
+
+```bash
+NUANU_AGENT_BUS_SCRIPT="<nuanu-flow-root>/scripts/agent-bus/agent-bus.mjs" \
+  node "<nuanu-flow-worker-root>/scripts/worker/worker.mjs"
+```
 
 In Codex, keep the worker's background output attached to the launching task.
 It renders safe connection and task milestones without raw task instructions,
 model deltas, tool arguments, or credentials. The inherited
 `CODEX_THREAD_ID` binds significant events to the exact originating
-conversation, and the plugin's `UserPromptSubmit` hook supplies a compact,
+conversation, and the worker companion's `UserPromptSubmit` hook supplies a compact,
 one-time catch-up on the next message—even after reopening that conversation.
 This is not a spontaneous chat notification; a native updating card still
 requires Codex host support.

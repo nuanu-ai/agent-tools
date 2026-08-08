@@ -11,6 +11,10 @@ const repoRoot = path.resolve(
 );
 const standaloneRoot = path.join(repoRoot, "skills");
 const pluginRoot = path.join(repoRoot, "plugins/nuanu-flow/skills");
+const workerPluginRoot = path.join(
+  repoRoot,
+  "plugins/nuanu-flow-worker/skills",
+);
 const portableRoot = path.join(standaloneRoot, "nuanu-flow");
 
 const bundledReferences = [
@@ -18,13 +22,17 @@ const bundledReferences = [
   "bpmn-processes.md",
   "create-agent-design.md",
   "create-agent.md",
+  "human-input.md",
   "onboarding.md",
+  "process-refine.md",
   "product-help-concepts.md",
   "product-help-how-to.md",
   "product-help-integrations.md",
   "product-help.md",
   "project-setup.md",
   "remote-worker.md",
+  "telegram.md",
+  "wiki.md",
   "work-items-payloads.md",
   "work-items.md",
   "workspace-setup.md",
@@ -44,23 +52,28 @@ async function filesBelow(root) {
   return files.sort();
 }
 
-test("standalone Agent Skills preserve every combined plugin skill", async () => {
+test("standalone Agent Skills preserve every skill in the paired plugins", async () => {
   const standaloneFiles = await filesBelow(standaloneRoot);
   const pluginFiles = await filesBelow(pluginRoot);
+  const workerPluginFiles = await filesBelow(workerPluginRoot);
+  const pairedFiles = [...new Set([...pluginFiles, ...workerPluginFiles])].sort();
 
   for (const relative of standaloneFiles) {
     if (relative.startsWith("nuanu-flow/references/")) continue;
     if (relative === "nuanu-flow/scripts/worker.mjs") continue;
     if (relative === "nuanu-flow/SKILL.md") continue;
-    assert(pluginFiles.includes(relative), `unexpected standalone file ${relative}`);
+    assert(pairedFiles.includes(relative), `unexpected standalone file ${relative}`);
   }
 
-  for (const relative of pluginFiles) {
+  for (const relative of pairedFiles) {
     assert(standaloneFiles.includes(relative), `missing standalone file ${relative}`);
     if (relative === "nuanu-flow/SKILL.md") continue;
+    const ownerRoot = workerPluginFiles.includes(relative)
+      ? workerPluginRoot
+      : pluginRoot;
     const [standalone, plugin] = await Promise.all([
       fs.readFile(path.join(standaloneRoot, relative)),
-      fs.readFile(path.join(pluginRoot, relative)),
+      fs.readFile(path.join(ownerRoot, relative)),
     ]);
     assert(
       standalone.equals(plugin),

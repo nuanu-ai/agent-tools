@@ -8,12 +8,14 @@
     "validate:skills:spec": "node scripts/validate-agent-skills.mjs",
     "build:codex:dev": "node scripts/codex/dev-package.mjs --build-only",
     "build:claude:dev": "node scripts/claude/dev-package.mjs",
-    "validate:plugins": "npm run check:skills && node scripts/validate-plugins.mjs",
-    "validate:dev": "npm run build:codex:dev && node scripts/validate-plugins.mjs --codex-plugin .build/codex-dev/plugins/nuanu-flow-dev --codex-marketplace .build/codex-dev/.agents/plugins/marketplace.json",
+    "validate:plugins": "npm run check:skills && node scripts/validate-plugins.mjs && node scripts/validate-plugins.mjs --codex-plugin plugins/nuanu-flow-worker",
+    "validate:dev": "npm run build:codex:dev && node scripts/validate-plugins.mjs --codex-plugin .build/codex-dev/plugins/nuanu-flow-dev --codex-marketplace .build/codex-dev/.agents/plugins/marketplace.json && node scripts/validate-plugins.mjs --codex-plugin .build/codex-dev/plugins/nuanu-flow-worker-dev --codex-marketplace .build/codex-dev/.agents/plugins/marketplace.json",
     "test": "node --test tests/e2e/*.test.mjs",
     "test:e2e": "node --test tests/e2e/*.test.mjs",
     "test:acceptance:codex": "node tests/acceptance/codex-dev-modes-acceptance.mjs",
     "test:acceptance:codex:model": "node tests/acceptance/codex-dev-modes-acceptance.mjs --model",
+    "test:acceptance:codex:onboarding": "node tests/acceptance/codex-dev-modes-acceptance.mjs --model --skip-credential-free --sessions-only",
+    "test:acceptance:codex:journey": "node tests/acceptance/codex-dev-modes-acceptance.mjs --model --journey",
     "test:acceptance:codex:worker": "node tests/acceptance/codex-dev-modes-acceptance.mjs --model --worker-only --skip-credential-free",
     "test:acceptance:codex:reload": "node tests/acceptance/codex-hot-reload-acceptance.mjs",
     "test:acceptance:claude": "node tests/acceptance/claude-plugin-acceptance.mjs",
@@ -23,6 +25,8 @@
     "codex:setup": "node scripts/codex/setup.mjs",
     "codex:install:dev": "node scripts/codex/install-current.mjs dev",
     "codex:install:prod": "node scripts/codex/install-current.mjs prod",
+    "codex:install:worker:dev": "node scripts/codex/install-current.mjs dev --remote-agent",
+    "codex:install:worker:prod": "node scripts/codex/install-current.mjs prod --remote-agent",
     "codex:prepare:dev": "node scripts/codex/install-current.mjs dev",
     "codex:remove": "node scripts/codex/remove.mjs",
     "codex:dev": "node scripts/codex/run-mode.mjs dev",
@@ -38,6 +42,10 @@
     "codex:auth-doctor": "node scripts/codex/auth-doctor.mjs",
     "claude:install:dev": "node scripts/claude/install.mjs dev",
     "claude:install:prod": "node scripts/claude/install.mjs prod",
-    "claude:remove": "node scripts/claude/remove.mjs"
+    "claude:install:worker:dev": "node scripts/claude/install.mjs dev --remote-agent",
+    "claude:install:worker:prod": "node scripts/claude/install.mjs prod --remote-agent",
+    "claude:remove": "node scripts/claude/remove.mjs",
+    "claude:worker:dev": "node scripts/claude/run-worker.mjs dev",
+    "claude:worker:prod": "node scripts/claude/run-worker.mjs prod"
   }
 }

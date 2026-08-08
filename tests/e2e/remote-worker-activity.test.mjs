@@ -8,10 +8,10 @@ import { fileURLToPath } from "node:url";
 
 import {
   activityContext,
-  activityInternals,
+  activityInternals as sessionActivityInternals,
   consumeSessionActivity,
   createActivityStore,
-} from "../../plugins/nuanu-flow/scripts/activity/remote-worker-activity.mjs";
+} from "../../plugins/nuanu-flow-worker/scripts/activity/remote-worker-activity.mjs";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -19,7 +19,7 @@ const repoRoot = path.resolve(
 );
 const userPromptHook = path.join(
   repoRoot,
-  "plugins/nuanu-flow/hooks/user-prompt-submit.mjs",
+  "plugins/nuanu-flow-worker/hooks/user-prompt-submit.mjs",
 );
 
 function runHook(script, payload, activityDirectory) {
@@ -82,7 +82,7 @@ test("activity store keeps safe milestones private and consumes them once", asyn
       duration_ms: 102_000,
     });
 
-    const sessionRoot = activityInternals.sessionDirectory(
+    const sessionRoot = sessionActivityInternals.sessionDirectory(
       activityDirectory,
       sessionId,
     );
@@ -149,6 +149,10 @@ test("activity stays bound to the exact Codex session", async () => {
         activityDirectory,
       }),
       [],
+    );
+    await assert.rejects(
+      fs.stat(path.join(activityDirectory, "sessions", otherSessionId)),
+      { code: "ENOENT" },
     );
     const ownerEvents = await consumeSessionActivity({
       sessionId: ownerSessionId,

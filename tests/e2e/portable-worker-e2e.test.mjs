@@ -13,7 +13,7 @@ const repoRoot = path.resolve(
 );
 const workerScript = path.join(
   repoRoot,
-  "plugins/nuanu-flow/scripts/worker/portable-worker.mjs",
+  "plugins/nuanu-flow-worker/scripts/worker/portable-worker.mjs",
 );
 const enrollmentToken = `nuanu_join_${"ab".repeat(32)}`;
 const durableKey = `nuanu_flow_${"cd".repeat(32)}`;

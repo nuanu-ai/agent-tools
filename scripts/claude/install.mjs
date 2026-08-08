@@ -14,12 +14,14 @@ import { createPluginLifecycle } from "../plugin-lifecycle.mjs";
 const MODES = {
   prod: {
     pluginId: "nuanu-flow@nuanu",
+    workerPluginId: "nuanu-flow-worker@nuanu",
     marketplace: "nuanu",
     mcpName: "plugin:nuanu-flow:mcp",
     mcpUrl: "https://flow.nuanu.com/mcp-server/mcp",
   },
   dev: {
     pluginId: "nuanu-flow-dev@nuanu-dev",
+    workerPluginId: "nuanu-flow-worker-dev@nuanu-dev",
     marketplace: "nuanu-dev",
     mcpName: "plugin:nuanu-flow-dev:mcp",
     mcpUrl: "http://localhost:3001/mcp",
@@ -73,10 +75,11 @@ export async function installClaude(modeName, options = {}) {
     throw new Error("Claude surface must be cli or desktop");
   }
   const isDesktop = surface === "desktop";
+  const remoteAgent = Boolean(options.remoteAgent);
   const interactive =
     options.interactive ??
     Boolean(options.command || (process.stdin.isTTY && process.stdout.isTTY));
-  const deferAuth = options.skipAuth || isDesktop || !interactive;
+  const deferAuth = remoteAgent || options.skipAuth || isDesktop || !interactive;
   const env = { ...process.env, ...options.env };
   const runner = options.command || command;
   const run = (args, extra = {}) =>
@@ -124,8 +127,10 @@ export async function installClaude(modeName, options = {}) {
 
   let plugins = runJson(["plugin", "list", "--json"]) || [];
   const opposite = modeName === "dev" ? MODES.prod : MODES.dev;
-  if (plugins.some((entry) => entry.id === opposite.pluginId)) {
-    run(["plugin", "uninstall", opposite.pluginId, "--scope", "user", "--yes"]);
+  for (const pluginId of [opposite.pluginId, opposite.workerPluginId]) {
+    if (plugins.some((entry) => entry.id === pluginId)) {
+      run(["plugin", "uninstall", pluginId, "--scope", "user", "--yes"]);
+    }
   }
 
   if (!existingMarketplace) {
@@ -140,36 +145,58 @@ export async function installClaude(modeName, options = {}) {
   }
 
   plugins = runJson(["plugin", "list", "--json"]) || [];
-  const installed = plugins.find((entry) => entry.id === mode.pluginId);
-  if (installed && modeName === "dev" && installed.version !== build.version) {
-    run(["plugin", "uninstall", mode.pluginId, "--scope", "user", "--yes"]);
-  } else if (installed && modeName === "prod") {
-    run(["plugin", "update", mode.pluginId]);
+  const desiredPluginIds = remoteAgent
+    ? [mode.pluginId, mode.workerPluginId]
+    : [mode.pluginId];
+  for (const pluginId of desiredPluginIds) {
+    const installed = plugins.find((entry) => entry.id === pluginId);
+    if (installed && modeName === "dev" && installed.version !== build.version) {
+      run(["plugin", "uninstall", pluginId, "--scope", "user", "--yes"]);
+    } else if (installed && modeName === "prod") {
+      run(["plugin", "update", pluginId]);
+    }
   }
   plugins = runJson(["plugin", "list", "--json"]) || [];
-  if (!plugins.some((entry) => entry.id === mode.pluginId)) {
-    run(["plugin", "install", mode.pluginId, "--scope", "user"]);
+  for (const pluginId of desiredPluginIds) {
+    if (!plugins.some((entry) => entry.id === pluginId)) {
+      run(["plugin", "install", pluginId, "--scope", "user"]);
+    }
   }
 
-  run(["plugin", "validate", modeName === "dev" ? build.pluginRoot : path.join(REPO_ROOT, "plugins/nuanu-flow")]);
+  const generalRoot =
+    modeName === "dev"
+      ? build.pluginRoot
+      : path.join(REPO_ROOT, "plugins/nuanu-flow");
+  const workerRoot =
+    modeName === "dev"
+      ? build.workerPluginRoot
+      : path.join(REPO_ROOT, "plugins/nuanu-flow-worker");
+  run(["plugin", "validate", generalRoot]);
+  if (remoteAgent) run(["plugin", "validate", workerRoot]);
   if (!deferAuth) {
     run(["mcp", "login", mode.mcpName], { inherit: true });
   }
   const verified = runJson(["plugin", "list", "--json"]) || [];
-  if (!verified.some((entry) => entry.id === mode.pluginId && entry.enabled)) {
-    throw new Error(`${mode.pluginId} was not enabled after installation.`);
+  for (const pluginId of desiredPluginIds) {
+    if (!verified.some((entry) => entry.id === pluginId && entry.enabled)) {
+      throw new Error(`${pluginId} was not enabled after installation.`);
+    }
   }
   return {
     surface: isDesktop ? "claude-code-desktop" : "claude-code-cli",
     mode: modeName,
     version,
     pluginId: mode.pluginId,
+    pluginIds: desiredPluginIds,
+    remoteAgent,
     mcpName: mode.mcpName,
     mcpUrl: modeName === "dev" ? build.mcpUrl : mode.mcpUrl,
     auth: deferAuth ? "skipped" : "oauth",
     reloadCommand: isDesktop ? null : "/reload-plugins",
-    nextAction: isDesktop
-      ? "Start one new Claude Desktop Code session in this project. On its first actual turn, the Nuanu Flow SessionStart hook continues setup alongside the user's intended task; use + → Connectors → Nuanu Flow → Connect there if prompted."
+    nextAction: remoteAgent
+      ? "Resolve both installed plugin roots, enroll with the Nuanu Flow Worker companion, pass the Nuanu Flow agent-bus script path, and require a successful heartbeat. Human OAuth and onboarding are not part of remote Agent enrollment."
+      : isDesktop
+      ? "Start one new Claude Desktop Code session in this project and send `Continue Nuanu Flow setup` once. Use + → Connectors → Nuanu Flow → Connect there if prompted. Ordinary later sessions do not run an onboarding preflight."
       : deferAuth
         ? "Run /reload-plugins in an interactive Claude Code conversation, authenticate through /mcp, then verify attachment with onboarding_next. Do not manufacture a pseudo-terminal."
         : "Run /reload-plugins in this conversation, authenticate through /mcp if prompted, then verify attachment with onboarding_next.",
@@ -186,6 +213,7 @@ async function main() {
   const mode = process.argv[2];
   const args = process.argv.slice(3);
   const skipAuth = args.includes("--skip-auth");
+  const remoteAgent = args.includes("--remote-agent");
   const surfaceIndex = args.indexOf("--surface");
   const surfaceFromPair =
     surfaceIndex >= 0 && typeof args[surfaceIndex + 1] === "string"
@@ -195,10 +223,11 @@ async function main() {
     .find((value) => value.startsWith("--surface="))
     ?.slice("--surface=".length);
   const surface = surfaceFromPair || surfaceFromEquals || "cli";
-  const result = await installClaude(mode, { skipAuth, surface });
+  const result = await installClaude(mode, { skipAuth, surface, remoteAgent });
   console.log(`Claude Code: ${result.version}`);
   console.log(`Surface: ${result.surface}`);
   console.log(`Plugin: ${result.pluginId}`);
+  if (result.remoteAgent) console.log(`Companion: ${result.pluginIds[1]}`);
   console.log(`MCP: ${result.mcpUrl}`);
   console.log(`Installation: ${result.lifecycle.installation}`);
   console.log(`Authentication: ${result.lifecycle.authentication}`);

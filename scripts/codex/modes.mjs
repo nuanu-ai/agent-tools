@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { realpathSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -11,6 +12,16 @@ export const REPO_ROOT = path.resolve(
 export const DEFAULT_BUILD_ROOT = path.join(REPO_ROOT, ".build/codex-dev");
 export const MIN_CODEX_VERSION = "0.145.0";
 
+export function canonicalFilesystemPath(value) {
+  if (!value) return "";
+  const absolute = path.resolve(value);
+  try {
+    return realpathSync.native(absolute);
+  } catch {
+    return absolute;
+  }
+}
+
 export const MODES = Object.freeze({
   prod: Object.freeze({
     name: "prod",
@@ -18,6 +29,8 @@ export const MODES = Object.freeze({
     marketplace: "nuanu",
     pluginName: "nuanu-flow",
     pluginId: "nuanu-flow@nuanu",
+    workerPluginName: "nuanu-flow-worker",
+    workerPluginId: "nuanu-flow-worker@nuanu",
     mcpName: "nuanu-flow",
     mcpUrl: "https://flow.nuanu.com/mcp-server/mcp",
     apiUrl: "https://flow.nuanu.com/api",
@@ -32,6 +45,8 @@ export const MODES = Object.freeze({
     marketplace: "nuanu-dev",
     pluginName: "nuanu-flow-dev",
     pluginId: "nuanu-flow-dev@nuanu-dev",
+    workerPluginName: "nuanu-flow-worker-dev",
+    workerPluginId: "nuanu-flow-worker-dev@nuanu-dev",
     mcpName: "nuanu-flow",
     mcpUrl: "http://localhost:3001/mcp",
     apiUrl: "http://localhost:8000/api",

@@ -81,14 +81,14 @@ export async function updateManifestVersion(options) {
   };
 }
 
-function parseArgs(argv) {
+export function parseVersionArgs(argv) {
   const options = { request: "", manifestPaths: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--dry-run") options.dryRun = true;
     else if (arg === "--manifest-path") {
       const manifestPath = argv[index + 1];
-      if (!manifestPath) throw new Error("--manifest-path requires a path");
+      if (!manifestPath) throw new Error("--manifest-path requires a file path");
       options.manifestPaths.push(manifestPath);
       index += 1;
     }
@@ -100,7 +100,7 @@ function parseArgs(argv) {
 }
 
 async function main() {
-  const options = parseArgs(process.argv.slice(2));
+  const options = parseVersionArgs(process.argv.slice(2));
   if (options.help || !options.request) {
     console.log(
       "Usage: node scripts/codex/version.mjs <patch|minor|major|X.Y.Z> " +

@@ -1,11 +1,15 @@
 {
   "format_version": 1,
-  "plugin_version": "0.3.10",
-  "bundle_sha256": "d264bae68855ef23e2710ca9a706a1f61e5010c73dbd784be1c32a22aae82f36",
+  "plugin_version": "0.3.12",
+  "bundle_sha256": "35f13be849ea5150c7df37ca3d04a420ee0e3cd9e8282de3eb034bc744c624d1",
   "sources": [
     {
-      "path": "plugins/nuanu-flow/scripts/worker/portable-worker.mjs",
+      "path": "plugins/nuanu-flow-worker/scripts/worker/portable-worker.mjs",
       "sha256": "02d0abaa269e286307ad848e0c5588487f3bed14bf822725f1f8783e28a51e3e"
+    },
+    {
+      "path": "plugins/nuanu-flow-worker/skills/remote-worker/SKILL.md",
+      "sha256": "1da0590ced1d58807d78c2f10408ca1239ac2a63589edced95ca50c647df27a7"
     },
     {
       "path": "plugins/nuanu-flow/skills/artifacts/SKILL.md",
@@ -17,19 +21,27 @@
     },
     {
       "path": "plugins/nuanu-flow/skills/create-agent/SKILL.md",
-      "sha256": "7fa40acac682b8947a90324ee5afccd405e63b08e5767a54d2f1fc606bd9bb7d"
+      "sha256": "76fdc45c06dce0882649c868b4c28e4b6fff4ca6e3b653bff358be4b780af788"
     },
     {
       "path": "plugins/nuanu-flow/skills/create-agent/references/agent-design.md",
       "sha256": "39703ed12b826eceea57358a308019e37e80c614e96c83155ee975c0d25b2a87"
     },
     {
+      "path": "plugins/nuanu-flow/skills/human-input/SKILL.md",
+      "sha256": "222c3e63010669925edf7133b0a1120a2a258d94a607ece4f887307580878b88"
+    },
+    {
       "path": "plugins/nuanu-flow/skills/nuanu-flow/SKILL.md",
-      "sha256": "28764dade76a8bca5d3e34ff898943bc23d940256c26f216c907559b23c735fc"
+      "sha256": "4f8bd906ca47efe0a254d4e3230c85c2fc581015dc9596b16fec9001b3d08efa"
     },
     {
       "path": "plugins/nuanu-flow/skills/onboarding/SKILL.md",
       "sha256": "2f4ca9d29e33afb5bc72840ae41b10863c4681850a32860f6626197e897d240d"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/process-refine/SKILL.md",
+      "sha256": "aeb07ff6a9d7af43072ec7138145aae3a55b1a497e7ce1f6ad5db51e6e5dc73d"
     },
     {
       "path": "plugins/nuanu-flow/skills/product-help/SKILL.md",
@@ -52,8 +64,12 @@
       "sha256": "4684a4ae6bd856fb39a6458c0aa35856d453b5d50219b75d780d7102c5126c29"
     },
     {
-      "path": "plugins/nuanu-flow/skills/remote-worker/SKILL.md",
-      "sha256": "d952d51c45637905b70557434f7f24c45f38dce0188b8a7f7b4c5e820cf7a89a"
+      "path": "plugins/nuanu-flow/skills/telegram/SKILL.md",
+      "sha256": "1f12960e5b3d2999aba87d46b7da70c59405ddcf051452f3d6333c9fe7682a13"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/wiki/SKILL.md",
+      "sha256": "2b2222bf01ee1eebd1c7cc8f751693a3eb8966a11624305025523bdb5b4194d2"
     },
     {
       "path": "plugins/nuanu-flow/skills/work-items/SKILL.md",

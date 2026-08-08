@@ -1,6 +1,6 @@
 {
   "name": "nuanu-flow-worker",
-  "version": "0.3.11",
+  "version": "0.3.12",
   "description": "Run a managed Nuanu Flow coding worker with enrollment, task execution, diagnostics, and session observation.",
   "author": {
     "name": "Nuanu",
@@ -17,6 +17,7 @@
     "codex"
   ],
   "skills": "./skills",
+  "hooks": "./hooks/codex-hooks.json",
   "interface": {
     "displayName": "Nuanu Flow Worker",
     "shortDescription": "Managed coding-agent worker runtime for Nuanu Flow.",

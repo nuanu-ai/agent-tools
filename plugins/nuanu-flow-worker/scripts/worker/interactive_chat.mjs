@@ -176,7 +176,14 @@ export function openAcpChatSession(cfg, { cwd, env, onActivity, onPermissionRequ
   };
 }
 
+export function resolveChatAdapterConfig(cfg) {
+  return cfg?.adapter || cfg;
+}
+
 export function startChatLoop({ client, cfg, isRunning, log = () => {} }) {
+  // The worker owns the full configuration object; focused tests and embedded
+  // callers may pass the adapter block directly.
+  const chatCfg = resolveChatAdapterConfig(cfg);
   const sessions = new Map(); // session_id -> bridge state
 
   const bridgeFor = (sessionId) => {
@@ -214,7 +221,7 @@ export function startChatLoop({ client, cfg, isRunning, log = () => {} }) {
   };
 
   const openBridge = async (sessionId, state) => {
-    state.acp = openAcpChatSession(cfg, {
+    state.acp = openAcpChatSession(chatCfg, {
       onActivity: (event) => {
         state.activityCounter += 1;
         state.activityBuffer.push({
@@ -269,6 +276,7 @@ export function startChatLoop({ client, cfg, isRunning, log = () => {} }) {
             { kind: "state", payload: { state: "closed", reason: "user" }, client_key: `state:${sessionId}:closed` },
           ]).catch(() => {});
           sessions.delete(sessionId);
+          return undefined;
         });
         continue;
       }
@@ -284,12 +292,14 @@ export function startChatLoop({ client, cfg, isRunning, log = () => {} }) {
           await post(sessionId, [
             { kind: "assistant_message", payload, client_key: `asst:${sessionId}:${event.seq}` },
           ]);
+          return undefined;
         });
       }
     }
     if (row.session.status === "requested" && !state.acp) {
       state.queue = state.queue.then(async () => {
         if (!state.acp) await openBridge(sessionId, state);
+        return undefined;
       });
     }
     state.queue = state.queue.catch(async (error) => {

@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   assertCodexVersion,
+  canonicalFilesystemPath,
   codexModeHome,
   modeConfig,
 } from "../../scripts/codex/modes.mjs";
@@ -42,9 +43,10 @@ import {
   buildCodexPrompt,
   buildPrompt,
   modelTaskEnv,
-} from "../../plugins/nuanu-flow/scripts/worker/adapter.mjs";
+} from "../../plugins/nuanu-flow-worker/scripts/worker/adapter.mjs";
 import {
   nextVersion,
+  parseVersionArgs,
   updateManifestVersion,
 } from "../../scripts/codex/version.mjs";
 import { updateProduction } from "../../scripts/codex/update.mjs";
@@ -55,6 +57,24 @@ const repoRoot = path.resolve(
 );
 const sourcePluginRoot = path.join(repoRoot, "plugins/nuanu-flow");
 const fakeCodexBin = path.join(repoRoot, "tests/fixtures/fake-codex.mjs");
+
+test("canonicalFilesystemPath treats symlinked marketplace paths as the same checkout", async () => {
+  const tempRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), "nuanu-canonical-path-"),
+  );
+  const realDirectory = path.join(tempRoot, "real-marketplace");
+  const alias = path.join(tempRoot, "marketplace-alias");
+  try {
+    await fs.mkdir(realDirectory);
+    await fs.symlink(realDirectory, alias);
+    assert.equal(
+      canonicalFilesystemPath(alias),
+      canonicalFilesystemPath(realDirectory),
+    );
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
 
 async function makeTempPlugin() {
   const tempRoot = await fs.mkdtemp(
@@ -271,7 +291,13 @@ test("buildDevPackage generates an isolated development marketplace without muta
     );
     assert.equal(state.fingerprint, result.fingerprint);
     assert.equal(state.version, result.version);
-    assert.equal(state.formatVersion, 2);
+    assert.equal(state.formatVersion, 3);
+    assert.equal(marketplace.plugins[1].name, "nuanu-flow-worker-dev");
+    const workerManifest = await readJson(
+      path.join(result.workerPluginRoot, ".codex-plugin/plugin.json"),
+    );
+    assert.equal(workerManifest.name, "nuanu-flow-worker-dev");
+    assert.equal(workerManifest.mcpServers, undefined);
     assert.equal(state.mcpUrl, "http://localhost:3001/mcp");
     assert.equal(await fs.readFile(manifestPath, "utf8"), originalManifest);
   } finally {
@@ -401,7 +427,7 @@ test("writeModeMcpConfig persists one managed direct MCP without replacing Codex
     assert.match(text, /\[plugins\."nuanu-flow-dev@nuanu-dev"\]/);
     assert.match(text, /\[mcp_servers\.nuanu-flow\]/);
     assert.match(text, /url = "http:\/\/127\.0\.0\.1:7654\/mcp"/);
-    assert.match(text, /required = true/);
+    assert.match(text, /required = false/);
     assert.match(text, /"X-Plane-User-Token" = "NUANU_DEV_TOKEN"/);
     assert.doesNotMatch(text, /flow\.nuanu\.com/);
     assert.equal((text.match(/\[mcp_servers\.nuanu-flow\]/g) || []).length, 1);
@@ -1100,6 +1126,36 @@ test("collectStatus reports selected mode health and auth without exposing crede
   }
 });
 
+test("collectStatus reports an optional missing mode home without creating it", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-status-missing-"));
+  const codexHome = path.join(tempRoot, "codex-home");
+  const missingProdHome = codexModeHome("prod", { codexHome });
+  const env = {
+    ...process.env,
+    FAKE_CODEX_STATE_DIR: path.join(tempRoot, "state"),
+    FAKE_CODEX_LOG: path.join(tempRoot, "log.jsonl"),
+    NUANU_TOKEN: "status-prod-secret",
+  };
+  try {
+    const report = await collectStatus({
+      mode: "prod",
+      repoRoot,
+      codexHome,
+      codexBin: fakeCodexBin,
+      env,
+      endpointTimeoutMs: 10,
+    });
+    assert.equal(report.homePresent, false);
+    assert.equal(report.installed, false);
+    assert.equal(report.installedVersion, null);
+    assert.equal(report.marketplaceSource, null);
+    assert.equal(report.oauth.mcpAuthStatus, "unknown");
+    await assert.rejects(fs.access(missingProdHome), { code: "ENOENT" });
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("development preflight fails on its configured endpoint and never falls back to production", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-preflight-"));
   const stateDir = path.join(tempRoot, "state");
@@ -1289,7 +1345,7 @@ test("buildWorkerLaunch maps development credentials into a child-only App Serve
   });
   assert.equal(
     dev.script,
-    path.join(repoRoot, "plugins/nuanu-flow/scripts/worker/worker.mjs"),
+    path.join(repoRoot, "plugins/nuanu-flow-worker/scripts/worker/worker.mjs"),
   );
   assert.equal(dev.env.NUANU_URL, "http://localhost:8000/api");
   assert.equal(
@@ -1387,9 +1443,20 @@ test("modelTaskEnv exposes only the short-lived task key to Codex", () => {
 });
 
 test("Codex worker prompts explain deferred MCP tool discovery", () => {
-  const task = { instruction: "Call flow_dev_identity." };
+  const task = {
+    contract_version: "nuanu.agent-task.v1",
+    configuration_snapshot: { system_prompt: "Use Nuanu Flow safely." },
+    request: {
+      instruction: "Call flow_dev_identity.",
+      process: { step_key: "identity" },
+      input: {},
+      output_definition: { data: {}, artifacts: {} },
+    },
+  };
   assert.doesNotMatch(buildPrompt(task), /tool_search/);
   assert.match(buildCodexPrompt(task), /tool_search/);
+  assert.match(buildCodexPrompt(task), /search_tools, execute_read_tool, and execute_tool/);
+  assert.match(buildCodexPrompt(task), /invokeWith executor/);
   assert.match(buildCodexPrompt(task), /Call flow_dev_identity/);
 });
 
@@ -1402,6 +1469,29 @@ test("nextVersion supports release increments and rejects invalid requests", () 
   assert.throws(
     () => nextVersion("0.1.0+local", "patch"),
     /canonical semantic version/,
+  );
+});
+
+test("parseVersionArgs accepts the release workflow's repeated manifest paths", () => {
+  assert.deepEqual(
+    parseVersionArgs([
+      "patch",
+      "--manifest-path",
+      "plugins/nuanu-flow-worker/.codex-plugin/plugin.json",
+      "--manifest-path",
+      "plugins/nuanu-flow-worker/.claude-plugin/plugin.json",
+    ]),
+    {
+      request: "patch",
+      manifestPaths: [
+        "plugins/nuanu-flow-worker/.codex-plugin/plugin.json",
+        "plugins/nuanu-flow-worker/.claude-plugin/plugin.json",
+      ],
+    },
+  );
+  assert.throws(
+    () => parseVersionArgs(["patch", "--manifest-path"]),
+    /requires a file path/,
   );
 });
 
