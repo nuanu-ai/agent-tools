@@ -5,6 +5,8 @@ import { createDefaultCredentialStore } from "./credentials.mjs";
 import { resolveBrowserQaPlaywrightModule } from "./qa_runtime.mjs";
 import { defaultActivityDirectory } from "./session_activity.mjs";
 
+const DEFAULT_CODEX_ACP_PACKAGE = "@agentclientprotocol/codex-acp@1.1.14";
+
 function required(name, value) {
   const v = value;
   if (!v) {
@@ -113,8 +115,14 @@ export function loadConfig({
     },
     adapter: {
       type: adapterType,
-      acpBin: env.NUANU_ACP_BIN || "codex-acp",
-      acpArgs: (env.NUANU_ACP_ARGS || "").split(/\s+/).filter(Boolean),
+      // Live chat uses ACP even when Process tasks run through App Server. Pin
+      // the bridge package so a fresh plugin install works without a separate
+      // global binary and does not float to an unreviewed latest release.
+      acpBin: env.NUANU_ACP_BIN || "npx",
+      acpArgs:
+        env.NUANU_ACP_ARGS == null
+          ? ["-y", DEFAULT_CODEX_ACP_PACKAGE]
+          : env.NUANU_ACP_ARGS.split(/\s+/).filter(Boolean),
       acpCwd: env.NUANU_ACP_CWD || os.tmpdir(),
       acpPermissionMode: (env.NUANU_ACP_PERMISSION_MODE || "auto").toLowerCase(),
       acpAuthMethod: env.NUANU_ACP_AUTH_METHOD || "",

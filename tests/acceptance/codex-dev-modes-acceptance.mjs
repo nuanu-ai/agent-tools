@@ -9,11 +9,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { buildDevPackage } from "../../scripts/codex/dev-package.mjs";
+import { installCurrentProfile } from "../../scripts/codex/install-current.mjs";
 import {
   REPO_ROOT,
   codexModeHome,
   runCodex,
 } from "../../scripts/codex/modes.mjs";
+import { removeNuanuFlow } from "../../scripts/codex/remove.mjs";
 import { buildCodexLaunch } from "../../scripts/codex/run-mode.mjs";
 import {
   ensureSharedCodexAuth,
@@ -21,8 +23,8 @@ import {
   writeModeMcpConfig,
 } from "../../scripts/codex/setup.mjs";
 import {
-  activityInternals,
-} from "../../plugins/nuanu-flow/scripts/activity/remote-worker-activity.mjs";
+  sessionActivityInternals,
+} from "../../plugins/nuanu-flow-worker/scripts/worker/session_activity.mjs";
 
 const repoRoot = REPO_ROOT;
 const codexBin = process.env.CODEX_BIN || "codex";
@@ -49,6 +51,14 @@ async function startMcpFixture() {
   const nonce = randomUUID();
   const requests = [];
   const toolCalls = [];
+  const state = {
+    available: true,
+    onboarding: {
+      complete: true,
+      current_step: "complete",
+    },
+    gateWritesOnOnboarding: true,
+  };
   const server = http.createServer(async (req, res) => {
     let body = null;
     try {
@@ -64,6 +74,12 @@ async function startMcpFixture() {
       agentKey: req.headers["x-agent-key"] || "",
       workspace: req.headers["x-plane-workspace"] || "",
     });
+
+    if (!state.available) {
+      return jsonResponse(res, 503, {
+        error: "acceptance MCP temporarily unavailable",
+      });
+    }
 
     if (req.method === "GET" && req.url === "/mcp") {
       return jsonResponse(res, 405, { error: "SSE stream not available" });
@@ -110,33 +126,134 @@ async function startMcpFixture() {
               openWorldHint: false,
             },
           },
+          {
+            name: "onboarding_next",
+            description:
+              "Return the authoritative onboarding status when the user explicitly requests it.",
+            inputSchema: {
+              type: "object",
+              properties: {},
+              additionalProperties: false,
+            },
+            annotations: {
+              readOnlyHint: true,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: false,
+            },
+          },
+          {
+            name: "list_flow_items",
+            description:
+              "List the current user's Flow items. This is a read-only ordinary product operation and must not preflight onboarding.",
+            inputSchema: {
+              type: "object",
+              properties: {},
+              additionalProperties: false,
+            },
+            annotations: {
+              readOnlyHint: true,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: false,
+            },
+          },
+          {
+            name: "create_flow_item",
+            description:
+              "Create a Flow item. If the server returns onboarding_required, call onboarding_next once for recovery instructions and do not retry this write automatically.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+              },
+              required: ["name"],
+              additionalProperties: false,
+            },
+            annotations: {
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: false,
+              openWorldHint: false,
+            },
+          },
         ],
       };
     } else if (body.method === "tools/call") {
-      if (body.params?.name !== "flow_dev_identity") {
+      const toolName = body.params?.name;
+      if (toolName === "onboarding_next") {
+        const onboarding = { ...state.onboarding };
+        toolCalls.push({ name: toolName });
+        result = {
+          content: [{ type: "text", text: JSON.stringify(onboarding) }],
+          structuredContent: onboarding,
+          isError: false,
+        };
+      } else if (toolName === "list_flow_items") {
+        const listing = {
+          count: 1,
+          first_item: "Acceptance Flow item",
+        };
+        toolCalls.push({ name: toolName });
+        result = {
+          content: [{ type: "text", text: JSON.stringify(listing) }],
+          structuredContent: listing,
+          isError: false,
+        };
+      } else if (toolName === "create_flow_item") {
+        toolCalls.push({
+          name: toolName,
+          input: body.params?.arguments || {},
+        });
+        if (state.gateWritesOnOnboarding) {
+          const blocked = {
+            code: "onboarding_required",
+            message:
+              "Finish the current Nuanu Flow onboarding step before creating a Flow item.",
+            retryable: false,
+            recovery: {
+              tool: "onboarding_next",
+            },
+          };
+          result = {
+            content: [{ type: "text", text: JSON.stringify(blocked) }],
+            structuredContent: blocked,
+            isError: true,
+          };
+        } else {
+          const created = { id: "acceptance-item", created: true };
+          result = {
+            content: [{ type: "text", text: JSON.stringify(created) }],
+            structuredContent: created,
+            isError: false,
+          };
+        }
+      } else if (toolName === "flow_dev_identity") {
+        const identity = {
+          environment: "LOCAL DEVELOPMENT",
+          authenticated: Boolean(
+            req.headers["x-plane-user-token"] || req.headers["x-agent-key"],
+          ),
+          nonce,
+        };
+        toolCalls.push({
+          name: toolName,
+          ...identity,
+          userToken: req.headers["x-plane-user-token"] || "",
+          agentKey: req.headers["x-agent-key"] || "",
+        });
+        result = {
+          content: [{ type: "text", text: JSON.stringify(identity) }],
+          structuredContent: identity,
+          isError: false,
+        };
+      } else {
         return jsonResponse(res, 200, {
           jsonrpc: "2.0",
           id: body.id,
           error: { code: -32601, message: "unknown tool" },
         });
       }
-      const identity = {
-        environment: "LOCAL DEVELOPMENT",
-        authenticated: Boolean(
-          req.headers["x-plane-user-token"] || req.headers["x-agent-key"],
-        ),
-        nonce,
-      };
-      toolCalls.push({
-        ...identity,
-        userToken: req.headers["x-plane-user-token"] || "",
-        agentKey: req.headers["x-agent-key"] || "",
-      });
-      result = {
-        content: [{ type: "text", text: JSON.stringify(identity) }],
-        structuredContent: identity,
-        isError: false,
-      };
     } else if (body.method === "ping") {
       result = {};
     } else {
@@ -158,6 +275,7 @@ async function startMcpFixture() {
     url: `http://127.0.0.1:${port}/mcp`,
     requests,
     toolCalls,
+    state,
     nonce,
     close: () => new Promise((resolve) => server.close(resolve)),
   };
@@ -190,6 +308,9 @@ async function startWorkerFixture(task) {
       if (fetched) return jsonResponse(res, 200, { tasks: [] });
       fetched = true;
       return jsonResponse(res, 200, { tasks: [task] });
+    }
+    if (req.url.match(/^\/agent-worker\/tasks\/[^/]+\/(checkpoint|events|renew)\/$/)) {
+      return jsonResponse(res, 200, { status: "ok" });
     }
     const complete = req.url.match(
       /^\/agent-worker\/tasks\/([^/]+)\/complete\/$/,
@@ -249,7 +370,11 @@ function assertDevelopmentOnly(value, label) {
   );
 }
 
-async function assertPackagedSessionHook(pluginRoot, label) {
+async function assertPackagedSessionHook(
+  pluginRoot,
+  workerPluginRoot,
+  label,
+) {
   const manifest = parseJsonOutput(
     `${label} manifest`,
     await fs.readFile(
@@ -257,18 +382,35 @@ async function assertPackagedSessionHook(pluginRoot, label) {
       "utf8",
     ),
   );
-  assert.equal(manifest.hooks, "./hooks/hooks.json");
+  assert.equal(manifest.hooks, "./hooks/codex-hooks.json");
   const hookConfig = parseJsonOutput(
     `${label} hook config`,
     await fs.readFile(path.join(pluginRoot, manifest.hooks), "utf8"),
   );
   const group = hookConfig.hooks?.SessionStart?.[0];
   const handler = group?.hooks?.[0];
-  const promptGroup = hookConfig.hooks?.UserPromptSubmit?.[0];
-  const promptHandler = promptGroup?.hooks?.[0];
-  assert.equal(group?.matcher, "startup|resume|clear|compact");
+  assert.equal(group?.matcher, "startup|clear|compact");
   assert.equal(handler?.timeout, 1);
   assert.match(handler?.command || "", /session-start\.mjs/);
+  assert.equal(hookConfig.hooks?.UserPromptSubmit, undefined);
+  const workerManifest = parseJsonOutput(
+    `${label} worker manifest`,
+    await fs.readFile(
+      path.join(workerPluginRoot, ".codex-plugin/plugin.json"),
+      "utf8",
+    ),
+  );
+  assert.equal(workerManifest.mcpServers, undefined);
+  const workerHookConfig = parseJsonOutput(
+    `${label} worker hook config`,
+    await fs.readFile(
+      path.join(workerPluginRoot, workerManifest.hooks),
+      "utf8",
+    ),
+  );
+  const promptGroup = workerHookConfig.hooks?.UserPromptSubmit?.[0];
+  const promptHandler = promptGroup?.hooks?.[0];
+  assert.equal(workerHookConfig.hooks?.SessionStart, undefined);
   assert.equal(promptGroup?.matcher, undefined);
   assert.equal(promptHandler?.timeout, 1);
   assert.equal(promptHandler?.additionalContextLimit, 500);
@@ -277,52 +419,113 @@ async function assertPackagedSessionHook(pluginRoot, label) {
     /user-prompt-submit\.mjs/,
   );
   await fs.access(
-    path.join(pluginRoot, "hooks/user-prompt-submit.mjs"),
+    path.join(workerPluginRoot, "hooks/user-prompt-submit.mjs"),
   );
   const scriptPath = path.join(pluginRoot, "hooks/session-start.mjs");
   const durations = [];
-  for (const source of ["startup", "resume", "clear", "compact"]) {
-    for (let iteration = 0; iteration < 4; iteration++) {
-      const started = performance.now();
+  const nodeStartupDurations = [];
+  const bindingRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), "nuanu-hook-acceptance-"),
+  );
+  const unboundRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), "nuanu-hook-unbound-"),
+  );
+  try {
+    await fs.mkdir(path.join(bindingRoot, ".git"));
+    await fs.mkdir(path.join(unboundRoot, ".git"));
+    await fs.writeFile(
+      path.join(bindingRoot, ".nuanu-flow.json"),
+      `${JSON.stringify({
+        version: 1,
+        workspace_slug: "acceptance",
+        project_identifier: "HOOK",
+      })}\n`,
+    );
+    for (const source of ["startup", "clear", "compact"]) {
+      for (let iteration = 0; iteration < 4; iteration++) {
+        const nodeStarted = performance.now();
+        const nodeResult = spawnSync(process.execPath, ["-e", ""], {
+          cwd: bindingRoot,
+          encoding: "utf8",
+        });
+        nodeStartupDurations.push(performance.now() - nodeStarted);
+        assert.equal(nodeResult.status, 0, nodeResult.stderr);
+        const started = performance.now();
+        const result = spawnSync(process.execPath, [scriptPath], {
+          cwd: bindingRoot,
+          encoding: "utf8",
+          input: JSON.stringify({
+            session_id: "acceptance-session",
+            transcript_path: null,
+            cwd: bindingRoot,
+            hook_event_name: "SessionStart",
+            model: "acceptance",
+            permission_mode: "default",
+            source,
+            credential_probe: "MUST_NOT_APPEAR",
+          }),
+        });
+        durations.push(performance.now() - started);
+        assert.equal(result.status, 0, result.stderr);
+        assert.doesNotMatch(result.stdout, /MUST_NOT_APPEAR/);
+        const output = parseJsonOutput(`${label} ${source} hook`, result.stdout);
+        const context = output.hookSpecificOutput?.additionalContext || "";
+        assert.match(context, /Repository binding/);
+        assert.match(context, /workspace "acceptance"/);
+        assert.match(context, /project "HOOK"/);
+        assert.doesNotMatch(
+          context,
+          /onboarding_next|onboarding|first actual turn/i,
+        );
+      }
+    }
+
+    for (const [source, cwd] of [
+      ["resume", bindingRoot],
+      ["startup", unboundRoot],
+    ]) {
       const result = spawnSync(process.execPath, [scriptPath], {
-        cwd: repoRoot,
+        cwd,
         encoding: "utf8",
         input: JSON.stringify({
           session_id: "acceptance-session",
           transcript_path: null,
-          cwd: repoRoot,
+          cwd,
           hook_event_name: "SessionStart",
-          model: "acceptance",
-          permission_mode: "default",
           source,
-          credential_probe: "MUST_NOT_APPEAR",
         }),
       });
-      durations.push(performance.now() - started);
       assert.equal(result.status, 0, result.stderr);
-      assert.doesNotMatch(result.stdout, /MUST_NOT_APPEAR/);
-      const output = parseJsonOutput(`${label} ${source} hook`, result.stdout);
-      const context =
-        output.hookSpecificOutput?.additionalContext || "";
-      assert.match(context, /Nuanu Flow/);
-      assert.match(context, /onboarding_next/);
-      assert(
-        context.trim().split(/\s+/).length <= 80,
-        `${label} ${source} hook context exceeds 80 words`,
-      );
+      assert.equal(result.stdout, "");
     }
+  } finally {
+    await fs.rm(bindingRoot, { recursive: true, force: true });
+    await fs.rm(unboundRoot, { recursive: true, force: true });
   }
   durations.sort((left, right) => left - right);
+  nodeStartupDurations.sort((left, right) => left - right);
   const p95 = durations[Math.ceil(durations.length * 0.95) - 1];
+  const p50 = durations[Math.ceil(durations.length * 0.5) - 1];
+  const nodeStartupP95 =
+    nodeStartupDurations[Math.ceil(nodeStartupDurations.length * 0.95) - 1];
+  const nodeStartupP50 =
+    nodeStartupDurations[Math.ceil(nodeStartupDurations.length * 0.5) - 1];
   assert(
-    p95 < 100,
-    `${label} SessionStart hook p95 ${p95.toFixed(1)}ms exceeds 100ms`,
+    p95 < 750,
+    `${label} SessionStart hook p95 ${p95.toFixed(1)}ms exceeds the 750ms safety ceiling`,
   );
-  return p95;
+  assert(
+    p50 - nodeStartupP50 < 100,
+    `${label} SessionStart hook adds ${(p50 - nodeStartupP50).toFixed(1)}ms at p50, exceeding the 100ms incremental budget`,
+  );
+  return { p50, p95, nodeStartupP50, nodeStartupP95 };
 }
 
 async function installIsolatedModes({ codexHome, buildRoot, mcpUrl }) {
-  const env = { NUANU_DEV_MCP_URL: mcpUrl };
+  const env = {
+    NUANU_DEV_MCP_URL: mcpUrl,
+    NUANU_DEV_TOKEN: "acceptance-development-token",
+  };
   const dryRun = await setup({
     repoRoot,
     codexHome,
@@ -338,10 +541,6 @@ async function installIsolatedModes({ codexHome, buildRoot, mcpUrl }) {
     ["nuanu-flow@nuanu", "nuanu-flow-dev@nuanu-dev"],
   );
 
-  const build = await buildDevPackage({
-    buildRoot,
-    env,
-  });
   const homes = {
     prod: codexModeHome("prod", { codexHome }),
     dev: codexModeHome("dev", { codexHome }),
@@ -355,15 +554,103 @@ async function installIsolatedModes({ codexHome, buildRoot, mcpUrl }) {
     codexHome: homes.prod,
   });
   await writeModeMcpConfig("prod", homes.prod, env);
-  actualCodex(
-    ["plugin", "marketplace", "add", build.marketplaceRoot, "--json"],
-    { codexHome: homes.dev },
-  );
-  actualCodex(["plugin", "add", "nuanu-flow-dev@nuanu-dev", "--json"], {
+  const firstDevelopmentInstall = await installCurrentProfile("dev", {
+    repoRoot,
     codexHome: homes.dev,
+    buildRoot,
+    codexBin,
+    env,
   });
   await writeModeMcpConfig("dev", homes.dev, env);
-  return { build, homes };
+  assert.equal(
+    firstDevelopmentInstall.authStatus,
+    "environment_credential",
+  );
+  assert(
+    firstDevelopmentInstall.actions.some((action) =>
+      action.includes("installed nuanu-flow-dev@nuanu-dev"),
+    ),
+    `first current-profile install must install the plugin: ${JSON.stringify(firstDevelopmentInstall.actions)}`,
+  );
+  const secondDevelopmentInstall = await installCurrentProfile("dev", {
+    repoRoot,
+    codexHome: homes.dev,
+    buildRoot,
+    codexBin,
+    env,
+  });
+  assert.deepEqual(
+    secondDevelopmentInstall.actions,
+    [],
+    "re-running the current-profile installer must be idempotent",
+  );
+  return {
+    build: firstDevelopmentInstall.build,
+    homes,
+    env,
+    firstDevelopmentInstall,
+    secondDevelopmentInstall,
+  };
+}
+
+async function installUnrelatedSentinel(codexHome, tempRoot) {
+  const marketplaceRoot = path.join(tempRoot, "unrelated-marketplace");
+  const pluginRoot = path.join(
+    marketplaceRoot,
+    "plugins",
+    "acceptance-sentinel",
+  );
+  await fs.mkdir(path.join(marketplaceRoot, ".agents/plugins"), {
+    recursive: true,
+  });
+  await fs.mkdir(path.join(pluginRoot, ".codex-plugin"), {
+    recursive: true,
+  });
+  await fs.writeFile(
+    path.join(marketplaceRoot, ".agents/plugins/marketplace.json"),
+    `${JSON.stringify(
+      {
+        name: "acceptance-sentinel",
+        plugins: [
+          {
+            name: "acceptance-sentinel",
+            source: { source: "local", path: "./plugins/acceptance-sentinel" },
+            policy: { installation: "AVAILABLE", authentication: "ON_USE" },
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  await fs.writeFile(
+    path.join(pluginRoot, ".codex-plugin/plugin.json"),
+    `${JSON.stringify(
+      {
+        name: "acceptance-sentinel",
+        version: "1.0.0",
+        description: "Unrelated plugin used to verify scoped removal.",
+        author: { name: "Acceptance" },
+        license: "MIT",
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  actualCodex(
+    ["plugin", "marketplace", "add", marketplaceRoot, "--json"],
+    { codexHome },
+  );
+  actualCodex(
+    [
+      "plugin",
+      "add",
+      "acceptance-sentinel@acceptance-sentinel",
+      "--json",
+    ],
+    { codexHome },
+  );
+  return "acceptance-sentinel@acceptance-sentinel";
 }
 
 async function runCredentialFreeAcceptance(mcp) {
@@ -380,14 +667,14 @@ async function runCredentialFreeAcceptance(mcp) {
       mcpUrl: mcp.url,
     });
     const prodMcp = parseJsonOutput(
-      "production mcp list",
-      actualCodex(["mcp", "list", "--json"], {
+      "production mcp config",
+      actualCodex(["mcp", "get", "nuanu-flow", "--json"], {
         codexHome: installed.homes.prod,
       }).stdout,
     );
     const devMcp = parseJsonOutput(
-      "development mcp list",
-      actualCodex(["mcp", "list", "--json"], {
+      "development mcp config",
+      actualCodex(["mcp", "get", "nuanu-flow", "--json"], {
         codexHome: installed.homes.dev,
       }).stdout,
     );
@@ -405,23 +692,15 @@ async function runCredentialFreeAcceptance(mcp) {
     );
 
     assert.deepEqual(
-      prodMcp.filter((server) => server.name === "nuanu-flow").map((server) => ({
-        name: server.name,
-        url: server.transport.url,
-      })),
-      [
-        {
-          name: "nuanu-flow",
-          url: "https://flow.nuanu.com/mcp-server/mcp",
-        },
-      ],
+      { name: prodMcp.name, url: prodMcp.transport.url },
+      {
+        name: "nuanu-flow",
+        url: "https://flow.nuanu.com/mcp-server/mcp",
+      },
     );
     assert.deepEqual(
-      devMcp.filter((server) => server.name === "nuanu-flow").map((server) => ({
-        name: server.name,
-        url: server.transport.url,
-      })),
-      [{ name: "nuanu-flow", url: mcp.url }],
+      { name: devMcp.name, url: devMcp.transport.url },
+      { name: "nuanu-flow", url: mcp.url },
     );
     assertDevelopmentOnly(devMcp, "isolated development MCP list");
     assert.deepEqual(
@@ -448,16 +727,66 @@ async function runCredentialFreeAcceptance(mcp) {
       productionManifest.mcpServers["nuanu-flow"].url,
       /localhost|127\.0\.0\.1|\[::1\]/,
     );
-    const productionP95 = await assertPackagedSessionHook(
+    const productionTiming = await assertPackagedSessionHook(
       productionRoot,
+      path.join(repoRoot, "plugins/nuanu-flow-worker"),
       "production",
     );
-    const developmentP95 = await assertPackagedSessionHook(
+    const developmentTiming = await assertPackagedSessionHook(
       installed.build.pluginRoot,
+      installed.build.workerPluginRoot,
       "development",
     );
+    const sentinelPluginId = await installUnrelatedSentinel(
+      codexHome,
+      tempRoot,
+    );
+    const basePluginsBeforeRemoval = parseJsonOutput(
+      "base plugins before scoped removal",
+      actualCodex(["plugin", "list", "--available", "--json"], {
+        codexHome,
+      }).stdout,
+    );
+    const unrelatedPluginIds = basePluginsBeforeRemoval.installed
+      .map((plugin) => plugin.pluginId)
+      .filter((pluginId) => !pluginId.includes("nuanu-flow"));
+    assert(
+      unrelatedPluginIds.includes(sentinelPluginId),
+      "the base profile must retain the unrelated sentinel plugin for scoped-removal verification",
+    );
+    const removal = await removeNuanuFlow({
+      repoRoot,
+      codexHome,
+      buildRoot,
+      codexBin,
+      env: installed.env,
+      keychain: { async remove() { return false; } },
+    });
+    assert(
+      removal.actions.some(
+        (action) =>
+          action.kind === "command" &&
+          action.args?.includes("nuanu-flow-dev@nuanu-dev"),
+      ),
+      "scoped removal must remove the installed development plugin",
+    );
+    await assert.rejects(fs.access(installed.homes.dev));
+    const basePluginsAfterRemoval = parseJsonOutput(
+      "base plugins after scoped removal",
+      actualCodex(["plugin", "list", "--available", "--json"], {
+        codexHome,
+      }).stdout,
+    );
+    for (const pluginId of unrelatedPluginIds) {
+      assert(
+        basePluginsAfterRemoval.installed.some(
+          (plugin) => plugin.pluginId === pluginId,
+        ),
+        `scoped removal must preserve unrelated plugin ${pluginId}`,
+      );
+    }
     console.log(
-      `credential-free: real Codex installed both modes; SessionStart hooks passed (prod p95=${productionP95.toFixed(1)}ms, dev p95=${developmentP95.toFixed(1)}ms)`,
+      `credential-free: real current-profile install was idempotent, scoped removal preserved unrelated plugins, and SessionStart hooks passed (prod p95=${productionTiming.p95.toFixed(1)}ms/node=${productionTiming.nodeStartupP95.toFixed(1)}ms, dev p95=${developmentTiming.p95.toFixed(1)}ms/node=${developmentTiming.nodeStartupP95.toFixed(1)}ms)`,
     );
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
@@ -470,6 +799,7 @@ async function runModelExec({
   schemaPath,
   outputPath,
   prompt,
+  autoApproveMcpWrites = false,
 }) {
   const args = [
     "exec",
@@ -479,6 +809,12 @@ async function runModelExec({
     "read-only",
     "--color",
     "never",
+    ...(autoApproveMcpWrites
+      ? [
+          "--config",
+          'mcp_servers.nuanu-flow.default_tools_approval_mode="auto"',
+        ]
+      : []),
     "--output-schema",
     schemaPath,
     "--output-last-message",
@@ -557,7 +893,7 @@ async function waitForValue(check, timeoutMs, label) {
 
 async function readActivityRecords(activityDirectory, sessionId) {
   const eventDirectory = path.join(
-    activityInternals.sessionDirectory(activityDirectory, sessionId),
+    sessionActivityInternals.sessionDirectory(activityDirectory, sessionId),
     "events",
   );
   try {
@@ -590,28 +926,44 @@ async function runRealWorker({
   buildEnv,
   mcp,
   tempRoot,
-  pluginRoot,
+  workerPluginRoot,
 }) {
   const task = {
-    task_id: "codex-app-server-acceptance",
+    task_id: "44444444-4444-4444-8444-444444444444",
+    run_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
     step_id: "step-1",
     step_name: "Real Codex App Server",
-    instruction:
-      "Use tool_search to load flow_dev_identity, then call it exactly once. Return only JSON with environment, authenticated, and nonce from the tool response.",
-    context: { acceptance: true },
-    output_schema: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        environment: { type: "string" },
-        authenticated: { type: "boolean" },
-        nonce: { type: "string" },
+    contract_version: "nuanu.agent-task.v1",
+    request: {
+      schema_version: "nuanu.agent-task.request.v1",
+      instruction:
+        "Use tool_search to load flow_dev_identity, then call it exactly once. Put its environment, authenticated, and nonce fields in item.data and return the exact required Process result JSON.",
+      process: { step_key: "mcp_identity" },
+      input: { acceptance: true },
+      output_definition: {
+        data: {
+          environment: { type: "string" },
+          authenticated: { type: "boolean" },
+          nonce: { type: "string" },
+        },
+        artifacts: {},
       },
-      required: ["environment", "authenticated", "nonce"],
     },
-    system_prompt:
-      "You are running the Nuanu Flow Codex App Server acceptance test.",
+    configuration_snapshot: {
+      system_prompt:
+        "You are running the Nuanu Flow Codex App Server acceptance test.",
+    },
+    workspace: "nuanu",
     agent_key: "per-task-acceptance-key",
+    lease_token: "acceptance-lease-token",
+    lease_generation: 1,
+    attempt: 1,
+    internal_mcp: {
+      url: mcp.url,
+      transport: "streamable_http",
+      authentication: { type: "task_credential", header: "X-Agent-Key" },
+      workspace_header: "X-Plane-Workspace",
+    },
   };
   const worker = await startWorkerFixture(task);
   const ownerSessionId = "codex-remote-worker-acceptance-owner";
@@ -660,9 +1012,12 @@ async function runRealWorker({
       300000,
       "real App Server worker",
     );
-    assert.equal(completed.body.status, "ok");
-    assert.match(String(completed.body.output), /LOCAL DEVELOPMENT/);
-    assert.match(String(completed.body.output), new RegExp(mcp.nonce));
+    assert.equal(completed.body.completion?.outcome, "success");
+    assert.deepEqual(completed.body.completion.result.item.data, {
+      environment: "LOCAL DEVELOPMENT",
+      authenticated: true,
+      nonce: mcp.nonce,
+    });
     assert(
       completed.requests
         .filter((request) => request.method === "POST")
@@ -697,14 +1052,17 @@ async function runRealWorker({
     assert.doesNotMatch(serializedActivity, /per-task-acceptance-key/);
     assert.doesNotMatch(serializedActivity, new RegExp(mcp.nonce));
     assert(
-      activityRecords.some((event) => event.kind === "task.started"),
+      activityRecords.some((event) => event.kind === "task.claimed"),
+    );
+    assert(
+      activityRecords.some((event) => event.kind === "task.progress"),
     );
     assert(
       activityRecords.some((event) => event.kind === "task.completed"),
     );
 
     const hookScript = path.join(
-      pluginRoot,
+      workerPluginRoot,
       "hooks/user-prompt-submit.mjs",
     );
     const hookPayload = (sessionId) =>
@@ -795,6 +1153,20 @@ async function runModelBackedAcceptance(mcp, options = {}) {
   const outputPath = path.join(tempRoot, "model-output.json");
   const markerSchemaPath = path.join(tempRoot, "marker-schema.json");
   const markerOutputPath = path.join(tempRoot, "marker-output.json");
+  const onboardingSchemaPath = path.join(tempRoot, "onboarding-schema.json");
+  const onboardingOutputPath = path.join(tempRoot, "onboarding-output.json");
+  const listSchemaPath = path.join(tempRoot, "list-schema.json");
+  const listOutputPath = path.join(tempRoot, "list-output.json");
+  const recoverySchemaPath = path.join(tempRoot, "recovery-schema.json");
+  const recoveryOutputPath = path.join(tempRoot, "recovery-output.json");
+  const availabilitySchemaPath = path.join(
+    tempRoot,
+    "availability-schema.json",
+  );
+  const availabilityOutputPath = path.join(
+    tempRoot,
+    "availability-output.json",
+  );
   const buildEnv = {
     NUANU_DEV_MCP_URL: mcp.url,
     NUANU_DEV_TOKEN: "acceptance-development-token",
@@ -852,6 +1224,10 @@ async function runModelBackedAcceptance(mcp, options = {}) {
       ["plugin", "add", "nuanu-flow-dev@nuanu-dev", "--json"],
       { codexHome: devHome },
     );
+    actualCodex(
+      ["plugin", "add", "nuanu-flow-worker-dev@nuanu-dev", "--json"],
+      { codexHome: devHome },
+    );
     await writeModeMcpConfig("dev", devHome, buildEnv);
 
     const prodBefore = actualCodex(
@@ -896,7 +1272,7 @@ async function runModelBackedAcceptance(mcp, options = {}) {
         buildEnv,
         mcp,
         tempRoot,
-        pluginRoot: firstBuild.pluginRoot,
+        workerPluginRoot: firstBuild.workerPluginRoot,
       });
       console.log("model-backed: App Server worker wrapper passed");
       return;
@@ -949,6 +1325,223 @@ async function runModelBackedAcceptance(mcp, options = {}) {
       await fs.readFile(outputPath, "utf8"),
     );
     assert.deepEqual(secondOutput, firstOutput);
+    assert.equal(
+      mcp.toolCalls.filter((call) => call.name === "onboarding_next").length,
+      0,
+      "ordinary fresh Codex sessions must not preflight onboarding",
+    );
+
+    await fs.writeFile(
+      onboardingSchemaPath,
+      `${JSON.stringify(
+        {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            complete: { type: "boolean" },
+            current_step: { type: "string" },
+          },
+          required: ["complete", "current_step"],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    await runModelExec({
+      codexHome: devHome,
+      env: buildEnv,
+      schemaPath: onboardingSchemaPath,
+      outputPath: onboardingOutputPath,
+      prompt:
+        "Explicitly check my Nuanu Flow onboarding status. Find and call onboarding_next exactly once, then return its complete and current_step fields.",
+    });
+    assert.deepEqual(
+      parseJsonOutput(
+        "explicit onboarding model output",
+        await fs.readFile(onboardingOutputPath, "utf8"),
+      ),
+      { complete: true, current_step: "complete" },
+    );
+    assert.equal(
+      mcp.toolCalls.filter((call) => call.name === "onboarding_next").length,
+      1,
+      "explicit onboarding intent must perform one authoritative status check",
+    );
+    if (options.sessionsOnly) {
+      console.log(
+        "model-backed: ordinary sessions skipped onboarding and explicit status checked exactly once",
+      );
+      return;
+    }
+
+    if (options.journey) {
+      await fs.writeFile(
+        listSchemaPath,
+        `${JSON.stringify(
+          {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              count: { type: "integer" },
+              first_item: { type: "string" },
+            },
+            required: ["count", "first_item"],
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      const onboardingCallsBeforeRead = mcp.toolCalls.filter(
+        (call) => call.name === "onboarding_next",
+      ).length;
+      await runModelExec({
+        codexHome: devHome,
+        env: buildEnv,
+        schemaPath: listSchemaPath,
+        outputPath: listOutputPath,
+        prompt:
+          "List my Nuanu Flow items. Find and call list_flow_items exactly once, return its count and first_item fields, and do not check onboarding.",
+      });
+      assert.deepEqual(
+        parseJsonOutput(
+          "ordinary Flow usage output",
+          await fs.readFile(listOutputPath, "utf8"),
+        ),
+        { count: 1, first_item: "Acceptance Flow item" },
+      );
+      assert.equal(
+        mcp.toolCalls.filter((call) => call.name === "onboarding_next").length,
+        onboardingCallsBeforeRead,
+        "ordinary Flow usage must not preflight onboarding",
+      );
+
+      mcp.state.onboarding = {
+        complete: false,
+        current_step: "workspace",
+      };
+      const onboardingCallsBeforeIncomplete = mcp.toolCalls.filter(
+        (call) => call.name === "onboarding_next",
+      ).length;
+      await runModelExec({
+        codexHome: devHome,
+        env: buildEnv,
+        schemaPath: onboardingSchemaPath,
+        outputPath: onboardingOutputPath,
+        prompt:
+          "Continue my Nuanu Flow first-run setup. Call onboarding_next exactly once and return only its complete and current_step fields. Do not invent or perform later setup steps.",
+      });
+      assert.deepEqual(
+        parseJsonOutput(
+          "incomplete onboarding model output",
+          await fs.readFile(onboardingOutputPath, "utf8"),
+        ),
+        { complete: false, current_step: "workspace" },
+      );
+      assert.equal(
+        mcp.toolCalls.filter((call) => call.name === "onboarding_next").length,
+        onboardingCallsBeforeIncomplete + 1,
+        "incomplete setup continuation must consult the authoritative step once",
+      );
+
+      await fs.writeFile(
+        recoverySchemaPath,
+        `${JSON.stringify(
+          {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              code: { type: "string" },
+              current_step: { type: "string" },
+              retried_write: { type: "boolean" },
+            },
+            required: ["code", "current_step", "retried_write"],
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      const createCallsBefore = mcp.toolCalls.filter(
+        (call) => call.name === "create_flow_item",
+      ).length;
+      const onboardingCallsBeforeRecovery = mcp.toolCalls.filter(
+        (call) => call.name === "onboarding_next",
+      ).length;
+      await runModelExec({
+        codexHome: devHome,
+        env: buildEnv,
+        schemaPath: recoverySchemaPath,
+        outputPath: recoveryOutputPath,
+        autoApproveMcpWrites: true,
+        prompt:
+          "Create a Nuanu Flow item named Acceptance gated write. Call create_flow_item once. If it returns onboarding_required, do not retry the write; call onboarding_next exactly once and return code onboarding_required, its current_step, and retried_write false.",
+      });
+      assert.deepEqual(
+        parseJsonOutput(
+          "gated operation recovery output",
+          await fs.readFile(recoveryOutputPath, "utf8"),
+        ),
+        {
+          code: "onboarding_required",
+          current_step: "workspace",
+          retried_write: false,
+        },
+      );
+      assert.equal(
+        mcp.toolCalls.filter((call) => call.name === "create_flow_item").length,
+        createCallsBefore + 1,
+        "a gated write must not be retried automatically",
+      );
+      assert.equal(
+        mcp.toolCalls.filter((call) => call.name === "onboarding_next").length,
+        onboardingCallsBeforeRecovery + 1,
+        "a gated operation must perform one bounded recovery call",
+      );
+
+      await fs.writeFile(
+        availabilitySchemaPath,
+        `${JSON.stringify(
+          {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              marker: { type: "string" },
+            },
+            required: ["marker"],
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      mcp.state.available = false;
+      const offlineStarted = Date.now();
+      try {
+        await runModelExec({
+          codexHome: devHome,
+          env: buildEnv,
+          schemaPath: availabilitySchemaPath,
+          outputPath: availabilityOutputPath,
+          prompt:
+            "Do not call any tools. Return marker exactly as unrelated-work-still-works.",
+        });
+      } finally {
+        mcp.state.available = true;
+      }
+      assert.deepEqual(
+        parseJsonOutput(
+          "unrelated work during MCP outage",
+          await fs.readFile(availabilityOutputPath, "utf8"),
+        ),
+        { marker: "unrelated-work-still-works" },
+      );
+      assert(
+        Date.now() - offlineStarted < 30_000,
+        "an optional unavailable Nuanu MCP must not block unrelated Codex work for 30 seconds",
+      );
+      console.log(
+        "model-backed journey: ordinary usage, incomplete setup, gated recovery, and MCP-outage isolation passed",
+      );
+      return;
+    }
 
     const marker = `ACCEPTANCE_MARKER_codex_dev_refresh_${Date.now()}`;
     await fs.appendFile(
@@ -965,6 +1558,10 @@ async function runModelBackedAcceptance(mcp, options = {}) {
     assert.notEqual(refreshed.version, firstBuild.version);
     actualCodex(
       ["plugin", "add", "nuanu-flow-dev@nuanu-dev", "--json"],
+      { codexHome: devHome },
+    );
+    actualCodex(
+      ["plugin", "add", "nuanu-flow-worker-dev@nuanu-dev", "--json"],
       { codexHome: devHome },
     );
     await fs.writeFile(
@@ -1003,7 +1600,7 @@ async function runModelBackedAcceptance(mcp, options = {}) {
       buildEnv,
       mcp,
       tempRoot,
-      pluginRoot: refreshed.pluginRoot,
+      workerPluginRoot: refreshed.workerPluginRoot,
     });
 
     const prodAfter = actualCodex(
@@ -1037,6 +1634,8 @@ async function main() {
       (arg) =>
         arg !== "--model" &&
         arg !== "--worker-only" &&
+        arg !== "--sessions-only" &&
+        arg !== "--journey" &&
         arg !== "--skip-credential-free",
     );
   if (unknownArgs.length) {
@@ -1057,6 +1656,8 @@ async function main() {
     }
     await runModelBackedAcceptance(mcp, {
       workerOnly: process.argv.includes("--worker-only"),
+      sessionsOnly: process.argv.includes("--sessions-only"),
+      journey: process.argv.includes("--journey"),
     });
   } finally {
     await mcp.close();

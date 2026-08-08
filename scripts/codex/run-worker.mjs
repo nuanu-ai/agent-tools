@@ -15,7 +15,11 @@ import { preflight } from "./status.mjs";
 
 const WORKER_SCRIPT = path.join(
   REPO_ROOT,
-  "plugins/nuanu-flow/scripts/worker/worker.mjs",
+  "plugins/nuanu-flow-worker/scripts/worker/worker.mjs",
+);
+const AGENT_BUS_SCRIPT = path.join(
+  REPO_ROOT,
+  "plugins/nuanu-flow/scripts/agent-bus/agent-bus.mjs",
 );
 
 function assertLocalUrl(rawUrl, label) {
@@ -60,6 +64,7 @@ function workerBanner(mode, env) {
     `API: ${env.NUANU_URL}`,
     `Gateway: ${env.NUANU_GATEWAY_URL}`,
     `Adapter: ${env.NUANU_ADAPTER}`,
+    `Agent bus: ${env.NUANU_AGENT_BUS_SCRIPT}`,
     `Codex home: ${env.CODEX_HOME}`,
     "=".repeat(72),
   ].join("\n");
@@ -96,6 +101,8 @@ export function buildWorkerLaunch(modeName, options = {}) {
   env.NUANU_AGENT_KEY = agentKey;
   env[mode.agentKeyEnv] = agentKey;
   env.NUANU_ADAPTER = sourceEnv.NUANU_ADAPTER || "codex-app-server";
+  env.NUANU_AGENT_BUS_SCRIPT =
+    sourceEnv.NUANU_AGENT_BUS_SCRIPT || AGENT_BUS_SCRIPT;
   env.NUANU_CODEX_APP_SERVER_ARGS =
     sourceEnv.NUANU_CODEX_APP_SERVER_ARGS || "app-server --stdio";
   env.CODEX_HOME = codexModeHome(modeName, {

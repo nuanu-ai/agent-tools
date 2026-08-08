@@ -10,13 +10,15 @@ BPMN **processes** orchestrate humans and AI **agent employees**, **decisions**
 gate approvals, and an **artifacts** registry stores versioned files. You talk
 to it through the bundled `nuanu-flow` MCP server.
 
-## Session activation
+## Onboarding and repository activation
 
-On a startup or resume turn, treat Nuanu Flow as the session's task tracker.
-When onboarding status is not already established in the thread, call the
-read-only `onboarding_next` tool at most once. Continue only its returned step
-when incomplete. If onboarding is complete, do not interrupt unrelated work.
-If the check is unavailable, continue the user's request without a retry loop.
+Do not run an onboarding preflight merely because a conversation is new,
+resumed, cleared, or compacted. Call the read-only `onboarding_next` tool only
+when the user explicitly asks to set up or inspect onboarding, when the
+installer resumes with `Continue Nuanu Flow setup`, or when a relevant Flow
+operation returns the structured code `onboarding_required`. Call it at most
+once for that explicit trigger, continue only its returned incomplete step,
+and never retry automatically when the check is unavailable.
 
 The SessionStart hook may also provide a repository binding loaded from
 `.nuanu-flow.json`. Discovery is deliberately local and bounded: it walks only
@@ -27,15 +29,17 @@ operation.
 ## Calling convention (read this first)
 
 The `nuanu-flow` MCP server runs in **compact mode** by default and publishes
-only
-two tools:
+three tools:
 
 - `search_tools(query)` — keyword search over the full catalog;
   returns matching tools' names + schemas.
-- `execute_tool(name, arguments)` — run any catalog tool by name.
+- `execute_read_tool(name, arguments)` — run a catalog operation declared
+  read-only without weakening mutation approvals.
+- `execute_tool(name, arguments)` — run a catalog mutation by name.
 
 **Every skill in this plugin names canonical catalog tool names** (e.g.
-`create_issue`). Call them as `execute_tool("create_issue", {...})` — you do
+`create_issue`). Use `execute_read_tool` for `get_*`, `list_*`, `search_*`,
+`validate_*`, and `onboarding_next`; use `execute_tool` for mutations. You do
 not need `search_tools` when a skill already gives you the name and shape.
 If the server was switched to full mode (`?optimize_context=full` on the URL),
 the same names are directly callable as regular MCP tools.
@@ -68,8 +72,9 @@ check.
 For every host, start with the universal installer prompt published in
 `https://flow.nuanu.com/install.md`. In Codex App, mention the installed plugin
 only after installation when the hosted guide requires a same-chat attachment
-attempt. After the host has attached or resumed, prove tool attachment by
-calling `onboarding_next` once before claiming setup is ready.
+attempt. During that explicit install/setup flow, prove tool attachment by
+calling `onboarding_next` once before claiming setup is ready. Ordinary product
+questions and Flow operations do not run this check as a session preflight.
 
 ## Object model
 
@@ -118,19 +123,19 @@ none`), assignees, **labels**, **estimates**, sub-items (parent), relations,
 
 ## Which skill to load
 
-| Job                                                                  | Skill                 |
-| -------------------------------------------------------------------- | --------------------- |
-| Explain a feature, UI path, product term, or external integration    | `product-help`        |
-| First workspace, new account, or zero-workspace setup                | `onboarding`          |
-| Enrich an existing empty workspace with company context and goals    | `workspace-setup`     |
-| Create/search/triage/update Flow items, sprints, relations, comments | `work-items`          |
-| Scaffold a new project (states, labels, estimates, members, views)   | `project-setup`       |
-| Author or operate a BPMN process / approval chain / automation flow  | `bpmn-processes`      |
-| Store, version, search, or link files and documents                  | `artifacts`           |
-| Design, create, connect, or launch a local or remote agent employee  | `create-agent`        |
-| Run this agent as a remote worker executing process agent-tasks      | `remote-worker`       |
-| Install, verify, or locally develop the Codex plugin                 | `codex-setup`         |
-| Run remote-worker tasks through Codex App Server                     | `codex-remote-worker` |
+| Job                                                                  | Skill                       |
+| -------------------------------------------------------------------- | --------------------------- |
+| Explain a feature, UI path, product term, or external integration    | `product-help`              |
+| First workspace, new account, or zero-workspace setup                | `onboarding`                |
+| Enrich an existing empty workspace with company context and goals    | `workspace-setup`           |
+| Create/search/triage/update Flow items, sprints, relations, comments | `work-items`                |
+| Scaffold a new project (states, labels, estimates, members, views)   | `project-setup`             |
+| Author or operate a BPMN process / approval chain / automation flow  | `bpmn-processes`            |
+| Store, version, search, or link files and documents                  | `artifacts`                 |
+| Design, create, connect, or launch a local or remote agent employee  | `create-agent`              |
+| Run this agent as a remote worker executing process agent-tasks      | `remote-worker`             |
+| Install, verify, or locally develop the Codex plugin                 | `codex-setup`               |
+| Run remote-worker tasks through Codex App Server                     | `codex-remote-worker`       |
 | Run remote-worker tasks through Claude Code                          | `claude-code-remote-worker` |
 
 For Codex remote enrollment, use the versionless instructions at
@@ -140,7 +145,7 @@ needed.
 
 ## Tools Used
 
-`search_tools`, `execute_tool`, `list_workspaces`, `get_workspace`, `list_projects`, `search_issues`
+`search_tools`, `execute_read_tool`, `execute_tool`, `list_workspaces`, `get_workspace`, `list_projects`, `search_issues`
 
 ## Portable fallback bundle
 
@@ -167,9 +172,13 @@ read exactly the relevant bundled reference:
 | Project scaffolding | [project setup](references/project-setup.md) |
 | Flow items, cycles, relations, and comments | [work items](references/work-items.md) |
 | BPMN process authoring and operation | [BPMN processes](references/bpmn-processes.md) |
+| Refining an existing Process without rebuilding it | [process refinement](references/process-refine.md) |
+| Human-input forms, approvals, and resumable waits | [human input](references/human-input.md) |
 | Versioned files and documents | [artifacts](references/artifacts.md) |
 | Agent design, creation, or connection | [create agent](references/create-agent.md) |
 | Generic remote-worker operation | [remote worker](references/remote-worker.md) |
+| Telegram channel linking and scoped delivery | [Telegram](references/telegram.md) |
+| Workspace wiki pages and durable knowledge | [wiki](references/wiki.md) |
 
 For a generic remote agent, use the bundled zero-dependency polling worker.
 It has no hooks and does not install a plugin:

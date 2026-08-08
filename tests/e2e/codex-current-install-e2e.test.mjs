@@ -284,3 +284,147 @@ test("current-profile production install uses the canonical marketplace and nati
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test("remote-agent install enables the matched pair without human OAuth or onboarding", async () => {
+  const tempRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), "nuanu-current-worker-pair-"),
+  );
+  const codexHome = path.join(tempRoot, "codex-home");
+  const statePath = path.join(tempRoot, "state.json");
+  const logPath = path.join(tempRoot, "commands.jsonl");
+  try {
+    await fs.mkdir(codexHome, { recursive: true });
+    await fs.writeFile(
+      statePath,
+      `${JSON.stringify({ marketplaces: [], installed: [], mcpAuth: {} })}\n`,
+    );
+
+    const report = await installCurrentProfile("prod", {
+      repoRoot,
+      codexHome,
+      codexBin: fakeCodexBin,
+      remoteAgent: true,
+      env: {
+        ...process.env,
+        FAKE_CODEX_STATE: statePath,
+        FAKE_CODEX_LOG: logPath,
+        FAKE_EXPECT_CODEX_HOME: codexHome,
+      },
+    });
+
+    assert.deepEqual(report.pluginIds, [
+      "nuanu-flow@nuanu",
+      "nuanu-flow-worker@nuanu",
+    ]);
+    assert.equal(report.authStatus, "skipped");
+    assert.equal(report.lifecycle.authentication, "skipped");
+    const state = await readJson(statePath);
+    assert.deepEqual(
+      state.installed.map((plugin) => plugin.pluginId).sort(),
+      ["nuanu-flow-worker@nuanu", "nuanu-flow@nuanu"],
+    );
+    const commands = (await fs.readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    assert.equal(
+      commands.filter((args) => args[0] === "mcp" && args[1] === "login")
+        .length,
+      0,
+    );
+    assert.equal(
+      commands.filter((args) => args[0] === "mcp" && args[1] === "list")
+        .length,
+      0,
+    );
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("current-profile development install accepts the documented environment credential without forcing OAuth", async () => {
+  const tempRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), "nuanu-current-env-auth-"),
+  );
+  const codexHome = path.join(tempRoot, "codex-home");
+  const buildRoot = path.join(tempRoot, "codex-dev");
+  const statePath = path.join(tempRoot, "state.json");
+  const logPath = path.join(tempRoot, "commands.jsonl");
+
+  try {
+    await fs.mkdir(codexHome, { recursive: true });
+    await fs.writeFile(
+      statePath,
+      `${JSON.stringify({
+        marketplaces: [],
+        installed: [],
+        mcpAuth: {},
+      })}\n`,
+    );
+
+    const report = await installCurrentProfile("dev", {
+      repoRoot,
+      buildRoot,
+      codexHome,
+      codexBin: fakeCodexBin,
+      env: {
+        ...process.env,
+        NUANU_DEV_TOKEN: "acceptance-only-token",
+        FAKE_CODEX_STATE: statePath,
+        FAKE_CODEX_LOG: logPath,
+        FAKE_EXPECT_CODEX_HOME: codexHome,
+      },
+    });
+
+    assert.equal(report.authStatus, "environment_credential");
+    const commands = (await fs.readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    assert.equal(
+      commands.filter((args) => args[0] === "mcp" && args[1] === "login")
+        .length,
+      0,
+    );
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("current-profile install honors an explicitly selected isolated mode home", async () => {
+  const tempRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), "nuanu-current-exact-home-"),
+  );
+  const baseHome = path.join(tempRoot, "codex-home");
+  const codexHome = path.join(baseHome, "nuanu-flow", "dev");
+  const buildRoot = path.join(tempRoot, "codex-dev");
+  const stateDirectory = path.join(tempRoot, "states");
+  const logPath = path.join(tempRoot, "commands.jsonl");
+
+  try {
+    await fs.mkdir(codexHome, { recursive: true });
+    const report = await installCurrentProfile("dev", {
+      repoRoot,
+      buildRoot,
+      codexHome,
+      codexBin: fakeCodexBin,
+      env: {
+        ...process.env,
+        NUANU_DEV_TOKEN: "acceptance-only-token",
+        FAKE_CODEX_STATE_DIR: stateDirectory,
+        FAKE_CODEX_LOG: logPath,
+        FAKE_EXPECT_CODEX_HOME: codexHome,
+      },
+    });
+
+    assert.equal(report.codexHome, codexHome);
+    const modeState = await readJson(path.join(stateDirectory, "dev.json"));
+    assert.deepEqual(
+      modeState.installed.map((plugin) => plugin.pluginId),
+      ["nuanu-flow-dev@nuanu-dev"],
+    );
+    await assert.rejects(fs.access(path.join(stateDirectory, "codex-home.json")));
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});

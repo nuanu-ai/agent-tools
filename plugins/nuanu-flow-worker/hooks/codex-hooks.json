@@ -1,0 +1,18 @@
+{
+  "description": "Deliver exact-session Nuanu Flow worker catch-up on the next user prompt.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hooks/user-prompt-submit.mjs\"",
+            "commandWindows": "node \"%PLUGIN_ROOT%\\hooks\\user-prompt-submit.mjs\"",
+            "timeout": 1,
+            "additionalContextLimit": 500
+          }
+        ]
+      }
+    ]
+  }
+}

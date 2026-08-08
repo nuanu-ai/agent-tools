@@ -8,6 +8,7 @@ import {
   DEFAULT_BUILD_ROOT,
   REPO_ROOT,
   assertCodexVersion,
+  canonicalFilesystemPath,
   codexModeHome,
   codexHome as resolveCodexHome,
   modeConfig,
@@ -37,8 +38,8 @@ function modeMcpBlock(modeName, env) {
   return `${begin}
 [mcp_servers.${mode.mcpName}]
 url = ${JSON.stringify(mode.mcpUrl)}
-required = true
-startup_timeout_sec = 20
+required = false
+startup_timeout_sec = 10
 tool_timeout_sec = 120
 default_tools_approval_mode = "writes"
 
@@ -134,7 +135,7 @@ export async function ensureSharedCodexAuth(baseHome, modeHome) {
 }
 
 function normalized(value) {
-  return value ? path.resolve(value) : "";
+  return canonicalFilesystemPath(value);
 }
 
 function isNuanuRemote(source) {

@@ -8,7 +8,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const workerScript = path.join(repoRoot, "plugins/nuanu-flow/scripts/worker/worker.mjs");
+const workerScript = path.join(repoRoot, "plugins/nuanu-flow-worker/scripts/worker/worker.mjs");
 
 function readBody(req) {
   return new Promise((resolve) => {
@@ -62,6 +62,10 @@ async function startNuanuServer(task) {
       return writeJson(res, 200, { tasks: [task] });
     }
 
+    if (/^\/agent-worker\/tasks\/[^/]+\/checkpoint\/$/.test(req.url)) {
+      return writeJson(res, 200, { status: "ok" });
+    }
+
     const completeMatch = req.url.match(/^\/agent-worker\/tasks\/([^/]+)\/complete\/$/);
     if (completeMatch) {
       resolveComplete({ taskId: completeMatch[1], body, requests });
@@ -109,7 +113,15 @@ if (args[0] === "exec") {
   process.stdin.on("end", async () => {
     const outIndex = args.indexOf("--output-last-message");
     if (outIndex === -1) process.exit(2);
-    await fs.writeFile(args[outIndex + 1], "codex-exec result for " + input.slice(0, 40));
+    await fs.writeFile(args[outIndex + 1], JSON.stringify({
+      item: {
+        key: "worker_test",
+        description: "codex-exec result",
+        data: {},
+        artifacts: {}
+      },
+      artifact_outputs: {}
+    }));
     process.exit(0);
   });
 } else if (args.includes("app-server")) {
@@ -166,7 +178,7 @@ if (args[0] === "exec") {
         threadId: "thread-test",
         turnId: "turn-test",
         completedAtMs: Date.now(),
-        item: { id: "agent-msg", type: "agentMessage", text: "app-server result" }
+          item: { id: "agent-msg", type: "agentMessage", text: JSON.stringify({ item: { key: "worker_test", description: "app-server result", data: {}, artifacts: {} }, artifact_outputs: {} }) }
       }
     });
     send({
@@ -176,7 +188,7 @@ if (args[0] === "exec") {
         turn: {
           id: "turn-test",
           status: "completed",
-          items: [{ id: "agent-msg", type: "agentMessage", text: "app-server result" }]
+          items: [{ id: "agent-msg", type: "agentMessage", text: JSON.stringify({ item: { key: "worker_test", description: "app-server result", data: {}, artifacts: {} }, artifact_outputs: {} }) }]
         }
       }
     });
@@ -193,9 +205,9 @@ if (args[0] === "exec") {
       } else if (method === "item/fileChange/requestApproval") {
         if (msg.result?.decision !== "decline") process.exit(12);
       } else if (method === "mcpServer/elicitation/request") {
-        if (msg.result?.action !== "decline") process.exit(13);
+        if (msg.error?.code !== -32601) process.exit(13);
       } else if (method === "item/tool/requestUserInput") {
-        if (!msg.result?.answers) process.exit(14);
+        if (msg.error?.code !== -32601) process.exit(14);
       } else if (method === "item/permissions/requestApproval") {
         if (!msg.error) process.exit(15);
       }
@@ -280,7 +292,7 @@ process.stdin.on("end", () => {
     type: "result",
     subtype: "success",
     is_error: false,
-    result: "claude-code result",
+    result: JSON.stringify({ item: { key: "worker_test", description: "claude-code result", data: {}, artifacts: {} }, artifact_outputs: {} }),
     session_id: "claude-session-test"
   }) + "\\n");
 });
@@ -312,20 +324,35 @@ async function runWorkerE2E(adapter) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), `nuanu-worker-${adapter}-`));
   const fakeCodex = await makeFakeCodex(tmpDir);
   const fakeClaude = await makeFakeClaude(tmpDir);
+  const adapterIds = {
+    "codex-exec": "11111111-1111-4111-8111-111111111111",
+    "codex-app-server": "22222222-2222-4222-8222-222222222222",
+    "claude-code": "33333333-3333-4333-8333-333333333333",
+  };
   const task = {
-    task_id: `task-${adapter}`,
+    task_id: adapterIds[adapter],
     step_id: "step-1",
     step_name: "Codex step",
-    instruction: `Task for ${adapter}: return a short success message.`,
-    context: { adapter },
-    output_schema: {
-      type: "object",
-      additionalProperties: true,
+    request: {
+      schema_version: "nuanu.agent-task.request.v1",
+      instruction: `Task for ${adapter}: return a short success message.`,
+      process: { step_key: "worker_test" },
+      input: { adapter },
+      output_definition: { data: {}, artifacts: {} },
     },
-    system_prompt: "You are a Nuanu Flow worker test agent.",
+    configuration_snapshot: {
+      system_prompt: "You are a Nuanu Flow worker test agent.",
+    },
+    workspace: "nuanu",
     agent_key: "per-task-key",
   };
   const server = await startNuanuServer(task);
+  task.internal_mcp = {
+    transport: "streamable_http",
+    url: `${server.baseUrl}/mcp`,
+    authentication: { header: "X-Agent-Key" },
+    workspace_header: "X-Plane-Workspace",
+  };
   const child = spawn(process.execPath, [workerScript], {
     cwd: repoRoot,
     env: {
@@ -367,7 +394,11 @@ async function runWorkerE2E(adapter) {
   try {
     const result = await withTimeout(server.completed, 15000, `${adapter} worker completion`);
     assert.equal(result.taskId, task.task_id);
-    assert.equal(result.body.status, "ok");
+    assert.equal(
+      result.body.completion?.outcome,
+      "success",
+      JSON.stringify({ body: result.body, stdout, stderr })
+    );
     assert.equal(result.body.worker_id, result.requests.find((r) => r.url === "/agent-worker/heartbeat/").body.worker_id);
     assert(result.requests.every((r) => r.agentKey === "worker-key"));
     assert.match(stdout, /remote agent connected/);
@@ -382,26 +413,45 @@ async function runWorkerE2E(adapter) {
 
 test("worker completes a task through codex-exec", async () => {
   const { result } = await runWorkerE2E("codex-exec");
-  assert.match(result.body.output, /codex-exec result/);
+  assert.match(result.body.completion.result.item.description, /codex-exec result/);
 });
 
 test("worker completes a task through codex-app-server and handles server requests", async () => {
   const { result, stdout } = await runWorkerE2E("codex-app-server");
-  assert.equal(result.body.output, "app-server result");
+  assert.equal(result.body.completion.result.item.description, "app-server result");
   assert.match(stdout, /adapter=codex-app-server/);
 });
 
 test("worker completes a task through first-class Claude Code streaming mode", async () => {
   const { result, stdout } = await runWorkerE2E("claude-code");
-  assert.equal(result.body.output, "claude-code result");
+  assert.equal(result.body.completion.result.item.description, "claude-code result");
   assert.match(stdout, /adapter=claude-code/);
+});
+
+test("live chat uses the nested adapter config and a pinned ACP bridge", async () => {
+  const [{ loadConfig }, { resolveChatAdapterConfig }] = await Promise.all([
+    import("../../plugins/nuanu-flow-worker/scripts/worker/config.mjs"),
+    import("../../plugins/nuanu-flow-worker/scripts/worker/interactive_chat.mjs"),
+  ]);
+  const config = loadConfig({
+    env: {
+      NUANU_URL: "https://flow.example.test/api",
+      NUANU_AGENT_KEY: "nuanu_flow_test",
+    },
+    credentialStore: { loadSync: () => null },
+  });
+
+  assert.equal(resolveChatAdapterConfig(config), config.adapter);
+  assert.equal(resolveChatAdapterConfig(config.adapter), config.adapter);
+  assert.equal(config.adapter.acpBin, "npx");
+  assert.deepEqual(config.adapter.acpArgs, ["-y", "@agentclientprotocol/codex-acp@1.1.14"]);
 });
 
 test("bundled enrollment exchanges once, stores privately, and feeds worker config", async () => {
   const [{ enroll, normalizeApiBase }, { createFileCredentialStore }, { loadConfig }] = await Promise.all([
-    import("../../plugins/nuanu-flow/scripts/worker/enroll.mjs"),
-    import("../../plugins/nuanu-flow/scripts/worker/credentials.mjs"),
-    import("../../plugins/nuanu-flow/scripts/worker/config.mjs"),
+    import("../../plugins/nuanu-flow-worker/scripts/worker/enroll.mjs"),
+    import("../../plugins/nuanu-flow-worker/scripts/worker/credentials.mjs"),
+    import("../../plugins/nuanu-flow-worker/scripts/worker/config.mjs"),
   ]);
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-public-enroll-"));
   const credentialPath = path.join(tmpDir, "credentials", "worker.json");

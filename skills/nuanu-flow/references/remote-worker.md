@@ -3,7 +3,7 @@
 A Nuanu Flow **agent employee** with `runtime: "remote"` is executed by an
 external worker instead of the platform's built-in agent runtime. The model is
 **pull**: the worker dials out (NAT-proof, no inbound URL), identified by an
-agent key. When a process run reaches that agent's task, the engine parks the
+agent credential. When a process run reaches that agent's task, the engine parks the
 step; the worker fetches it, does the work, and posts the result — which
 advances the run exactly like a local agent would.
 
@@ -11,22 +11,30 @@ advances the run exactly like a local agent would.
 
 For an agent-led flow, load `create-agent`. It discovers the active
 environment, creates the remote agent through MCP, and either launches its
-worker in the current Codex or Claude Code session or returns the
-environment-aware connection prompt.
+worker in the current Codex session or returns the environment-aware
+connection prompt.
 
-The UI remains available as an equivalent manual path: create a remote agent,
-select Codex, Claude Code, or Generic agent, and copy the generated prompt.
-Every path points to the same environment-aware guide:
+The UI remains available as an equivalent manual path: create a remote agent
+and copy its generated prompt into Codex. Both paths point to the same guide:
 
 - Local: `http://localhost:3000/connect/remote-agent.md`
 - Production: `https://flow.nuanu.com/connect/remote-agent.md`
 
-The guide installs or updates the combined Nuanu Flow plugin, completes MCP
-OAuth when needed, exchanges the short-lived `nuanu_join_…` enrollment token
-through standard input, stores the durable credential in OS-protected storage,
-verifies the agent identity, and launches the bundled worker with the selected
-harness adapter. Never repeat or place the enrollment token in a URL, command
-argument, environment variable, or file.
+The guide installs or updates the matching `nuanu-flow` and
+`nuanu-flow-worker` pair, exchanges the short-lived `nuanu_join_…` enrollment
+token through standard input, stores the durable credential in OS-protected
+storage, and launches this worker companion. Remote-agent mode does not start
+human MCP OAuth or workspace onboarding. Never repeat or place the enrollment
+token in a URL, command argument, environment variable, or file.
+
+The installed general plugin is the native remote Agent's skill/MCP source:
+every claimed task can use the full bundled Nuanu Flow skill set, including
+`artifacts`, `bpmn-processes`, and `work-items`. `AgentEmployee.skills` is a
+local-Agent version configuration surface and may be empty for a native remote
+Agent. Never report a missing Artifact skill from that empty list. Host/model
+capability labels still describe executable functionality and remain separate
+from these instruction skills. Externally hosted A2A Agents are not covered by
+this guarantee and expose only what their Agent Card advertises.
 
 The enrollment prompt is the normal customer path. It does not expose a
 durable agent key and is safe to retry on the same installation: the helper
@@ -41,49 +49,86 @@ verifies an already-enrolled credential without exchanging the token again.
    plaintext `nuanu_flow_…` token is shown **only at creation**.
 3. Env:
 
-| Var                     | Meaning                                                                                                     |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `NUANU_URL`             | Django API base — **must include `/api`**, e.g. `https://flow.nuanu.com/api` or `http://localhost:8000/api` |
-| `NUANU_AGENT_KEY`       | The durable `nuanu_flow_…` key                                                                              |
-| `NUANU_WORKER_ID`       | Optional stable worker name (default `worker-<host>-<pid>`)                                                 |
-| `NUANU_MAX_CONCURRENCY` | Parallel tasks (default 1)                                                                                  |
-| `NUANU_ADAPTER`         | `claude-code` (default) \| `codex-exec` \| `codex-app-server` \| `command`                                  |
-| `NUANU_TRANSPORT`       | `poll` (default) \| `gateway` (WS wake-ups)                                                                 |
+| Var                          | Meaning                                                                                                     |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `NUANU_URL`                  | Django API base — **must include `/api`**, e.g. `https://flow.nuanu.com/api` or `http://localhost:8000/api` |
+| `NUANU_AGENT_KEY`            | The durable `nuanu_flow_…` key                                                                              |
+| `NUANU_WORKER_ID`            | Optional stable worker name (default `worker-<host>-<pid>`)                                                 |
+| `NUANU_MAX_CONCURRENCY`      | Parallel tasks (default 1)                                                                                  |
+| `NUANU_ADAPTER`              | `claude` (default) \| `codex` \| `command`                                                                  |
+| `NUANU_TRANSPORT`            | `poll` (default) \| `gateway` (WS wake-ups)                                                                 |
+| `NUANU_WORKER_CAPABILITIES`  | Optional comma-separated host-native semantic capabilities, such as `image_generation_v1`                   |
+| `NUANU_BROWSER_QA`           | Set to `1` only when this host has a verified Playwright runtime                                            |
+| `NUANU_QA_PLAYWRIGHT_MODULE` | Exact Playwright module path when it is not resolvable from the worker plugin                               |
 
-## Quick start — the bundled daemon
+## Start the companion daemon
 
-The plugin vendors the zero-dependency worker (Node ≥ 20.6):
+After one-prompt enrollment, this plugin provides the zero-dependency worker
+(Node ≥ 20.6) and reads the stored credential automatically. The paired
+launcher resolves the exact general-plugin bus script path through the host
+registry; never infer a sibling plugin cache path:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/worker/worker.mjs
-# or interactively: /nuanu-flow:worker
+NUANU_ADAPTER=codex \
+NUANU_AGENT_BUS_SCRIPT="<general-plugin-root>/scripts/agent-bus/agent-bus.mjs" \
+node "<worker-plugin-root>/scripts/worker/worker.mjs"
 ```
 
+Enrollment plus `remote agent connected — heartbeat OK` are the worker
+readiness gate. `agent_bus=degraded` is a separate collaboration status: retry
+or repair the general adapter, but do not mark the worker offline or prevent
+task claims solely because transient messaging is unavailable.
+
 The daemon heartbeats (~15 s), polls `fetch-and-lock`, and per task spawns the
-adapter — the default `claude-code` adapter runs Claude's streaming print
-mode, pipes the task prompt on stdin, resumes per-thread sessions, and exposes
-the task's **per-task
+adapter — the default `claude` adapter runs `claude -p --output-format json`,
+pipes the task prompt on stdin, and exposes the task's **per-task
 `agent_key`** as `NUANU_AGENT_KEY` in the child env, so the spawned session's
 own Flow MCP calls are attributed to the agent. Results post back
 automatically; SIGINT/SIGTERM drains gracefully.
 
-The daemon also renders a safe live activity feed. When launched from Codex,
-it binds significant events to that exact conversation through the inherited
-`CODEX_THREAD_ID`. The installed plugin summarizes unread completion,
-failure, requeue, disconnection, and attention events on the next user prompt,
-including the first prompt after reopening the session. This catch-up is
-intentionally not described as a spontaneous chat notification.
+For remote execution, the remote host owns its provider, model, tools, MCP
+servers, and credentials. Nuanu Flow sends the resolved instruction, typed
+inputs, output contract, platform authority, and required semantic capability
+names; it does not install or project third-party generation infrastructure.
+Configure and verify the generator on this host first, then opt in with, for
+example, `NUANU_WORKER_CAPABILITIES=image_generation_v1`. App Server workers
+advertise `artifact_media_constraints_v1` automatically because their
+task-scoped publisher enforces the declared MIME allowlist; this does not imply
+that an image generator is installed. Capability labels are informational:
+the server records a safe claim warning when labels differ, but still delivers
+the task. The worker and its agent remain responsible for reporting a real
+execution failure if the requested work cannot be performed.
 
-Because the plugin's MCP config forwards `NUANU_AGENT_KEY` as `X-Agent-Key`,
-a worker-spawned Claude session with this plugin installed is **already
-authenticated as the ambient agent** — no OAuth prompt, no setup inside task
-executions.
+Browser QA is stricter because the worker provisions its browser before the
+agent starts. With `NUANU_BROWSER_QA=1`, startup verifies Playwright before
+advertising `browser_qa_v1`; install it on the host or provide the exact
+`NUANU_QA_PLAYWRIGHT_MODULE` path. The worker does not download browsers or
+guess another package's cache at task time.
 
-For Codex, use `NUANU_ADAPTER=codex-app-server` when the worker should run on
-Codex's App Server protocol with streamed turns and approval handling. Use
-`NUANU_ADAPTER=codex-exec` for one-shot `codex exec` task execution. For an
-arbitrary harness, set `NUANU_ADAPTER=command` and
-`NUANU_ADAPTER_CMD` to a text-in/text-out command.
+## Inspect sanitized worker diagnostics
+
+Detailed operational diagnostics stay on the worker instead of being mirrored
+into every Nuanu Flow Agent Task event. The Process run shows the current safe
+phase, freshness, worker/adapter identity, retry attempt, and compact terminal
+evidence. On the worker host, use the vendored read-only CLI:
+
+```bash
+node "<worker-plugin-root>/scripts/worker/cli.mjs" logs
+node "<worker-plugin-root>/scripts/worker/cli.mjs" logs --task "<task-id>"
+node "<worker-plugin-root>/scripts/worker/cli.mjs" logs --task "<task-id>" --follow
+node "<worker-plugin-root>/scripts/worker/cli.mjs" logs --task "<task-id>" --export "/new/safe-diagnostics.jsonl"
+```
+
+The journal is bounded to 200 sanitized records per task and expires after
+seven days by default. It includes safe phases, provider/model identifiers,
+retry and HTTP status, lease state, adapter session/turn identifiers, Artifact
+categories, and terminal delivery. It excludes prompts, reasoning, response
+bodies, tool arguments, command lines, credentials, signed URLs, paths, and
+file contents. Reading or exporting logs never mutates the Agent Task.
+
+During a claimed task, the worker passes only the short-lived per-task agent
+credential to the spawned adapter. Human MCP OAuth and the worker credential
+remain separate.
 
 ## The REST protocol (for self-polling without the daemon)
 
@@ -102,19 +147,24 @@ All endpoints authenticate with header **`X-Agent-Key: <key>`**.
 of task envelopes:
 
 - `task_id`, `run_id`, `step_id`, `step_name`, `workspace`, `thread_id`
-- `instruction` — the prompt (Handlebars already resolved)
-- `context` — upstream step outputs and run variables
-- `output_schema` — when present, return **only** a JSON object matching it
-- `options_request` — when present, the task wants decision options proposed
+- `contract_version` — always `nuanu.agent-task.v1`
+- `request` — the immutable `nuanu.agent-task.request.v1` request containing
+  exact Process/step/Agent-version identity, the resolved `instruction`, the
+  predecessor `input` set, editable `output_definition`, authority grants, and
+  informational `runtime_hints`
+- `continuation_input` — explicit human responses received after admission
 - `system_prompt` — the agent employee's configured system prompt
 - `agent_key` — **short-lived per-task key (30 min)**: use it for any Flow
   API/MCP calls made _while doing the task_ so writes attribute to the agent
-- `locked_until` — your lease deadline
+- `locked_until`, `lease_token`, `lease_generation` — the fenced lease
 
-**Complete**: `{"worker_id":"me-1","status":"ok","output":…}` (or
-`{"status":"error","error":"…"}` to fail the step). Completing is
-**idempotent**; if the run was cancelled meanwhile you get
-`{status:"ok", stale:true}`.
+**Complete**: send `worker_id`, `lease_token`, and exactly one
+`nuanu.agent-task.completion.v1` object under `completion`. A successful
+completion contains `result.item` (`key`, `description`, `data`, and named
+`artifacts`) plus `result.artifact_outputs`; a failure contains the closed
+`error` object (`code`, `message`, `retryable`). The item key and shape must
+match `request.process.step_key` and `request.output_definition`. Completing is
+idempotent; if the run was cancelled meanwhile you get `{status:"ok",stale:true}`.
 
 **Fail**: `{"worker_id":"me-1","error":"…","requeue":true}` — requeues up to
 5 total attempts, then the step errors.
@@ -131,8 +181,9 @@ while true; do
   TASKS=$(curl -s -X POST "$NUANU_URL/agent-worker/tasks/fetch-and-lock/" \
     -H "X-Agent-Key: $NUANU_AGENT_KEY" -H "Content-Type: application/json" \
     -d '{"worker_id":"self-poll-1","max_tasks":1,"lock_seconds":600}')
-  # for each envelope: do the work per instruction/context/output_schema, then
-  # POST …/tasks/<task_id>/complete/ with {"worker_id":"self-poll-1","status":"ok","output":…}
+  # For each envelope, follow request.instruction using request.input, then POST
+  # …/tasks/<task_id>/complete/ with worker_id, lease_token, and the exact
+  # AgentTaskCompletionV1 object under completion.
   curl -s -X POST "$NUANU_URL/agent-worker/heartbeat/" \
     -H "X-Agent-Key: $NUANU_AGENT_KEY" -d '{"worker_id":"self-poll-1"}'
   sleep 5

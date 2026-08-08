@@ -12,7 +12,11 @@ import {
 } from "./modes.mjs";
 
 const DEFAULT_PLUGIN_ROOT = path.join(REPO_ROOT, "plugins/nuanu-flow");
-const DEV_PACKAGE_FORMAT_VERSION = 2;
+const DEFAULT_WORKER_PLUGIN_ROOT = path.join(
+  REPO_ROOT,
+  "plugins/nuanu-flow-worker",
+);
+const DEV_PACKAGE_FORMAT_VERSION = 3;
 
 async function walkFiles(root, current = root) {
   const entries = await fs.readdir(current, { withFileTypes: true });
@@ -99,9 +103,28 @@ function developmentManifest(source, { version, mcpUrl }) {
       ...source.interface,
       displayName: "Nuanu Flow [DEV]",
       shortDescription:
-        "Local development Nuanu Flow MCP tools, skills, and worker support.",
+        "Local development Nuanu Flow MCP tools, skills, and communication bus.",
       longDescription:
-        "Develop and test Nuanu Flow locally with an isolated Codex plugin identity, localhost MCP configuration, development-only credentials, domain skills, and App Server worker support.",
+        "Develop and test Nuanu Flow locally with an isolated Codex plugin identity, localhost MCP configuration, development-only credentials, domain skills, and the general Agent communication bus.",
+    },
+  };
+}
+
+function developmentWorkerManifest(source, { version }) {
+  if (source.mcpServers) {
+    throw new Error("Worker Codex manifest must not define an MCP server");
+  }
+  return {
+    ...source,
+    name: "nuanu-flow-worker-dev",
+    version,
+    interface: {
+      ...source.interface,
+      displayName: "Nuanu Flow Worker [DEV]",
+      shortDescription:
+        "Local remote Agent enrollment, execution, heartbeat, and diagnostics.",
+      longDescription:
+        "Install with Nuanu Flow [DEV] on remote Agent hosts. This companion owns enrollment, task execution, heartbeat, and diagnostics while using the general plugin communication bus.",
     },
   };
 }
@@ -125,6 +148,18 @@ function developmentMarketplace() {
         },
         category: "Productivity",
       },
+      {
+        name: "nuanu-flow-worker-dev",
+        source: {
+          source: "local",
+          path: "./plugins/nuanu-flow-worker-dev",
+        },
+        policy: {
+          installation: "AVAILABLE",
+          authentication: "ON_INSTALL",
+        },
+        category: "Productivity",
+      },
     ],
   };
 }
@@ -136,6 +171,12 @@ async function outputExists(buildRoot) {
         path.join(
           buildRoot,
           "plugins/nuanu-flow-dev/.codex-plugin/plugin.json",
+        ),
+      ),
+      fs.access(
+        path.join(
+          buildRoot,
+          "plugins/nuanu-flow-worker-dev/.codex-plugin/plugin.json",
         ),
       ),
       fs.access(path.join(buildRoot, ".agents/plugins/marketplace.json")),
@@ -168,6 +209,8 @@ async function replaceDirectory(tempRoot, buildRoot) {
 
 export async function buildDevPackage(options = {}) {
   const pluginRoot = options.pluginRoot || DEFAULT_PLUGIN_ROOT;
+  const workerPluginRoot =
+    options.workerPluginRoot || DEFAULT_WORKER_PLUGIN_ROOT;
   const buildRoot = options.buildRoot || DEFAULT_BUILD_ROOT;
   const mode = modeConfig("dev", options.env || process.env);
   assertLocalMcpUrl(mode.mcpUrl);
@@ -177,12 +220,26 @@ export async function buildDevPackage(options = {}) {
     ".codex-plugin/plugin.json",
   );
   const sourceManifest = await readJson(sourceManifestPath);
-  const fingerprint = await fingerprintPlugin(pluginRoot);
+  const workerSourceManifest = await readJson(
+    path.join(workerPluginRoot, ".codex-plugin/plugin.json"),
+  );
+  const generalFingerprint = await fingerprintPlugin(pluginRoot);
+  const workerFingerprint = await fingerprintPlugin(workerPluginRoot);
+  const fingerprint = crypto
+    .createHash("sha256")
+    .update(generalFingerprint)
+    .update("\0")
+    .update(workerFingerprint)
+    .digest("hex");
   const statePath = path.join(buildRoot, "state.json");
   const previous = await readJson(statePath, null);
   const generatedPluginRoot = path.join(
     buildRoot,
     "plugins/nuanu-flow-dev",
+  );
+  const generatedWorkerPluginRoot = path.join(
+    buildRoot,
+    "plugins/nuanu-flow-worker-dev",
   );
   if (
     !options.force &&
@@ -197,6 +254,7 @@ export async function buildDevPackage(options = {}) {
       version: previous.version,
       marketplaceRoot: buildRoot,
       pluginRoot: generatedPluginRoot,
+      workerPluginRoot: generatedWorkerPluginRoot,
     };
   }
 
@@ -209,11 +267,19 @@ export async function buildDevPackage(options = {}) {
     `.${path.basename(buildRoot)}.tmp-${process.pid}-${Date.now()}`,
   );
   const tempPluginRoot = path.join(tempRoot, "plugins/nuanu-flow-dev");
+  const tempWorkerPluginRoot = path.join(
+    tempRoot,
+    "plugins/nuanu-flow-worker-dev",
+  );
 
   await fs.mkdir(parent, { recursive: true });
   await fs.rm(tempRoot, { recursive: true, force: true });
   try {
     await fs.cp(pluginRoot, tempPluginRoot, {
+      recursive: true,
+      preserveTimestamps: true,
+    });
+    await fs.cp(workerPluginRoot, tempWorkerPluginRoot, {
       recursive: true,
       preserveTimestamps: true,
     });
@@ -224,6 +290,13 @@ export async function buildDevPackage(options = {}) {
     await fs.writeFile(
       path.join(tempPluginRoot, ".codex-plugin/plugin.json"),
       `${JSON.stringify(manifest, null, 2)}\n`,
+    );
+    const workerManifest = developmentWorkerManifest(workerSourceManifest, {
+      version,
+    });
+    await fs.writeFile(
+      path.join(tempWorkerPluginRoot, ".codex-plugin/plugin.json"),
+      `${JSON.stringify(workerManifest, null, 2)}\n`,
     );
     await fs.mkdir(path.join(tempRoot, ".agents/plugins"), {
       recursive: true,
@@ -258,6 +331,7 @@ export async function buildDevPackage(options = {}) {
     version,
     marketplaceRoot: buildRoot,
     pluginRoot: generatedPluginRoot,
+    workerPluginRoot: generatedWorkerPluginRoot,
   };
 }
 

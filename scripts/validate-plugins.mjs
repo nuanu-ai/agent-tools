@@ -210,7 +210,7 @@ function resolveInside(root, relativePath, label) {
   return null;
 }
 
-async function validateHooks(pluginRoot, hooksPath) {
+async function validateHooks(pluginRoot, hooksPath, requiredHook) {
   requireRelativePath(hooksPath, "Codex plugin hooks path");
   const configPath = resolveInside(
     pluginRoot,
@@ -224,62 +224,69 @@ async function validateHooks(pluginRoot, hooksPath) {
   }
   const config = await readJson(configPath, "Codex hooks config");
   const sessionStart = config?.hooks?.SessionStart;
-  if (!Array.isArray(sessionStart) || sessionStart.length !== 1) {
+  if (requiredHook === "session" && (!Array.isArray(sessionStart) || sessionStart.length !== 1)) {
     add("Codex hooks config must define exactly one SessionStart matcher group");
     return;
   }
-  const group = sessionStart[0];
-  if (group?.matcher !== "startup|resume|clear|compact") {
-    add(
-      "Codex SessionStart matcher must be startup|resume|clear|compact",
+  if (Array.isArray(sessionStart) && sessionStart.length === 1) {
+    const group = sessionStart[0];
+    if (group?.matcher !== "startup|clear|compact") {
+      add("Codex SessionStart matcher must be startup|clear|compact");
+    }
+    if (!Array.isArray(group?.hooks) || group.hooks.length !== 1) {
+      add("Codex SessionStart must define exactly one command hook");
+      return;
+    }
+    const hook = group.hooks[0];
+    if (hook?.type !== "command") {
+      add("Codex SessionStart hook type must be command");
+    }
+    if (
+      typeof hook?.timeout !== "number" ||
+      !Number.isFinite(hook.timeout) ||
+      hook.timeout <= 0 ||
+      hook.timeout > 1
+    ) {
+      add("Codex SessionStart hook timeout must be greater than zero and at most one second");
+    }
+    if (typeof hook?.command !== "string") {
+      add("Codex SessionStart hook command must be a string");
+      return;
+    }
+    const target = hook.command.match(
+      /\$\{PLUGIN_ROOT\}\/([A-Za-z0-9._/-]+)/,
+    )?.[1];
+    if (!target) {
+      add("Codex SessionStart hook command must target a file under ${PLUGIN_ROOT}");
+      return;
+    }
+    const targetPath = resolveInside(
+      pluginRoot,
+      target,
+      "Codex SessionStart hook target",
     );
-  }
-  if (!Array.isArray(group?.hooks) || group.hooks.length !== 1) {
-    add("Codex SessionStart must define exactly one command hook");
-    return;
-  }
-  const hook = group.hooks[0];
-  if (hook?.type !== "command") {
-    add("Codex SessionStart hook type must be command");
-  }
-  if (
-    typeof hook?.timeout !== "number" ||
-    !Number.isFinite(hook.timeout) ||
-    hook.timeout <= 0 ||
-    hook.timeout > 1
-  ) {
-    add("Codex SessionStart hook timeout must be greater than zero and at most one second");
-  }
-  if (typeof hook?.command !== "string") {
-    add("Codex SessionStart hook command must be a string");
-    return;
-  }
-  const target = hook.command.match(
-    /\$\{PLUGIN_ROOT\}\/([A-Za-z0-9._/-]+)/,
-  )?.[1];
-  if (!target) {
-    add("Codex SessionStart hook command must target a file under ${PLUGIN_ROOT}");
-    return;
-  }
-  const targetPath = resolveInside(
-    pluginRoot,
-    target,
-    "Codex SessionStart hook target",
-  );
-  if (targetPath && !(await exists(targetPath))) {
-    add(
-      `Codex SessionStart hook target does not exist: ${path.relative(repoRoot, targetPath)}`,
-    );
+    if (targetPath && !(await exists(targetPath))) {
+      add(
+        `Codex SessionStart hook target does not exist: ${path.relative(repoRoot, targetPath)}`,
+      );
+    }
   }
 
   const userPromptSubmit = config?.hooks?.UserPromptSubmit;
   if (
+    requiredHook === "prompt" &&
     !Array.isArray(userPromptSubmit) ||
+    requiredHook === "prompt" &&
     userPromptSubmit.length !== 1
   ) {
     add(
       "Codex hooks config must define exactly one UserPromptSubmit matcher group",
     );
+    return;
+  }
+  if (!Array.isArray(userPromptSubmit) || userPromptSubmit.length === 0) return;
+  if (userPromptSubmit.length !== 1) {
+    add("Codex hooks config may define at most one UserPromptSubmit matcher group");
     return;
   }
   const promptGroup = userPromptSubmit[0];
@@ -364,7 +371,11 @@ async function validateCodexPlugin(pluginRoot) {
     if (typeof manifest.hooks !== "string") {
       add("Codex plugin hooks must be a single relative path");
     } else {
-      await validateHooks(pluginRoot, manifest.hooks);
+      await validateHooks(
+        pluginRoot,
+        manifest.hooks,
+        manifest.name.includes("worker") ? "prompt" : "session",
+      );
     }
   }
 

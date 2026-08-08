@@ -1,6 +1,6 @@
 {
   "name": "nuanu-flow",
-  "version": "0.3.10",
+  "version": "0.3.12",
   "description": "Install and onboard Nuanu Flow from one prompt, then work with projects, processes, artifacts, decisions, and remote agents.",
   "author": {
     "name": "Nuanu",
@@ -20,7 +20,7 @@
     "codex"
   ],
   "skills": "./skills",
-  "hooks": "./hooks/hooks.json",
+  "hooks": "./hooks/codex-hooks.json",
   "mcpServers": {
     "nuanu-flow": {
       "type": "http",
@@ -34,15 +34,15 @@
       "http_headers": {
         "X-Agent-Client": "Codex App"
       },
-      "startup_timeout_sec": 20,
+      "startup_timeout_sec": 10,
       "tool_timeout_sec": 120,
       "default_tools_approval_mode": "writes"
     }
   },
   "interface": {
     "displayName": "Nuanu Flow",
-    "shortDescription": "One-prompt setup, Flow MCP tools, onboarding, and remote Codex workers.",
-    "longDescription": "Install from one versionless prompt, sign in or sign up through OAuth, create a first workspace conversationally, and connect a remote Codex worker through a single-use enrollment token. Advanced environment-token and isolated development profiles remain available.",
+    "shortDescription": "One-prompt setup, Flow MCP tools, onboarding, and domain skills.",
+    "longDescription": "Install from one versionless prompt, sign in or sign up through OAuth, create a first workspace conversationally, and work with the single Nuanu MCP, complete domain-skill set, and general Agent communication bus. Remote execution is supplied by the separate Nuanu Flow Worker companion.",
     "developerName": "Nuanu",
     "category": "Productivity",
     "capabilities": [

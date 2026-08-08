@@ -10,6 +10,10 @@ const repoRoot = path.resolve(
   "..",
 );
 const sourceRoot = path.join(repoRoot, "plugins/nuanu-flow/skills");
+const workerSourceRoot = path.join(
+  repoRoot,
+  "plugins/nuanu-flow-worker/skills",
+);
 const targetRoot = path.join(repoRoot, "skills");
 const pluginManifestPath = path.join(
   repoRoot,
@@ -17,8 +21,18 @@ const pluginManifestPath = path.join(
 );
 const portableWorkerPath = path.join(
   repoRoot,
-  "plugins/nuanu-flow/scripts/worker/portable-worker.mjs",
+  "plugins/nuanu-flow-worker/scripts/worker/portable-worker.mjs",
 );
+
+const workerSkills = new Set([
+  "claude-code-remote-worker",
+  "codex-remote-worker",
+  "remote-worker",
+]);
+
+function sourceRootForSkill(skillName) {
+  return workerSkills.has(skillName) ? workerSourceRoot : sourceRoot;
+}
 
 const canonicalSkills = [
   "artifacts",
@@ -44,10 +58,14 @@ const bundledSkills = [
   "artifacts",
   "bpmn-processes",
   "create-agent",
+  "human-input",
   "onboarding",
+  "process-refine",
   "product-help",
   "project-setup",
   "remote-worker",
+  "telegram",
+  "wiki",
   "work-items",
   "workspace-setup",
 ];
@@ -109,9 +127,13 @@ read exactly the relevant bundled reference:
 | Project scaffolding | [project setup](references/project-setup.md) |
 | Flow items, cycles, relations, and comments | [work items](references/work-items.md) |
 | BPMN process authoring and operation | [BPMN processes](references/bpmn-processes.md) |
+| Refining an existing Process without rebuilding it | [process refinement](references/process-refine.md) |
+| Human-input forms, approvals, and resumable waits | [human input](references/human-input.md) |
 | Versioned files and documents | [artifacts](references/artifacts.md) |
 | Agent design, creation, or connection | [create agent](references/create-agent.md) |
 | Generic remote-worker operation | [remote worker](references/remote-worker.md) |
+| Telegram channel linking and scoped delivery | [Telegram](references/telegram.md) |
+| Workspace wiki pages and durable knowledge | [wiki](references/wiki.md) |
 
 For a generic remote agent, use the bundled zero-dependency polling worker.
 It has no hooks and does not install a plugin:
@@ -193,12 +215,22 @@ async function sourceRecord(relativePath) {
 }
 
 async function copyCanonicalSkills(outputRoot) {
-  const sourceEntries = await fs.readdir(sourceRoot, { withFileTypes: true });
-  const unexpectedDirectories = sourceEntries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter((name) => !canonicalSkills.includes(name))
-    .sort();
+  const sourceEntries = await Promise.all(
+    [sourceRoot, workerSourceRoot].map(async (root) => ({
+      root,
+      entries: await fs.readdir(root, { withFileTypes: true }),
+    })),
+  );
+  const unexpectedDirectories = sourceEntries.flatMap(({ root, entries }) =>
+    entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .filter(
+        (name) =>
+          !canonicalSkills.includes(name) ||
+          sourceRootForSkill(name) !== root,
+      ),
+  ).sort();
   if (unexpectedDirectories.length) {
     throw new Error(
       `Canonical skill allowlist is missing: ${unexpectedDirectories.join(", ")}`,
@@ -206,7 +238,7 @@ async function copyCanonicalSkills(outputRoot) {
   }
 
   for (const skillName of canonicalSkills) {
-    const sourceDirectory = path.join(sourceRoot, skillName);
+    const sourceDirectory = path.join(sourceRootForSkill(skillName), skillName);
     const skillFile = path.join(sourceDirectory, "SKILL.md");
     parseSkill(skillName, await fs.readFile(skillFile, "utf8"));
     await fs.cp(sourceDirectory, path.join(outputRoot, skillName), {
@@ -237,7 +269,10 @@ async function compilePortableBundle(outputRoot) {
     "plugins/nuanu-flow/skills/nuanu-flow/SKILL.md",
   ];
   for (const skillName of bundledSkills) {
-    const relativePath = `plugins/nuanu-flow/skills/${skillName}/SKILL.md`;
+    const pluginDirectory = workerSkills.has(skillName)
+      ? "nuanu-flow-worker"
+      : "nuanu-flow";
+    const relativePath = `plugins/${pluginDirectory}/skills/${skillName}/SKILL.md`;
     const content = await fs.readFile(path.join(repoRoot, relativePath), "utf8");
     const { body } = parseSkill(skillName, content);
     await fs.writeFile(
@@ -267,7 +302,7 @@ async function compilePortableBundle(outputRoot) {
   );
   await fs.chmod(path.join(scriptsRoot, "worker.mjs"), 0o755);
   sourcePaths.push(
-    "plugins/nuanu-flow/scripts/worker/portable-worker.mjs",
+    "plugins/nuanu-flow-worker/scripts/worker/portable-worker.mjs",
   );
 
   const pluginManifest = JSON.parse(

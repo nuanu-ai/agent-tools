@@ -7,6 +7,7 @@ import { buildDevPackage } from "./dev-package.mjs";
 import {
   DEFAULT_BUILD_ROOT,
   REPO_ROOT,
+  canonicalFilesystemPath,
   codexModeHome,
   codexHome as resolveCodexHome,
   modeConfig,
@@ -98,7 +99,7 @@ function classifyDevelopmentMarketplace(entry, buildRoot) {
   const source = entry.marketplaceSource?.source || entry.root || "";
   if (
     entry.marketplaceSource?.sourceType === "local" &&
-    path.resolve(source) === path.resolve(buildRoot)
+    canonicalFilesystemPath(source) === canonicalFilesystemPath(buildRoot)
   ) {
     return "this-build";
   }

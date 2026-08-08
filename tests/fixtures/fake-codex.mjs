@@ -141,7 +141,7 @@ function mcpList(state) {
               "X-Plane-Workspace": "NUANU_WORKSPACE",
             },
       },
-      startup_timeout_sec: 20,
+      startup_timeout_sec: 10,
       tool_timeout_sec: 120,
       auth_status: state.mcpAuth?.[name] || "unsupported",
     },
@@ -188,7 +188,7 @@ try {
                   eventName: "session_start",
                   handlerType: "command",
                   isManaged: false,
-                  matcher: "startup|resume|clear|compact",
+                  matcher: "startup|clear|compact",
                   command:
                     'node "${PLUGIN_ROOT}/hooks/session-start.mjs"',
                   timeoutSec: 1,
@@ -303,6 +303,12 @@ try {
     } else {
       throw new Error(`unsupported plugin command: ${command}`);
     }
+  } else if (args[0] === "mcp" && args[1] === "get") {
+    const name = args[2];
+    const server = mcpList(state).find((entry) => entry.name === name);
+    if (!server) throw new Error(`MCP server not found: ${name}`);
+    const { auth_status: _authStatus, ...definition } = server;
+    output(definition);
   } else if (args[0] === "mcp" && args[1] === "list") {
     output(mcpList(state));
   } else if (args[0] === "mcp" && args[1] === "login") {

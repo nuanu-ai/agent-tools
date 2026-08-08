@@ -26,7 +26,8 @@ Agent Skills cannot universally register or authenticate MCP servers. The
 portable worker can enroll and execute remote jobs without MCP, while
 interactive Flow reads and writes still require a configured MCP connection.
 Prefer the combined plugin below for Codex and Claude Code because it provides
-native OAuth, MCP tools, startup guidance, and the full worker runtime.
+native OAuth, MCP tools, optional local repository binding, and the full worker
+runtime.
 
 Refresh an installed fallback after this repository changes:
 
@@ -46,9 +47,8 @@ Claude Code uses its native marketplace, plugin, and MCP OAuth controls. The
 activation step depends on the host:
 
 - **Claude Desktop Code tab:** install in the current session, then start one
-  new Code session in the same project. The plugin's `SessionStart` hook
-  continues setup on its first actual turn alongside the user's intended task,
-  so there is no special continuation prompt to copy. Use
+  new Code session in the same project and send `Continue Nuanu Flow setup`
+  once. Ordinary later sessions do not run an onboarding preflight. Use
   **+ → Connectors → Nuanu Flow → Connect** in that new session if
   authentication is requested. `/reload-plugins` does not exist in this host.
 - **Claude Code CLI or IDE:** run `/reload-plugins`, authenticate through
@@ -96,11 +96,11 @@ page. Because the CLI loads new MCP tools at startup, the installer prints the
 exact `codex resume <thread-id> "Continue Nuanu Flow setup"` command needed
 only when its structured lifecycle result says
 `attachment: restart_required`. Run it in the same terminal to continue the
-same conversation and start the onboarding check immediately. Installation,
-OAuth, and tool attachment are separate states; setup is complete only after
-the resumed thread successfully calls `onboarding_next`. The bundled
-`SessionStart` hook adds a short task-tracker reminder on future starts and
-resumes, while `UserPromptSubmit` delivers remote-worker catch-up; Codex may
+same conversation and start the explicit onboarding check immediately.
+Installation, OAuth, and tool attachment are separate states; setup is complete
+only after the resumed thread successfully calls `onboarding_next`. The bundled
+`SessionStart` hook emits only an optional local repository binding on startup,
+clear, or compact, while `UserPromptSubmit` delivers remote-worker catch-up; Codex may
 ask for one-time lifecycle-hook review on the first restart. The
 installer never opens the desktop app, asks the user to copy an authorization
 URL, bypasses hook trust, or creates a new chat.
@@ -224,6 +224,7 @@ Real Codex acceptance is explicit:
 ```bash
 npm run test:acceptance:codex
 npm run test:acceptance:codex:model
+npm run test:acceptance:codex:onboarding
 npm run test:acceptance:codex:worker
 ```
 
@@ -231,7 +232,9 @@ The first command installs both variants into a temporary unauthenticated
 Codex home and verifies plugin/MCP isolation. The opt-in command symlinks the
 existing Codex login into temporary mode homes, then exercises the local MCP,
 a fresh second session, skill refresh, and a real App Server worker task. The
-worker acceptance also verifies exact-session activity isolation, sensitive
+focused onboarding command uses real fresh Codex sessions to prove ordinary
+requests make zero onboarding calls while explicit onboarding status makes
+exactly one. The worker acceptance also verifies exact-session activity isolation, sensitive
 data exclusion, one-time catch-up, and packaged-hook execution. It never
 copies auth files or changes the normal production/development homes.
 `test:acceptance:codex:worker` is the focused model-backed worker path for
@@ -257,15 +260,15 @@ deletes only its marker-scoped test records.
 
 ## What's inside
 
-| Path                               | What                                                                                                                                                                                                                                          |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `skills/`                          | Generated open-standard Agent Skills. `skills/nuanu-flow` is a self-contained portable fallback with product Q&A, compiled operational references, and a simplified worker; the remaining directories expose each canonical skill separately.         |
+| Path                               | What                                                                                                                                                                                                                                                       |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `skills/`                          | Generated open-standard Agent Skills. `skills/nuanu-flow` is a self-contained portable fallback with product Q&A, compiled operational references, and a simplified worker; the remaining directories expose each canonical skill separately.              |
 | `plugins/nuanu-flow`               | The Nuanu Flow plugin: hosted MCP server config, product Q&A, domain skills (Flow items, BPMN processes, artifacts, project setup, remote worker, orientation), Claude slash commands/output style, Codex metadata, and the zero-dependency worker daemon. |
-| `.claude-plugin/marketplace.json`  | The marketplace catalog (name `nuanu`). This repo owns it — edit it here.                                                                                                                                                                     |
-| `.agents/plugins/marketplace.json` | The Codex marketplace catalog (name `nuanu`) for local and remote Codex installs.                                                                                                                                                             |
-| `scripts/sync-skills.mjs`          | Deterministically compiles the canonical plugin skills into `skills/`, flattens portable references, copies the simplified worker, and records source hashes in a generated manifest.                                                         |
-| `scripts/codex/`                   | Repository-local setup, mode launch, auth diagnostics, status, update, version, and worker helpers.                                                                                                                                           |
-| `scripts/claude/`                  | Claude-native development packaging, install/OAuth, and complete Nuanu plugin cleanup.                                                                                                                                                         |
+| `.claude-plugin/marketplace.json`  | The marketplace catalog (name `nuanu`). This repo owns it — edit it here.                                                                                                                                                                                  |
+| `.agents/plugins/marketplace.json` | The Codex marketplace catalog (name `nuanu`) for local and remote Codex installs.                                                                                                                                                                          |
+| `scripts/sync-skills.mjs`          | Deterministically compiles the canonical plugin skills into `skills/`, flattens portable references, copies the simplified worker, and records source hashes in a generated manifest.                                                                      |
+| `scripts/codex/`                   | Repository-local setup, mode launch, auth diagnostics, status, update, version, and worker helpers.                                                                                                                                                        |
+| `scripts/claude/`                  | Claude-native development packaging, install/OAuth, and complete Nuanu plugin cleanup.                                                                                                                                                                     |
 
 ## Versioning
 

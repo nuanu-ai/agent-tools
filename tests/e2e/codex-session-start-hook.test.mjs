@@ -41,24 +41,17 @@ async function makeGitRepo() {
   return root;
 }
 
-test("SessionStart hook injects compact task-tracker context for every supported source", () => {
-  for (const source of ["startup", "resume", "clear", "compact"]) {
-    const result = runHook(hookPayload(repoRoot, source));
-    assert.equal(result.status, 0);
-    assert.equal(result.stderr, "");
-    const body = JSON.parse(result.stdout);
-    assert.equal(
-      body.hookSpecificOutput.hookEventName,
-      "SessionStart",
-    );
-    const context = body.hookSpecificOutput.additionalContext;
-    assert.match(context, /Nuanu Flow/);
-    assert.match(context, /onboarding_next/);
-    assert.match(context, /without retries/);
-    assert(
-      context.trim().split(/\s+/).length <= 80,
-      `hook context for ${source} exceeds 80 words`,
-    );
+test("SessionStart hook is silent without a repository binding and ignores resume", async () => {
+  const tempRoot = await makeGitRepo();
+  try {
+    for (const source of ["startup", "resume", "clear", "compact"]) {
+      const result = runHook(hookPayload(tempRoot, source));
+      assert.equal(result.status, 0);
+      assert.equal(result.stderr, "");
+      assert.equal(result.stdout, "");
+    }
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
   }
 });
 
@@ -80,13 +73,16 @@ test("SessionStart hook injects a root repository binding without a network look
     const result = runHook(hookPayload(nested));
     assert.equal(result.status, 0);
     assert.equal(result.stderr, "");
-    const context = JSON.parse(
-      result.stdout,
-    ).hookSpecificOutput.additionalContext;
+    const context = JSON.parse(result.stdout).hookSpecificOutput
+      .additionalContext;
     assert.match(context, /Repository binding/);
     assert.match(context, /workspace "nuanu"/);
     assert.match(context, /project "FLOW"/);
     assert.match(context, /validate it lazily/);
+    assert.doesNotMatch(
+      context,
+      /onboarding_next|onboarding|first actual turn/i,
+    );
     assert(
       context.trim().split(/\s+/).length <= 80,
       "hook context exceeds 80 words",
@@ -117,9 +113,8 @@ test("SessionStart hook chooses the most specific monorepo scope", async () => {
 
     const result = runHook(hookPayload(nested));
     assert.equal(result.status, 0);
-    const context = JSON.parse(
-      result.stdout,
-    ).hookSpecificOutput.additionalContext;
+    const context = JSON.parse(result.stdout).hookSpecificOutput
+      .additionalContext;
     assert.match(context, /scope "apps\/web"/);
     assert.match(context, /project "WEB"/);
     assert.doesNotMatch(context, /project "APPS"/);
@@ -147,9 +142,8 @@ test("SessionStart hook applies a valid local override and ignores an invalid on
     );
 
     let result = runHook(hookPayload(tempRoot));
-    let context = JSON.parse(
-      result.stdout,
-    ).hookSpecificOutput.additionalContext;
+    let context = JSON.parse(result.stdout).hookSpecificOutput
+      .additionalContext;
     assert.match(context, /project "LOCAL"/);
 
     await fs.writeFile(
@@ -180,9 +174,7 @@ test("SessionStart hook fails open for malformed, unsafe, and oversized reposito
         version: 1,
         workspace_slug: "nuanu",
         project_identifier: "FLOW",
-        scopes: [
-          { path: "../outside", project_identifier: "UNSAFE" },
-        ],
+        scopes: [{ path: "../outside", project_identifier: "UNSAFE" }],
       }),
       "x".repeat(4 * 1024 + 1),
     ]) {
@@ -190,11 +182,7 @@ test("SessionStart hook fails open for malformed, unsafe, and oversized reposito
       const result = runHook(hookPayload(tempRoot));
       assert.equal(result.status, 0);
       assert.equal(result.stderr, "");
-      const context = JSON.parse(
-        result.stdout,
-      ).hookSpecificOutput.additionalContext;
-      assert.match(context, /Nuanu Flow/);
-      assert.doesNotMatch(context, /Repository binding/);
+      assert.equal(result.stdout, "");
     }
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
@@ -206,6 +194,7 @@ test("SessionStart hook produces no context for malformed or unrelated input", (
     "{not-json",
     {},
     { hook_event_name: "PostToolUse", source: "startup" },
+    { hook_event_name: "SessionStart", source: "resume" },
     { hook_event_name: "SessionStart", source: "unknown" },
   ]) {
     const result = runHook(payload);
@@ -245,7 +234,7 @@ test("plugin validator rejects escaped, missing, slow, and incorrectly matched h
     );
 
     const manifestPath = path.join(pluginRoot, ".codex-plugin/plugin.json");
-    const hooksPath = path.join(pluginRoot, "hooks/hooks.json");
+    const hooksPath = path.join(pluginRoot, "hooks/codex-hooks.json");
     const originalManifest = await fs.readFile(manifestPath, "utf8");
     const originalHooks = await fs.readFile(hooksPath, "utf8");
     const validate = () =>
@@ -273,22 +262,32 @@ test("plugin validator rejects escaped, missing, slow, and incorrectly matched h
     hooks.hooks.SessionStart[0].matcher = "startup";
     hooks.hooks.SessionStart[0].hooks[0].timeout = 2;
     hooks.hooks.SessionStart[0].hooks[0].command =
-      "node \"${PLUGIN_ROOT}/hooks/missing.mjs\"";
+      'node "${PLUGIN_ROOT}/hooks/missing.mjs"';
     await fs.writeFile(hooksPath, `${JSON.stringify(hooks, null, 2)}\n`);
     const invalid = validate();
     assert.notEqual(invalid.status, 0);
-    assert.match(invalid.stderr, /matcher must be startup\|resume\|clear\|compact/);
+    assert.match(invalid.stderr, /matcher must be startup\|clear\|compact/);
     assert.match(invalid.stderr, /at most one second/);
     assert.match(invalid.stderr, /target does not exist/);
 
     await fs.writeFile(hooksPath, originalHooks);
     const invalidPromptHooks = JSON.parse(originalHooks);
+    const workerHooks = JSON.parse(
+      await fs.readFile(
+        path.join(
+          repoRoot,
+          "plugins/nuanu-flow-worker/hooks/codex-hooks.json",
+        ),
+        "utf8",
+      ),
+    );
+    invalidPromptHooks.hooks.UserPromptSubmit =
+      workerHooks.hooks.UserPromptSubmit;
     invalidPromptHooks.hooks.UserPromptSubmit[0].matcher = "*";
     invalidPromptHooks.hooks.UserPromptSubmit[0].hooks[0].timeout = 2;
-    invalidPromptHooks.hooks.UserPromptSubmit[0].hooks[0].additionalContextLimit =
-      501;
+    invalidPromptHooks.hooks.UserPromptSubmit[0].hooks[0].additionalContextLimit = 501;
     invalidPromptHooks.hooks.UserPromptSubmit[0].hooks[0].command =
-      "node \"${PLUGIN_ROOT}/hooks/missing-prompt.mjs\"";
+      'node "${PLUGIN_ROOT}/hooks/missing-prompt.mjs"';
     await fs.writeFile(
       hooksPath,
       `${JSON.stringify(invalidPromptHooks, null, 2)}\n`,

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const pluginRoot = path.join(repoRoot, "plugins/nuanu-flow");
+const workerPluginRoot = path.join(repoRoot, "plugins/nuanu-flow-worker");
 const manifestPath = path.join(pluginRoot, ".codex-plugin/plugin.json");
 const marketplacePath = path.join(repoRoot, ".agents/plugins/marketplace.json");
 const installPrompt = "Read and install https://flow.nuanu.com/install.md";
@@ -73,7 +74,7 @@ test("Codex plugin metadata points at skills and OAuth-ready Flow MCP config", a
   assert.equal(manifest.name, "nuanu-flow");
   assert.match(manifest.version, /^\d+\.\d+\.\d+(\+[0-9A-Za-z.-]+)?$/);
   assert.equal(manifest.skills, "./skills");
-  assert.equal(manifest.hooks, "./hooks/hooks.json");
+  assert.equal(manifest.hooks, "./hooks/codex-hooks.json");
   assert.equal(manifest.apps, undefined);
   await assert.rejects(fs.access(path.join(pluginRoot, ".app.json")));
   assert.equal(typeof manifest.mcpServers, "object");
@@ -102,6 +103,11 @@ test("Codex plugin metadata points at skills and OAuth-ready Flow MCP config", a
     source: "local",
     path: "./plugins/nuanu-flow",
   });
+  assert.equal(marketplace.plugins[1].name, "nuanu-flow-worker");
+  assert.deepEqual(marketplace.plugins[1].source, {
+    source: "local",
+    path: "./plugins/nuanu-flow-worker",
+  });
 
   await fs.access(path.join(pluginRoot, manifest.skills));
   await fs.access(path.join(pluginRoot, manifest.hooks));
@@ -124,24 +130,38 @@ test("Codex plugin metadata points at skills and OAuth-ready Flow MCP config", a
   }
   const hooks = await readJson(path.join(pluginRoot, manifest.hooks));
   assert.equal(hooks.hooks.SessionStart.length, 1);
-  assert.equal(hooks.hooks.UserPromptSubmit.length, 1);
+  assert.equal(hooks.hooks.UserPromptSubmit, undefined);
+  const workerManifest = await readJson(
+    path.join(workerPluginRoot, ".codex-plugin/plugin.json"),
+  );
+  const workerHooks = await readJson(
+    path.join(workerPluginRoot, workerManifest.hooks),
+  );
+  assert.equal(workerManifest.mcpServers, undefined);
+  assert.equal(workerHooks.hooks.UserPromptSubmit.length, 1);
   assert.match(
-    hooks.hooks.UserPromptSubmit[0].hooks[0].command,
+    workerHooks.hooks.UserPromptSubmit[0].hooks[0].command,
     /user-prompt-submit\.mjs/,
   );
   assert.equal(
-    hooks.hooks.UserPromptSubmit[0].hooks[0].additionalContextLimit,
+    workerHooks.hooks.UserPromptSubmit[0].hooks[0].additionalContextLimit,
     500,
   );
   await fs.access(
-    path.join(pluginRoot, "hooks/user-prompt-submit.mjs"),
+    path.join(workerPluginRoot, "hooks/user-prompt-submit.mjs"),
   );
   await fs.access(
     path.join(
-      pluginRoot,
-      "scripts/activity/remote-worker-activity.mjs",
+      workerPluginRoot,
+      "scripts/worker/session_activity.mjs",
     ),
   );
+  await fs.access(path.join(workerPluginRoot, "scripts/worker/session_observer.mjs"));
+  await fs.access(path.join(workerPluginRoot, "scripts/worker/managed_supervisor.mjs"));
+  await fs.access(path.join(workerPluginRoot, "commands/peek.md"));
+  await fs.access(path.join(workerPluginRoot, "commands/babysit.md"));
+  await fs.access(path.join(pluginRoot, "scripts/agent-bus/agent-bus.mjs"));
+  await assert.rejects(fs.access(path.join(pluginRoot, "scripts/worker")));
 });
 
 test("Codex auth doctor detects disabled OAuth metadata", async () => {
@@ -169,8 +189,9 @@ test("public plugin exposes the one-prompt onboarding and remote enrollment flow
   const codexSetup = await fs.readFile(path.join(pluginRoot, "skills/codex-setup/SKILL.md"), "utf8");
 
   await fs.access(path.join(pluginRoot, "skills/onboarding/SKILL.md"));
-  await fs.access(path.join(pluginRoot, "scripts/worker/enroll.mjs"));
-  await fs.access(path.join(pluginRoot, "scripts/worker/credentials.mjs"));
+  await fs.access(path.join(workerPluginRoot, "scripts/worker/enroll.mjs"));
+  await fs.access(path.join(workerPluginRoot, "scripts/worker/credentials.mjs"));
+  await fs.access(path.join(workerPluginRoot, "skills/remote-worker/SKILL.md"));
 
   assert.match(rootReadme, new RegExp(installPrompt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(pluginReadme, new RegExp(installPrompt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));

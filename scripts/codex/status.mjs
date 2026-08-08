@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -54,19 +55,30 @@ export async function collectStatus(options = {}) {
 
   const versionResult = runCodex(["--version"], codexOptions);
   assertCodexVersion(versionResult.stdout);
-  const marketplaceResult = runCodex(
-    ["plugin", "marketplace", "list", "--json"],
-    codexOptions,
-  );
-  const pluginResult = runCodex(
-    ["plugin", "list", "--available", "--json"],
-    codexOptions,
-  );
-  const marketplaces = parseJsonOutput(
-    "Codex marketplace list",
-    marketplaceResult.stdout,
-  ).marketplaces;
-  const plugins = parseJsonOutput("Codex plugin list", pluginResult.stdout);
+  const homePresent = await fs
+    .access(home)
+    .then(() => true)
+    .catch((error) => {
+      if (error.code === "ENOENT") return false;
+      throw error;
+    });
+  let marketplaces = [];
+  let plugins = { installed: [] };
+  if (homePresent) {
+    const marketplaceResult = runCodex(
+      ["plugin", "marketplace", "list", "--json"],
+      codexOptions,
+    );
+    const pluginResult = runCodex(
+      ["plugin", "list", "--available", "--json"],
+      codexOptions,
+    );
+    marketplaces = parseJsonOutput(
+      "Codex marketplace list",
+      marketplaceResult.stdout,
+    ).marketplaces;
+    plugins = parseJsonOutput("Codex plugin list", pluginResult.stdout);
+  }
   const installed = (plugins.installed || []).find(
     (plugin) => plugin.pluginId === mode.pluginId,
   );
@@ -85,12 +97,14 @@ export async function collectStatus(options = {}) {
       probeOAuthMetadata(mode.mcpUrl, {
         timeoutMs: options.endpointTimeoutMs,
       }),
-      readMcpAuthStatus(modeName, {
-        codexHome: baseHome,
-        codexBin: options.codexBin,
-        cwd: repoRoot,
-        env,
-      }),
+      homePresent
+        ? readMcpAuthStatus(modeName, {
+            codexHome: baseHome,
+            codexBin: options.codexBin,
+            cwd: repoRoot,
+            env,
+          })
+        : Promise.resolve("unknown"),
       resolveModeCredentials(modeName, env, options.keychain),
     ]);
   const authSource =
@@ -114,6 +128,7 @@ export async function collectStatus(options = {}) {
     installed: Boolean(installed),
     baseCodexHome: baseHome,
     codexHome: home,
+    homePresent,
     isolated: Boolean(installed) && !oppositeInstalled,
     oppositeInstalled,
     endpoints: {
