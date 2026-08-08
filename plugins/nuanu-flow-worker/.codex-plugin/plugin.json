@@ -1,0 +1,30 @@
+{
+  "name": "nuanu-flow-worker",
+  "version": "0.3.10",
+  "description": "Run a managed Nuanu Flow coding worker with enrollment, task execution, diagnostics, and session observation.",
+  "author": {
+    "name": "Nuanu",
+    "email": "albert@nuanu.com",
+    "url": "https://flow.nuanu.com"
+  },
+  "homepage": "https://flow.nuanu.com",
+  "repository": "https://github.com/nuanu-ai/agent-tools",
+  "license": "AGPL-3.0",
+  "keywords": ["nuanu-flow", "remote-agent", "worker", "codex"],
+  "skills": "./skills",
+  "interface": {
+    "displayName": "Nuanu Flow Worker",
+    "shortDescription": "Managed coding-agent worker runtime for Nuanu Flow.",
+    "longDescription": "Enroll and run a persistent managed coding worker with task execution, heartbeat, diagnostics, and exact-session observation.",
+    "developerName": "Nuanu",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "websiteURL": "https://flow.nuanu.com",
+    "privacyPolicyURL": "https://flow.nuanu.com/legals/privacy-policy",
+    "termsOfServiceURL": "https://flow.nuanu.com/legals/terms-and-conditions",
+    "defaultPrompt": [
+      "Show the status of this Nuanu Flow worker.",
+      "Inspect the current remote worker session in read-only mode."
+    ]
+  }
+}

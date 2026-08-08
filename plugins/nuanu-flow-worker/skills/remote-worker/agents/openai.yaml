@@ -1,0 +1,10 @@
+interface:
+  display_name: "Nuanu Flow Remote Worker"
+  short_description: "Operate and inspect a managed Nuanu Flow worker"
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "nuanu-flow"
+      description: "Nuanu Flow remote-worker operations"
+      transport: "streamable_http"
+      url: "https://flow.nuanu.com/mcp-server/mcp"
