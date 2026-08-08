@@ -34,8 +34,10 @@ export function nextVersion(current, request) {
 }
 
 export async function updateManifestVersion(options) {
-  const manifestPaths = options.manifestPath
-    ? [options.manifestPath]
+  const manifestPaths = options.manifestPaths?.length
+    ? options.manifestPaths
+    : options.manifestPath
+      ? [options.manifestPath]
     : [
         path.join(
           REPO_ROOT,
@@ -80,9 +82,16 @@ export async function updateManifestVersion(options) {
 }
 
 function parseArgs(argv) {
-  const options = { request: "" };
-  for (const arg of argv) {
+  const options = { request: "", manifestPaths: [] };
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
     if (arg === "--dry-run") options.dryRun = true;
+    else if (arg === "--manifest-path") {
+      const manifestPath = argv[index + 1];
+      if (!manifestPath) throw new Error("--manifest-path requires a path");
+      options.manifestPaths.push(manifestPath);
+      index += 1;
+    }
     else if (arg === "-h" || arg === "--help") options.help = true;
     else if (!options.request) options.request = arg;
     else throw new Error(`Unknown argument: ${arg}`);
@@ -93,7 +102,10 @@ function parseArgs(argv) {
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   if (options.help || !options.request) {
-    console.log(`Usage: node scripts/codex/version.mjs <patch|minor|major|X.Y.Z> [--dry-run]`);
+    console.log(
+      "Usage: node scripts/codex/version.mjs <patch|minor|major|X.Y.Z> " +
+        "[--dry-run] [--manifest-path PATH ...]",
+    );
     if (!options.help) process.exitCode = 1;
     return;
   }
