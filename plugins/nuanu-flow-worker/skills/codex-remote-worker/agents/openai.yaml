@@ -1,0 +1,10 @@
+interface:
+  display_name: "Nuanu Flow Codex Worker"
+  short_description: "Run and inspect a Nuanu Flow worker in Codex"
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "nuanu-flow"
+      description: "Nuanu Flow Codex remote-worker operations"
+      transport: "streamable_http"
+      url: "https://flow.nuanu.com/mcp-server/mcp"

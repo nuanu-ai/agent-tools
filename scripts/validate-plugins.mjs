@@ -382,7 +382,7 @@ async function validateCodexPlugin(pluginRoot) {
     }
     const mcp = await readJson(path.join(pluginRoot, ".mcp.json"), "Codex MCP companion");
     validateMcpServers(mcp?.mcpServers, "Codex MCP companion mcpServers");
-  } else {
+  } else if (manifest.mcpServers !== undefined) {
     validateMcpServers(manifest.mcpServers, "Codex plugin manifest mcpServers");
   }
 
@@ -479,8 +479,11 @@ async function validateClaudePlugin(pluginRoot) {
   if (!isObject(manifest.author)) add("Claude plugin manifest author must be an object");
   else requireString(manifest.author, "name", "Claude plugin manifest author");
 
-  const mcp = await readJson(path.join(pluginRoot, ".mcp.json"), "Claude MCP config");
-  validateMcpServers(mcp?.mcpServers, "Claude MCP config mcpServers");
+  const mcpPath = path.join(pluginRoot, ".mcp.json");
+  const mcp = (await exists(mcpPath))
+    ? await readJson(mcpPath, "Claude MCP config")
+    : null;
+  if (mcp) validateMcpServers(mcp.mcpServers, "Claude MCP config mcpServers");
   return { manifest, mcp };
 }
 

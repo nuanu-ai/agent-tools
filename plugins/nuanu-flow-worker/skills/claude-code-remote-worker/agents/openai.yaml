@@ -1,0 +1,10 @@
+interface:
+  display_name: "Nuanu Flow Claude Worker"
+  short_description: "Run and inspect a Nuanu Flow worker in Claude Code"
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "nuanu-flow"
+      description: "Nuanu Flow Claude Code remote-worker operations"
+      transport: "streamable_http"
+      url: "https://flow.nuanu.com/mcp-server/mcp"
