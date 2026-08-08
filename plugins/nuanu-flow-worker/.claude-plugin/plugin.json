@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "nuanu-flow-worker",
-  "version": "0.3.10",
+  "version": "0.3.11",
   "displayName": "Nuanu Flow Worker",
   "description": "Run a managed Nuanu Flow coding worker with enrollment, task execution, diagnostics, and session observation.",
   "author": {
@@ -10,5 +10,11 @@
   },
   "repository": "https://github.com/nuanu-ai/agent-tools",
   "license": "AGPL-3.0",
-  "keywords": ["nuanu-flow", "remote-agent", "worker", "codex", "claude-code"]
+  "keywords": [
+    "nuanu-flow",
+    "remote-agent",
+    "worker",
+    "codex",
+    "claude-code"
+  ]
 }

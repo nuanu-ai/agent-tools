@@ -56,6 +56,14 @@ export class NuanuClient {
     return this._request("/agent-worker/whoami/");
   }
 
+  chatSync({ cursors, waitSeconds = 0 } = {}) {
+    return this._post("/agent-worker/chat/sync/", { cursors: cursors || {}, wait_seconds: waitSeconds });
+  }
+
+  chatPostEvents(sessionId, events) {
+    return this._post(`/agent-worker/chat/${sessionId}/events/`, { events });
+  }
+
   heartbeat(workerId, status = {}) {
     return this._post("/agent-worker/heartbeat/", { worker_id: workerId, ...status });
   }

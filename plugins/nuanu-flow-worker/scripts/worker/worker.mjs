@@ -760,3 +760,8 @@ sessionActivityGcTimer.unref?.();
 heartbeatLoop();
 pollLoop();
 gatewayLoop();
+if (process.env.NUANU_CHAT_DISABLED !== "1") {
+  import("./interactive_chat.mjs")
+    .then(({ startChatLoop }) => startChatLoop({ client, cfg, isRunning: () => running, log }))
+    .catch((error) => log("chat loop unavailable: " + error.message));
+}
