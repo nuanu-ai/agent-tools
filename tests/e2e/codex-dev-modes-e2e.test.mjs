@@ -1452,6 +1452,30 @@ test("updateManifestVersion changes only the canonical version and honors dry-ru
   }
 });
 
+test("updateManifestVersion updates an explicit manifest pair atomically", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-version-pair-"));
+  const manifestPaths = ["codex.json", "claude.json"].map((name) =>
+    path.join(tempRoot, name),
+  );
+  try {
+    for (const manifestPath of manifestPaths) {
+      await fs.writeFile(
+        manifestPath,
+        `${JSON.stringify({ name: "nuanu-flow-worker", version: "0.3.10" }, null, 2)}\n`,
+      );
+    }
+
+    const result = await updateManifestVersion({ manifestPaths, request: "patch" });
+
+    assert.equal(result.newVersion, "0.3.11");
+    for (const manifestPath of manifestPaths) {
+      assert.equal((await readJson(manifestPath)).version, "0.3.11");
+    }
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("updateProduction upgrades only Git-backed production without removing the plugin", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nuanu-update-"));
   const statePath = path.join(tempRoot, "state.json");
