@@ -1,6 +1,6 @@
 {
   "name": "nuanu-flow-worker",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "description": "Run a managed Nuanu Flow coding worker with enrollment, task execution, diagnostics, and session observation.",
   "author": {
     "name": "Nuanu",
