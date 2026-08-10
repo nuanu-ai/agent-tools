@@ -956,7 +956,7 @@ test("readMcpAuthStatus reads the selected isolated home and server only", async
     `${JSON.stringify({
       marketplaces: [],
       installed: [{ pluginId: "nuanu-flow@nuanu" }],
-      mcpAuth: { "nuanu-flow": "o_auth" },
+      mcpAuth: { "nuanu-flow": "oauth" },
     })}\n`,
   );
   await fs.writeFile(

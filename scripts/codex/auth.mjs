@@ -220,6 +220,14 @@ export async function probeEndpoint(url, timeoutMs = 5000) {
   }
 }
 
+export function isOAuthAuthStatus(status) {
+  return status === "oauth" || status === "o_auth";
+}
+
+export function normalizeMcpAuthStatus(status) {
+  return isOAuthAuthStatus(status) ? "o_auth" : status;
+}
+
 export async function readMcpAuthStatus(modeName, options = {}) {
   const mode = modeConfig(modeName, options.env || process.env);
   const home =
@@ -246,9 +254,8 @@ export async function readMcpAuthStatus(modeName, options = {}) {
   const status = servers.find(
     (server) => server.name === mode.mcpName,
   )?.auth_status;
-  return ["o_auth", "not_logged_in", "unsupported"].includes(status)
-    ? status
-    : "unknown";
+  if (isOAuthAuthStatus(status)) return normalizeMcpAuthStatus(status);
+  return ["not_logged_in", "unsupported"].includes(status) ? status : "unknown";
 }
 
 export function runCodexWithBrowserAuth(args, options = {}) {

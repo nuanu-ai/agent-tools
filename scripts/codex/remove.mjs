@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   CODEX_KEYCHAIN_SERVICE,
+  isOAuthAuthStatus,
   keychainAccount,
   systemKeychain,
 } from "./auth.mjs";
@@ -173,7 +174,7 @@ async function homeRemovalActions(
     const nuanuMcp = Array.isArray(mcpServers)
       ? mcpServers.find((server) => server.name === "nuanu-flow")
       : null;
-    if (nuanuMcp?.auth_status === "o_auth") {
+    if (isOAuthAuthStatus(nuanuMcp?.auth_status)) {
       actions.push(
         commandAction(
           home,
