@@ -4,6 +4,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  isOAuthAuthStatus,
+  normalizeMcpAuthStatus,
   readMcpAuthStatus,
   runCodexWithBrowserAuth,
   runMcpLogin,
@@ -264,7 +266,7 @@ export async function installCurrentProfile(modeName, options = {}) {
       }.`,
     );
   }
-  if (mcp.auth_status !== "o_auth") {
+  if (!isOAuthAuthStatus(mcp.auth_status)) {
     throw new Error(
       `Nuanu Flow MCP authentication verification failed: ${mcp.auth_status}.`,
     );
@@ -286,7 +288,7 @@ export async function installCurrentProfile(modeName, options = {}) {
     codexHome: home,
     pluginId: mode.pluginId,
     mcpUrl: mode.mcpUrl,
-    authStatus: mcp.auth_status,
+    authStatus: normalizeMcpAuthStatus(mcp.auth_status),
     hookStatus: hook.status,
     hookDetail: hook.detail,
     build,

@@ -30,13 +30,16 @@ test("production marketplaces publish the managed worker companion", async () =>
 });
 
 test("managed worker plugin ships the bootstrap runtime without a second MCP", async () => {
-  const generalManifest = await readJson("plugins/nuanu-flow/.codex-plugin/plugin.json");
   const workerManifest = await readJson(
     "plugins/nuanu-flow-worker/.codex-plugin/plugin.json",
   );
+  const claudeWorkerManifest = await readJson(
+    "plugins/nuanu-flow-worker/.claude-plugin/plugin.json",
+  );
 
   assert.equal(workerManifest.name, "nuanu-flow-worker");
-  assert.equal(workerManifest.version, generalManifest.version);
+  assert.match(workerManifest.version, /^\d+\.\d+\.\d+$/);
+  assert.equal(workerManifest.version, claudeWorkerManifest.version);
   assert.equal(workerManifest.mcpServers, undefined);
   for (const relativePath of [
     "scripts/worker/enroll.mjs",
