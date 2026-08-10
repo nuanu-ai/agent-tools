@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 
 import { createDefaultCredentialStore } from "./credentials.mjs";
 
-const DEFAULT_API_BASE = "https://flow.nuanu.com/api";
+const DEFAULT_API_BASE = "https://flow.nuanu.com/be/api";
 const ENROLLMENT_TOKEN_PATTERN = /^nuanu_join_[0-9a-f]{64}$/;
 const AGENT_KEY_PATTERN = /^nuanu_flow_[0-9a-f]{64}$/;
 

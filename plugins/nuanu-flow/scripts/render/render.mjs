@@ -7,7 +7,7 @@
 //   node render.mjs board <projectId> [--workspace <slug>] [--limit 8]
 //
 // Env:
-//   NUANU_URL or NUANU_API_URL — Django API base INCLUDING /api (e.g. https://flow.nuanu.com/api)
+//   NUANU_URL or NUANU_API_URL — Django API base ending in /api (e.g. https://flow.nuanu.com/be/api)
 //   NUANU_TOKEN                — personal API token (nuanu_api_…)
 //   NUANU_WORKSPACE            — default workspace slug (overridden by --workspace)
 //
@@ -236,14 +236,23 @@ async function cmdWatch(ws, runId, opts) {
     } else {
       for (const [stepId, log] of logs) {
         const before = prevSteps.get(stepId);
-        if (!before) console.log(`${dim(now())} ${yellow("▶")} entered ${log.step_name || stepId}${TYPE_LABEL[log.step_type] ? dim(` (${TYPE_LABEL[log.step_type]})`) : ""}`);
+        if (!before)
+          console.log(
+            `${dim(now())} ${yellow("▶")} entered ${log.step_name || stepId}${TYPE_LABEL[log.step_type] ? dim(` (${TYPE_LABEL[log.step_type]})`) : ""}`
+          );
         else if (before.status !== log.status || (!before.completed_at && log.completed_at)) {
-          const glyph = FAILED.has(String(log.status).toLowerCase()) ? red("✗") : log.completed_at ? green("✓") : yellow("▶");
+          const glyph = FAILED.has(String(log.status).toLowerCase())
+            ? red("✗")
+            : log.completed_at
+              ? green("✓")
+              : yellow("▶");
           console.log(`${dim(now())} ${glyph} ${log.step_name || stepId} → ${log.status}`);
         }
       }
       if (prev.status !== run.status)
-        console.log(`${dim(now())} ${bold("run")} → ${run.status}${run.error_message ? red(` (${run.error_message})`) : ""}`);
+        console.log(
+          `${dim(now())} ${bold("run")} → ${run.status}${run.error_message ? red(` (${run.error_message})`) : ""}`
+        );
     }
     prev = run;
     prevSteps = logs;
@@ -257,7 +266,7 @@ async function cmdWatch(ws, runId, opts) {
       console.log(dim(`\n— watch timeout after ${timeout / 1000}s; run is ${run.status} —`));
       process.exit(3);
     }
-    await new Promise((r) => setTimeout(r, interval));
+    await new Promise((resolve) => setTimeout(resolve, interval));
   }
 }
 
@@ -294,7 +303,12 @@ async function cmdBoard(ws, projectId, opts) {
     const items = byState.get(state.id) || [];
     const rows = items
       .slice(0, limit)
-      .map((i) => clip(`${PRIORITY_GLYPH[i.priority ?? "none"] || "·"} ${project.identifier ? `${project.identifier}-${i.sequence_id} ` : ""}${i.name}`, COL_WIDTH - 2));
+      .map((i) =>
+        clip(
+          `${PRIORITY_GLYPH[i.priority ?? "none"] || "·"} ${project.identifier ? `${project.identifier}-${i.sequence_id} ` : ""}${i.name}`,
+          COL_WIDTH - 2
+        )
+      );
     if (items.length > limit) rows.push(dim(`+${items.length - limit} more`));
     return { header: clip(`${state.name} (${items.length})`, COL_WIDTH - 2), rows };
   });
@@ -341,12 +355,30 @@ function cmdDemo() {
     started_at: new Date(Date.now() - 12 * 60_000).toISOString(),
   };
   const stepLogs = [
-    { step_id: "start", step_name: "start", step_type: "start", status: "done",
-      entered_at: run.started_at, completed_at: run.started_at },
-    { step_id: "quote", step_name: "Draft quote", step_type: "agent_task", status: "done",
-      entered_at: run.started_at, completed_at: new Date(Date.now() - 10 * 60_000).toISOString() },
-    { step_id: "approve", step_name: "Approve quote?", step_type: "decision", status: "waiting",
-      entered_at: new Date(Date.now() - 10 * 60_000).toISOString(), completed_at: null },
+    {
+      step_id: "start",
+      step_name: "start",
+      step_type: "start",
+      status: "done",
+      entered_at: run.started_at,
+      completed_at: run.started_at,
+    },
+    {
+      step_id: "quote",
+      step_name: "Draft quote",
+      step_type: "agent_task",
+      status: "done",
+      entered_at: run.started_at,
+      completed_at: new Date(Date.now() - 10 * 60_000).toISOString(),
+    },
+    {
+      step_id: "approve",
+      step_name: "Approve quote?",
+      step_type: "decision",
+      status: "waiting",
+      entered_at: new Date(Date.now() - 10 * 60_000).toISOString(),
+      completed_at: null,
+    },
   ];
   console.log(runHeader(run));
   console.log("");
