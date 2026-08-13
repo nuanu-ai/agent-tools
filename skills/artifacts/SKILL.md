@@ -40,8 +40,8 @@ work_item | module | objective | user | team | agent | …` with a relation
    Duplicating an existing artifact instead of versioning it fragments the
    registry.
 2. **New content for the same artifact = a new version**, not a new artifact:
-   `add_artifact_version` (`content`, optional `change_summary` — treat it
-   like a commit message).
+   `add_artifact_version` for text or `add_artifact_file_version` for binary
+   bytes (`content_base64`); use `change_summary` like a commit message.
 3. **Scratch work must be `temp`** (`temp: true` or `context.kind:"agent"`) —
    and **promoted with `commit_artifact` if it turns out to matter**,
    otherwise the TTL sweeper deletes it. A run-scoped artifact commits to
@@ -61,9 +61,12 @@ execute_tool("create_artifact", {
 });
 ```
 
-Text, markdown, JSON, CSV, HTML all work inline. Omitting `content` just
-registers the row and returns presigned `upload_data` for a raw-bytes REST
-upload (binary files) — prefer inline `content` whenever the payload is text.
+Text, markdown, JSON, CSV, HTML all work inline. For PDF, images, archives, or
+other binary files up to 5 MiB, call `upload_artifact_file` with canonical
+standard `content_base64`; it performs registration, byte upload, checksum
+verification, and completion in one call. Use `add_artifact_file_version` for
+a new binary version. Omitting `content` from `create_artifact` only registers
+the row for callers that intentionally operate the presigned REST flow.
 
 Inside a Process Agent Task, a declared Artifact output must also include its
 exact `output_path` from the task instructions, together with the declared
@@ -116,4 +119,4 @@ node solely to deliver a Decision artifact.
 
 ## Tools Used
 
-`list_specs`, `create_spec`, `update_spec`, `search_artifacts`, `get_artifact`, `create_artifact`, `add_artifact_version`, `link_artifact`, `commit_artifact`, `get_artifact_download_url`
+`list_specs`, `create_spec`, `update_spec`, `search_artifacts`, `get_artifact`, `create_artifact`, `upload_artifact_file`, `add_artifact_version`, `add_artifact_file_version`, `link_artifact`, `commit_artifact`, `get_artifact_download_url`
