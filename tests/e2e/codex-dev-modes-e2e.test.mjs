@@ -128,7 +128,7 @@ test("modeConfig isolates production and development endpoints and credentials",
   assert.equal(prod.pluginId, "nuanu-flow@nuanu");
   assert.equal(prod.mcpName, "nuanu-flow");
   assert.equal(prod.mcpUrl, "https://flow.nuanu.com/mcp-server/mcp");
-  assert.equal(prod.apiUrl, "https://flow.nuanu.com/api");
+  assert.equal(prod.apiUrl, "https://flow.nuanu.com/be/api");
   assert.equal(prod.tokenEnv, "NUANU_TOKEN");
 
   assert.throws(() => modeConfig("staging", {}), /Unknown Nuanu Flow mode/);
@@ -1336,7 +1336,7 @@ test("buildWorkerLaunch rejects missing keys and production endpoints in develop
       buildWorkerLaunch("dev", {
         env: {
           NUANU_DEV_AGENT_KEY: "local-agent-key",
-          NUANU_URL: "https://flow.nuanu.com/api",
+          NUANU_URL: "https://flow.nuanu.com/be/api",
         },
       }),
     /development worker URL must use localhost/i,

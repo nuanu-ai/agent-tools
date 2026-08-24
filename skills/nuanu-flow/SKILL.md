@@ -175,7 +175,7 @@ For a generic remote agent, use the bundled zero-dependency polling worker.
 It has no hooks and does not install a plugin:
 
 ```bash
-node scripts/worker.mjs enroll --base-url https://flow.nuanu.com/api
+node scripts/worker.mjs enroll --base-url https://flow.nuanu.com/be/api
 node scripts/worker.mjs status
 node scripts/worker.mjs run --command "<non-interactive text-in/text-out command>"
 ```

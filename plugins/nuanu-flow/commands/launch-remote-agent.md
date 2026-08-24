@@ -16,11 +16,14 @@ API base URL (ends with `/api`). If no token was given, ask the user for it.
    - the second argument, if provided;
    - `$NUANU_URL` from the environment, if set;
    - otherwise probe candidates with the token and keep the first that
-     answers — try `http://localhost:8000/api`, then `https://flow.nuanu.com/api`:
+     returns a JSON Agent identity — try `http://localhost:8000/api`, then
+     `https://flow.nuanu.com/be/api`:
      ```bash
      curl -s -o /dev/null -w "%{http_code}" "<candidate>/agent-worker/whoami/" -H "X-Agent-Key: <token>"
      ```
-     `200` → use it. If every candidate returns `401`, prefer one that is
+     A `200` is valid only when `Content-Type` is JSON and the body is an object
+     containing the agent identity fields (`id`, `display_name`, `workspace`).
+     Never accept an HTML `200` as an API response. If every candidate returns `401`, prefer one that is
      reachable at all: the token may simply not be active yet (the create form
      pregenerates tokens that go live on Create) — the worker retries, so
      proceed with the reachable candidate and tell the user to hit Create.

@@ -20,7 +20,7 @@ export const MODES = Object.freeze({
     pluginId: "nuanu-flow@nuanu",
     mcpName: "nuanu-flow",
     mcpUrl: "https://flow.nuanu.com/mcp-server/mcp",
-    apiUrl: "https://flow.nuanu.com/api",
+    apiUrl: "https://flow.nuanu.com/be/api",
     gatewayUrl: "wss://flow.nuanu.com/live/agent-gateway",
     tokenEnv: "NUANU_TOKEN",
     agentKeyEnv: "NUANU_AGENT_KEY",

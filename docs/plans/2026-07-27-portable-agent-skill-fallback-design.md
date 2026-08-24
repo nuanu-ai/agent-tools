@@ -174,7 +174,7 @@ It is deliberately smaller than the plugin worker:
 One file exposes three explicit subcommands:
 
 ```bash
-node scripts/worker.mjs enroll --base-url https://flow.nuanu.com/api
+node scripts/worker.mjs enroll --base-url https://flow.nuanu.com/be/api
 node scripts/worker.mjs status
 node scripts/worker.mjs run --command "<non-interactive command>"
 ```
