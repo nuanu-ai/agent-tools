@@ -21,13 +21,21 @@ export class NuanuClient {
     });
     const text = await res.text();
     let data = {};
+    let parseError;
     try {
       data = text ? JSON.parse(text) : {};
-    } catch {
-      /* non-JSON body */
+    } catch (error) {
+      parseError = error;
     }
     if (!res.ok) {
       const err = new Error(`HTTP ${res.status} ${path}: ${text.slice(0, 200)}`);
+      err.status = res.status;
+      throw err;
+    }
+    if (parseError) {
+      const err = new Error(
+        `Invalid non-JSON response for ${path}: ${text.slice(0, 200)}`,
+      );
       err.status = res.status;
       throw err;
     }

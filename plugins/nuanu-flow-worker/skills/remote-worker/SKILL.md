@@ -56,7 +56,7 @@ verifies an already-enrolled credential without exchanging the token again.
 
 | Var                          | Meaning                                                                                                     |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `NUANU_URL`                  | Django API base — **must include `/api`**, e.g. `https://flow.nuanu.com/api` or `http://localhost:8000/api` |
+| `NUANU_URL`                  | Django API base — **must include `/api`**, e.g. `https://flow.nuanu.com/be/api` or `http://localhost:8000/api` |
 | `NUANU_AGENT_KEY`            | The durable `nuanu_flow_…` key                                                                              |
 | `NUANU_WORKER_ID`            | Optional stable worker name (default `worker-<host>-<pid>`)                                                 |
 | `NUANU_MAX_CONCURRENCY`      | Parallel tasks (default 1)                                                                                  |

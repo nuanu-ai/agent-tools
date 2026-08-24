@@ -259,7 +259,7 @@ NUANU_CODEX_APP_SERVER_ARGS=--profile nuanu-flow-dev app-server --stdio
 `worker:prod` uses:
 
 ```text
-NUANU_URL=https://flow.nuanu.com/api
+NUANU_URL=https://flow.nuanu.com/be/api
 NUANU_ADAPTER=codex-app-server
 NUANU_CODEX_APP_SERVER_ARGS=--profile nuanu-flow-prod app-server --stdio
 ```

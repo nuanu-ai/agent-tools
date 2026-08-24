@@ -420,7 +420,7 @@ test("bundled enrollment exchanges once, stores privately, and feeds worker conf
       return new Response(
         JSON.stringify({
           agent_key: agentKey,
-          api_url: "https://flow.nuanu.com/api",
+          api_url: "https://flow.nuanu.com/be/api",
           agent,
         }),
         { status: 201, headers: { "Content-Type": "application/json" } }
@@ -463,7 +463,7 @@ test("bundled enrollment exchanges once, stores privately, and feeds worker conf
     assert.equal(storedStat.mode & 0o777, 0o600);
     assert.match(stored.enrollment_token_sha256, /^[0-9a-f]{64}$/);
     assert.equal(JSON.stringify(stored).includes(enrollmentToken), false);
-    assert.equal(config.baseUrl, "https://flow.nuanu.com/api");
+    assert.equal(config.baseUrl, "https://flow.nuanu.com/be/api");
     assert.equal(config.agentKey, agentKey);
     assert.equal(normalizeApiBase("http://localhost:8000/api"), "http://localhost:8000/api");
     assert.throws(() => normalizeApiBase("http://flow.nuanu.com/api"), /HTTPS/);

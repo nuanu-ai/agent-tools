@@ -15,7 +15,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const DEFAULT_API_BASE = "https://flow.nuanu.com/api";
+const DEFAULT_API_BASE = "https://flow.nuanu.com/be/api";
 const ENROLLMENT_TOKEN_PATTERN = /^nuanu_join_[0-9a-f]{64}$/;
 const AGENT_KEY_PATTERN = /^nuanu_flow_[0-9a-f]{64}$/;
 const SECRET_PATTERN = /nuanu_(?:join|flow)_[0-9a-f]{64}/g;

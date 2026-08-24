@@ -274,7 +274,7 @@ Generic agents use the portable skill instead of the full plugin:
 
 ```bash
 npx skills add nuanu-ai/agent-tools --skill nuanu-flow
-node "<installed-skill-root>/scripts/worker.mjs" enroll --base-url "https://flow.nuanu.com/api"
+node "<installed-skill-root>/scripts/worker.mjs" enroll --base-url "https://flow.nuanu.com/be/api"
 node "<installed-skill-root>/scripts/worker.mjs" run --command "<text-in/text-out command>"
 ```
 

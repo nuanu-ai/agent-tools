@@ -274,7 +274,7 @@ test("portable worker rejects enrollment tokens passed as command arguments", as
   const result = await runCli([
     "enroll",
     "--base-url",
-    "https://flow.nuanu.com/api",
+    "https://flow.nuanu.com/be/api",
     enrollmentToken,
   ]);
   assert.notEqual(result.code, 0);
