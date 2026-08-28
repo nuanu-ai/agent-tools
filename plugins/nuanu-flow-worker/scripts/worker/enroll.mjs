@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
 import { createDefaultCredentialStore } from "./credentials.mjs";
+import { discoverRuntimes } from "./runtime_discovery.mjs";
 
 const DEFAULT_API_BASE = "https://flow.nuanu.com/be/api";
 const ENROLLMENT_TOKEN_PATTERN = /^nuanu_join_[0-9a-f]{64}$/;
@@ -109,6 +110,8 @@ export async function enroll({
   credentialStore = createDefaultCredentialStore(),
   fetchImpl = globalThis.fetch,
   allowLocalDockerHttp = false,
+  discover = false,
+  discoverImpl = discoverRuntimes,
 }) {
   if (!ENROLLMENT_TOKEN_PATTERN.test(enrollmentToken ?? "")) {
     throw new Error("Invalid enrollment token");
@@ -122,7 +125,9 @@ export async function enroll({
   const existing = await credentialStore.load();
   if (existing && existing.baseUrl === normalizedBase && existing.enrollment_token_sha256 === fingerprint) {
     const agent = await verifyCredential(existing, fetchImpl);
-    return { status: "already_enrolled", agent };
+    const result = { status: "already_enrolled", agent };
+    if (discover) result.runtime_inventory = await discoverImpl();
+    return result;
   }
 
   const response = await fetchImpl(`${normalizedBase}/agent-worker/enroll/`, {
@@ -159,7 +164,9 @@ export async function enroll({
   };
   const agent = await verifyCredential(record, fetchImpl);
   await credentialStore.save(record);
-  return { status: "enrolled", agent };
+  const result = { status: "enrolled", agent };
+  if (discover) result.runtime_inventory = await discoverImpl();
+  return result;
 }
 
 function parseArgs(argv) {
@@ -168,6 +175,7 @@ function parseArgs(argv) {
   let allowLocalDockerHttp = false;
   let verifyExisting = false;
   let expectedAgentId = "";
+  let discover = false;
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--base-url") {
@@ -193,12 +201,16 @@ function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if (argument === "--discover-runtimes") {
+      discover = true;
+      continue;
+    }
     throw new Error(`Unknown option: ${argument}`);
   }
   if (expectedAgentId && !verifyExisting) {
     throw new Error("--expected-agent-id requires --verify-existing");
   }
-  return { baseUrl, profile, allowLocalDockerHttp, verifyExisting, expectedAgentId };
+  return { baseUrl, profile, allowLocalDockerHttp, verifyExisting, expectedAgentId, discover };
 }
 
 async function readEnrollmentToken() {
@@ -211,7 +223,7 @@ async function readEnrollmentToken() {
 
 async function main() {
   try {
-    const { baseUrl, profile, allowLocalDockerHttp, verifyExisting, expectedAgentId } = parseArgs(
+    const { baseUrl, profile, allowLocalDockerHttp, verifyExisting, expectedAgentId, discover } = parseArgs(
       process.argv.slice(2)
     );
     const credentialStore = createDefaultCredentialStore({ profile });
@@ -231,6 +243,7 @@ async function main() {
       enrollmentToken,
       credentialStore,
       allowLocalDockerHttp,
+      discover,
     });
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } catch (error) {

@@ -5,8 +5,8 @@ description: Terminal decision inbox — list pending Nuanu Flow decisions and r
 Act as the user's Nuanu Flow decision inbox. Load the `bpmn-processes` skill
 if you need protocol details.
 
-1. **Find pending decisions**: `execute_tool("list_process_runs", {"status": "waiting"})`.
-   For each waiting run, `execute_tool("get_process_run_status", {"run_id": …})`
+1. **Find pending decisions**: `execute_read_tool("list_process_runs", {"status": "waiting"})`.
+   For each waiting run, `execute_read_tool("get_process_run_status", {"run_id": …})`
    and keep the runs whose current step is a decision (step_type `decision`
    in the latest step log / current_step matches a decision node).
 
@@ -15,7 +15,7 @@ if you need protocol details.
    and stop.
 
 3. **Fetch each decision's options** from its template:
-   `execute_tool("get_process_template", {"template_id": …})` → find the graph
+   `execute_read_tool("get_process_template", {"template_id": …})` → find the graph
    node whose id equals the waiting step's id → `config.options`
    (value/label pairs) and `approval_mode`.
 
@@ -27,7 +27,7 @@ if you need protocol details.
 
 5. **Submit**: `execute_tool("submit_process_decision", {"run_id": …,
    "step_id": …, "decision": "<chosen value>"})`, then confirm what the run
-   did next (re-fetch `get_process_run_status` — did it advance past the
+   did next (re-fetch through `execute_read_tool("get_process_run_status", …)` — did it advance past the
    gate?) and print the run's web link.
 
 Rules: never submit a decision the user did not explicitly pick; "skip"

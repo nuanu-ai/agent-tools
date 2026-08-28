@@ -88,6 +88,9 @@ export function loadConfig({
     browserQaPlaywrightModule,
     pollIntervalMs: Math.max(500, int(env, "NUANU_POLL_INTERVAL_MS", 2000)),
     heartbeatIntervalMs: Math.max(5000, int(env, "NUANU_HEARTBEAT_INTERVAL_MS", 15000)),
+    // Emergency rollback for hosts where probing locally installed coding
+    // runtimes is undesirable. Discovery is safe and enabled by default.
+    runtimeDiscoveryEnabled: bool(env, "NUANU_RUNTIME_DISCOVERY", true),
     capabilities,
     debug: bool(env, "NUANU_WORKER_DEBUG", false),
     lockSeconds: Math.max(30, int(env, "NUANU_LOCK_SECONDS", 300)),

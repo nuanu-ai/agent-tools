@@ -31,6 +31,7 @@ import { TaskWorkspaceManager } from "./task_workspace.mjs";
 import { buildFailureCompletion, createCanonicalCompletionSender, deliverTerminal } from "./terminal_delivery.mjs";
 import { ensureStructuredTextArtifacts } from "./structured_artifact_materializer.mjs";
 import { resolveStructuredInputArtifacts } from "./input_artifact_context.mjs";
+import { discoverRuntimes } from "./runtime_discovery.mjs";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const log = (...a) => console.log(`[${new Date().toISOString()}]`, ...a);
@@ -69,6 +70,7 @@ const agentBusLoad = await loadAgentBusAdapter({
   onError: (error) => log("agent bus degraded:", error.message),
 });
 const agentBus = agentBusLoad.adapter;
+const runtimeInventory = cfg.runtimeDiscoveryEnabled ? await discoverRuntimes() : null;
 
 let running = true;
 let inFlight = 0;
@@ -144,11 +146,13 @@ async function heartbeatLoop() {
   while (running) {
     try {
       const activeRunId = activeProcessRuns.values().next().value;
-      await client.heartbeat(cfg.workerId, {
+      const heartbeat = {
         status: inFlight > 0 ? "working" : "idle",
         activity_label: inFlight > 0 ? "Running delegated task" : "",
         related_object: activeRunId ? { type: "process", id: activeRunId } : null,
-      });
+      };
+      if (runtimeInventory) heartbeat.runtime_inventory = runtimeInventory;
+      await client.heartbeat(cfg.workerId, heartbeat);
       await Promise.allSettled([...activeTaskObservability.values()].map((observability) => observability.refresh()));
       void sessionActivity.heartbeat({ connection: "connected" });
       if (!heartbeatOk) {

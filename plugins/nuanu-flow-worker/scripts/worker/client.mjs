@@ -33,24 +33,16 @@ export class NuanuClient {
     }
     const text = await res.text();
     let data = {};
-    let parseError;
     try {
       data = text ? JSON.parse(text) : {};
-    } catch (error) {
-      parseError = error;
+    } catch {
+      /* non-JSON body */
     }
     if (!res.ok) {
       const err = new Error(`HTTP ${res.status} ${path}: ${text.slice(0, 200)}`);
       err.status = res.status;
       err.retryable = res.status === 408 || res.status === 429 || (res.status >= 500 && res.status <= 599);
       err.response = data;
-      throw err;
-    }
-    if (parseError) {
-      const err = new Error(
-        `Invalid non-JSON response for ${path}: ${text.slice(0, 200)}`,
-      );
-      err.status = res.status;
       throw err;
     }
     return data;

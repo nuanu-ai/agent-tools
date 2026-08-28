@@ -6,6 +6,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { createTaskLogStore } from "./diagnostic_log.mjs";
+import { discoverRuntimes } from "./runtime_discovery.mjs";
 
 const IDENTIFIER = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,254}$/;
 const TERMINAL_PHASES = new Set(["task_completed", "task_failed"]);
@@ -126,6 +127,11 @@ export async function runWorkerCli(
   } = {}
 ) {
   if (argv[0] === "logs") return runLogs(argv.slice(1), { env, stdout, stderr, signal });
+  if (argv[0] === "discover") {
+    const inventory = await discoverRuntimes();
+    stdout.write(`${JSON.stringify(inventory)}\n`);
+    return inventory.runtimes.some((runtime) => runtime.status === "ready") ? 0 : 1;
+  }
   await importWorker();
   return 0;
 }

@@ -77,6 +77,14 @@ Do not shorten the path to `image` or rename the field.
 `get_artifact_download_url` (optionally a specific `version`) → fetch the
 short-lived URL for the bytes.
 
+**HTML preview and sharing**: upload HTML with `create_artifact` using a
+`.html` name or `type:"text/html"`. Use `get_artifact_html_preview_url` for an
+authenticated sandboxed preview in a new tab. Use
+`publish_artifact_share_link` to publish one immutable Artifact version,
+`get_artifact_share_link` to inspect the active link, and
+`revoke_artifact_share_link` to disable anonymous access without deleting the
+Artifact. A later Artifact version does not silently change an existing link.
+
 **Bind**: `link_artifact` with `entity_type`, `entity_id`, `relation`
 (idempotent). Use `output` for things a run/task produced, `source` for
 inputs, `about` for subject matter, `attachment` for misc.
@@ -119,4 +127,4 @@ node solely to deliver a Decision artifact.
 
 ## Tools Used
 
-`list_specs`, `create_spec`, `update_spec`, `search_artifacts`, `get_artifact`, `create_artifact`, `upload_artifact_file`, `add_artifact_version`, `add_artifact_file_version`, `link_artifact`, `commit_artifact`, `get_artifact_download_url`
+`list_specs`, `create_spec`, `update_spec`, `search_artifacts`, `get_artifact`, `create_artifact`, `upload_artifact_file`, `add_artifact_version`, `add_artifact_file_version`, `link_artifact`, `commit_artifact`, `get_artifact_download_url`, `get_artifact_html_preview_url`, `get_artifact_share_link`, `publish_artifact_share_link`, `revoke_artifact_share_link`
