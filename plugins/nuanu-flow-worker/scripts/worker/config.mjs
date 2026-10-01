@@ -1,11 +1,34 @@
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { createDefaultCredentialStore } from "./credentials.mjs";
 import { resolveBrowserQaPlaywrightModule } from "./qa_runtime.mjs";
 import { defaultActivityDirectory } from "./session_activity.mjs";
 
 const DEFAULT_CODEX_ACP_PACKAGE = "@agentclientprotocol/codex-acp@1.1.14";
+const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
+
+function bundledConnection() {
+  try {
+    return JSON.parse(fs.readFileSync(path.resolve(moduleDirectory, "../../connection.json"), "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw new Error("The generated worker connection is invalid.", { cause: error });
+  }
+}
+
+function enforceRegisteredConnection(baseUrl, connection) {
+  if (!connection) return;
+  if (!["local", "production"].includes(connection.environment) || !connection.api_url) {
+    throw new Error("The generated worker connection is invalid.");
+  }
+  const expected = String(connection.api_url).replace(/\/+$/, "");
+  if (baseUrl !== expected) {
+    throw new Error(`NUANU_URL does not match the ${connection.environment} plugin connection.`);
+  }
+}
 
 function required(name, value) {
   const v = value;
@@ -55,9 +78,11 @@ export function loadConfig({
   env = process.env,
   credentialStore = createDefaultCredentialStore({ profile: env.NUANU_WORKER_PROFILE }),
   resolveBrowserQaModule = resolveBrowserQaPlaywrightModule,
+  registeredConnection = bundledConnection(),
 } = {}) {
   const stored = !env.NUANU_URL || !env.NUANU_AGENT_KEY ? credentialStore.loadSync() : null;
   const baseUrl = required("NUANU_URL", env.NUANU_URL || stored?.baseUrl).replace(/\/+$/, "");
+  enforceRegisteredConnection(baseUrl, registeredConnection);
   const repositoryRoot = env.NUANU_REPOSITORY_ROOT || path.join(os.homedir(), ".cache", "nuanu-flow");
   const adapterType = (env.NUANU_ADAPTER || "claude-code").toLowerCase();
   const capabilities = ["lease_renewal_v1", "checkpoint_v1", "repository_read_write_v1", "human_input_v1"];

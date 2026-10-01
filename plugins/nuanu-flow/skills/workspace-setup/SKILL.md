@@ -38,8 +38,13 @@ and get a confirmation before proceeding.
 ## 2. Company wiki page
 
 The wiki page is the workspace's shared context — members and agents read it.
-Follow the dedicated `wiki` skill for duplicate checks, HTML content, tree
-placement, publishing safeguards, and read-back verification.
+Follow the dedicated `wiki` skill for saved-guide retrieval, duplicate checks,
+HTML content, tree placement, publishing safeguards, and read-back verification.
+If the user requests a knowledge structure or template, hand the confirmed
+brief and this existing workspace scope to that skill's template workflow.
+Reuse its saved definition when present; do not independently create a second
+scaffold. Knowledge setup alone does not require creating projects or teams.
+The company page below must follow the adopted structure and page conventions.
 
 - Check first: `list_wiki_pages` (workspace scope). If a company page already
   exists, `update_wiki_page` instead of duplicating.

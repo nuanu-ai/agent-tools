@@ -1,39 +1,72 @@
 {
-  "format_version": 1,
-  "plugin_version": "0.3.14",
-  "bundle_sha256": "f563d3d4d9f5d5ee1d78a364e260821452901ef9aca86e0e351d8ceebd78c9e4",
+  "format_version": 2,
+  "plugin_version": "0.3.16",
+  "source_commit": "c9eec9944ab00f9ea362914fa39648bff8e15763",
+  "bundle_sha256": "60e016fcccd57d8fb3ba771cfd20ade3101d9ff52e08d862459e59a19a100d5f",
   "sources": [
     {
-      "path": "plugins/nuanu-flow/scripts/worker/portable-worker.mjs",
-      "sha256": "71aee746d1e42f52197efe37fcb81c84b4e17d1534dd0cd1aa1a60a9430f60af"
+      "path": "plugins/nuanu-flow-worker/skills/claude-code-remote-worker/SKILL.md",
+      "sha256": "727929d7bcee02c45156ec5a66f4eae9015d119768bc98a398d513866d886964"
+    },
+    {
+      "path": "plugins/nuanu-flow-worker/skills/codex-remote-worker/SKILL.md",
+      "sha256": "95dfe7bb8f426cfab2f356cdf3591914512655168effe3dd376f059f79a6db3f"
+    },
+    {
+      "path": "plugins/nuanu-flow-worker/skills/remote-worker/SKILL.md",
+      "sha256": "68749bdf4231ac217b6c2f3b0e37559623c3375dd0b8dfe61e5a70a9a6f90653"
     },
     {
       "path": "plugins/nuanu-flow/skills/artifacts/SKILL.md",
-      "sha256": "d43850aa42b6b1d844b36fe038d2496b62eee881a160a33039668e838a49fab2"
+      "sha256": "654d58641457a308b459fc329962e5564c637052fef51785a0adf74b73f462eb"
     },
     {
       "path": "plugins/nuanu-flow/skills/bpmn-processes/SKILL.md",
       "sha256": "94d35fa4eb4c61c75f43e42104d022d64532608b8b3a2c7997de13ff9415f5fe"
     },
     {
-      "path": "plugins/nuanu-flow/skills/create-agent/SKILL.md",
-      "sha256": "7fa40acac682b8947a90324ee5afccd405e63b08e5767a54d2f1fc606bd9bb7d"
+      "path": "plugins/nuanu-flow/skills/codex-setup/SKILL.md",
+      "sha256": "a228a19b804b78daa0560bfe299e7f5a55ebab4ac843c97876570f7d79009625"
     },
     {
       "path": "plugins/nuanu-flow/skills/create-agent/references/agent-design.md",
-      "sha256": "39703ed12b826eceea57358a308019e37e80c614e96c83155ee975c0d25b2a87"
+      "sha256": "937e7dd35e9e12af8e47a4c1718b0315eb5b9ab9978543554aa5b94489a9f275"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/create-agent/SKILL.md",
+      "sha256": "0419e7daefd3d2aedeee9713315f5995600557050b2acec8da57855a377ba86f"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/flows/references/project-guided-work.md",
+      "sha256": "073c8747d7903187c56688883a33b6eac37d922d29af0aeaee45b15fbf71ca93"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/flows/SKILL.md",
+      "sha256": "c4b3eb0fbabfd00818b46cafad24fcd0fc717753fb8d17b5673e2bbb982de3b8"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/human-input/SKILL.md",
+      "sha256": "222c3e63010669925edf7133b0a1120a2a258d94a607ece4f887307580878b88"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/memory-feed/SKILL.md",
+      "sha256": "f5520c8c7a69b1b3fcbb95a6c83a5b9768c33a3f318a36c7f9c6e6b45cbbfad5"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/nuanu-flow/references/tool-discovery.md",
+      "sha256": "9c1d89fcf71aaee9fd080e5a666a2abe653dd1406563a2a5d6d7a8540b83b164"
     },
     {
       "path": "plugins/nuanu-flow/skills/nuanu-flow/SKILL.md",
-      "sha256": "28764dade76a8bca5d3e34ff898943bc23d940256c26f216c907559b23c735fc"
+      "sha256": "4e5218a0a8dcf3b7850ef8cab8a5f6c876b6bf61b8ac464664811ecc79b606b6"
     },
     {
       "path": "plugins/nuanu-flow/skills/onboarding/SKILL.md",
-      "sha256": "2f4ca9d29e33afb5bc72840ae41b10863c4681850a32860f6626197e897d240d"
+      "sha256": "ffa58d939e2305de7fc4a8ca7c045548d074f3cc0895c4ffdb3bd033b315df03"
     },
     {
-      "path": "plugins/nuanu-flow/skills/product-help/SKILL.md",
-      "sha256": "1380ab91c6320c0e19e67a2979f38a41329c764e01bbc2f0f684f7edf4d075c5"
+      "path": "plugins/nuanu-flow/skills/process-refine/SKILL.md",
+      "sha256": "aeb07ff6a9d7af43072ec7138145aae3a55b1a497e7ce1f6ad5db51e6e5dc73d"
     },
     {
       "path": "plugins/nuanu-flow/skills/product-help/references/concepts.md",
@@ -48,24 +81,44 @@
       "sha256": "efb91848843c6923c42fb3a3d413863867860de6e32b6e4e767c6bd095c623a1"
     },
     {
+      "path": "plugins/nuanu-flow/skills/product-help/SKILL.md",
+      "sha256": "1380ab91c6320c0e19e67a2979f38a41329c764e01bbc2f0f684f7edf4d075c5"
+    },
+    {
       "path": "plugins/nuanu-flow/skills/project-setup/SKILL.md",
-      "sha256": "4684a4ae6bd856fb39a6458c0aa35856d453b5d50219b75d780d7102c5126c29"
+      "sha256": "5d6c48312d6868c6dc03160381d9f17d204dea4c0051d7ccd2f2388aa1fdd5f9"
     },
     {
-      "path": "plugins/nuanu-flow/skills/remote-worker/SKILL.md",
-      "sha256": "d1cbad66f1914725341b8a27eb2693c5ee407b3df914a995732f8bdd604fa63b"
+      "path": "plugins/nuanu-flow/skills/telegram/SKILL.md",
+      "sha256": "1f12960e5b3d2999aba87d46b7da70c59405ddcf051452f3d6333c9fe7682a13"
     },
     {
-      "path": "plugins/nuanu-flow/skills/work-items/SKILL.md",
-      "sha256": "a7aaa985bf257dd8db15f7ab50fb6c7e51b98ed40deb424d1fe90c1c26e76d13"
+      "path": "plugins/nuanu-flow/skills/wiki/references/knowledge-templates.md",
+      "sha256": "181cb7071f5d9d97a7032778092eff050e787e415f6efbce5988dfd9744f4c5e"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/wiki/SKILL.md",
+      "sha256": "8e20200a5187512c9256a42c8100eaf26b470ad27492d56cbf2ba7190f7cc580"
     },
     {
       "path": "plugins/nuanu-flow/skills/work-items/references/payloads.md",
-      "sha256": "880559901b1e76a3ee3c98dd84597d0535d33cf679da7b202f28c837e87a755a"
+      "sha256": "c2f819df47b48fa59364d4abd2935d179985be4d813d2bdef8c196f9d6453840"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/work-items/SKILL.md",
+      "sha256": "9cc1a9952599cbec674214e82b447f70e2180e9be0e59427338e03ae40762d82"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/work-modes/references/event-vectors.json",
+      "sha256": "75066fd89ef05e3f1dcbd7588adf2baa6d2c2105856db20be90aa33ea56f04c3"
+    },
+    {
+      "path": "plugins/nuanu-flow/skills/work-modes/SKILL.md",
+      "sha256": "468baf5c837cdf8410d90333a7bd17d75bd516bad415112bed79ddc5f148c60d"
     },
     {
       "path": "plugins/nuanu-flow/skills/workspace-setup/SKILL.md",
-      "sha256": "c5e2a422c66fc930be6b37a044f26b4080c8ac08fae908d502a7697fa02ceef0"
+      "sha256": "19ad2a34ab99d1ef6c5bee9d0991b357c29c66ad2ba74cc1732e4be584289c05"
     }
   ]
 }

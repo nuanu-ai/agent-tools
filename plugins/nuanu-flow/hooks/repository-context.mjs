@@ -3,16 +3,10 @@ import path from "node:path";
 
 export const CONFIG_FILENAME = ".nuanu-flow.json";
 export const LOCAL_CONFIG_FILENAME = ".nuanu-flow.local.json";
-export const MAX_CONFIG_BYTES = 4 * 1024;
+export const MAX_CONFIG_BYTES = 16 * 1024;
 export const MAX_ANCESTORS = 64;
 
-const ROOT_KEYS = new Set([
-  "$schema",
-  "version",
-  "workspace_slug",
-  "project_identifier",
-  "scopes",
-]);
+const ROOT_KEYS = new Set(["$schema", "version", "workspace_slug", "project_identifier", "scopes"]);
 const SCOPE_KEYS = new Set(["path", "project_identifier"]);
 const WORKSPACE_SLUG = /^[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?$/;
 const PROJECT_IDENTIFIER = /^[A-Z0-9][A-Z0-9_-]{0,31}$/;
@@ -43,15 +37,7 @@ function normalizeScopePath(value) {
     return "";
   }
   const segments = value.split("/");
-  if (
-    segments.some(
-      (segment) =>
-        !segment ||
-        segment === "." ||
-        segment === ".." ||
-        !SCOPE_SEGMENT.test(segment),
-    )
-  ) {
+  if (segments.some((segment) => !segment || segment === "." || segment === ".." || !SCOPE_SEGMENT.test(segment))) {
     return "";
   }
   return segments.join("/");
@@ -78,23 +64,30 @@ function normalizeScopes(value) {
   return scopes;
 }
 
-function normalizeConfig(value, { partial = false } = {}) {
+export function normalizeConfig(value, { partial = false } = {}) {
+  if (isPlainObject(value) && value.version === 2) {
+    if (!hasOnlyKeys(value, new Set(["version", "environments"])) || !isPlainObject(value.environments)) return null;
+    const environments = {};
+    for (const [environment, binding] of Object.entries(value.environments)) {
+      if (!["local", "production"].includes(environment) || !isPlainObject(binding)) return null;
+      const valid = normalizeConfig({ ...binding, version: 1 });
+      if (!valid) return null;
+      const { version, ...fields } = valid;
+      environments[environment] = fields;
+    }
+    return { version: 2, environments };
+  }
   if (!isPlainObject(value) || !hasOnlyKeys(value, ROOT_KEYS)) return null;
   if (
     Object.hasOwn(value, "$schema") &&
-    (typeof value.$schema !== "string" ||
-      value.$schema.length === 0 ||
-      value.$schema.length > 500)
+    (typeof value.$schema !== "string" || value.$schema.length === 0 || value.$schema.length > 500)
   ) {
     return null;
   }
   if ((!partial || Object.hasOwn(value, "version")) && value.version !== 1) {
     return null;
   }
-  if (
-    (!partial || Object.hasOwn(value, "workspace_slug")) &&
-    !WORKSPACE_SLUG.test(value.workspace_slug ?? "")
-  ) {
+  if ((!partial || Object.hasOwn(value, "workspace_slug")) && !WORKSPACE_SLUG.test(value.workspace_slug ?? "")) {
     return null;
   }
   if (
@@ -105,12 +98,7 @@ function normalizeConfig(value, { partial = false } = {}) {
   }
 
   const normalized = {};
-  for (const key of [
-    "$schema",
-    "version",
-    "workspace_slug",
-    "project_identifier",
-  ]) {
+  for (const key of ["$schema", "version", "workspace_slug", "project_identifier"]) {
     if (Object.hasOwn(value, key)) normalized[key] = value[key];
   }
   if (Object.hasOwn(value, "scopes")) {
@@ -129,10 +117,7 @@ async function readConfig(filePath, options) {
     if (!stat.isFile() || stat.size > MAX_CONFIG_BYTES) return null;
     const bytes = Buffer.alloc(stat.size);
     const { bytesRead } = await handle.read(bytes, 0, stat.size, 0);
-    return normalizeConfig(
-      JSON.parse(bytes.subarray(0, bytesRead).toString("utf8")),
-      options,
-    );
+    return normalizeConfig(JSON.parse(bytes.subarray(0, bytesRead).toString("utf8")), options);
   } catch {
     return null;
   } finally {
@@ -165,9 +150,7 @@ function matchingScope(scopes, relativeDirectory) {
   let match = null;
   for (const scope of scopes ?? []) {
     const matches =
-      scope.path === "." ||
-      relativeDirectory === scope.path ||
-      relativeDirectory.startsWith(`${scope.path}/`);
+      scope.path === "." || relativeDirectory === scope.path || relativeDirectory.startsWith(`${scope.path}/`);
     if (
       matches &&
       (!match ||
@@ -180,33 +163,42 @@ function matchingScope(scopes, relativeDirectory) {
   return match;
 }
 
-export async function resolveRepositoryContext(cwd) {
+export async function resolveRepositoryContext(cwd, environment = "production") {
+  if (!["local", "production"].includes(environment)) return null;
   const repoRoot = await findGitRoot(cwd);
   if (!repoRoot) return null;
 
   const base = await readConfig(path.join(repoRoot, CONFIG_FILENAME));
-  if (!base) return null;
-
-  const local = await readConfig(path.join(repoRoot, LOCAL_CONFIG_FILENAME), {
-    partial: true,
-  });
-  const config = local ? { ...base, ...local } : base;
-  const relativeDirectory =
-    path.relative(repoRoot, path.resolve(cwd)).split(path.sep).join("/") || ".";
-  if (
-    relativeDirectory === ".." ||
-    relativeDirectory.startsWith("../") ||
-    path.isAbsolute(relativeDirectory)
-  ) {
+  const localPath = path.join(repoRoot, LOCAL_CONFIG_FILENAME);
+  const localExists = await fs.lstat(localPath).then(
+    () => true,
+    () => false
+  );
+  const local = await readConfig(localPath, { partial: true });
+  if (localExists && !local) return null;
+  let config;
+  let legacy = false;
+  if (local?.version === 2 || base?.version === 2) {
+    // A v2 file never inherits an unscoped v1 target across environments.
+    config = local?.environments?.[environment] ?? base?.environments?.[environment];
+  } else {
+    config = normalizeConfig({ ...base, ...local });
+    legacy = true;
+  }
+  if (!config) return null;
+  const relativeDirectory = path.relative(repoRoot, path.resolve(cwd)).split(path.sep).join("/") || ".";
+  if (relativeDirectory === ".." || relativeDirectory.startsWith("../") || path.isAbsolute(relativeDirectory)) {
     return null;
   }
 
   const scope = matchingScope(config.scopes, relativeDirectory);
   return {
     repoRoot,
+    environment,
+    requiresValidation: true,
+    legacy,
     workspaceSlug: config.workspace_slug,
-    projectIdentifier:
-      scope?.project_identifier ?? config.project_identifier,
+    projectIdentifier: scope?.project_identifier ?? config.project_identifier,
     scopePath: scope?.path ?? "",
     source: local ? LOCAL_CONFIG_FILENAME : CONFIG_FILENAME,
   };
@@ -215,5 +207,5 @@ export async function resolveRepositoryContext(cwd) {
 export function repositoryContextMessage(binding) {
   if (!binding) return "";
   const scope = binding.scopePath ? ` for scope "${binding.scopePath}"` : "";
-  return `Repository binding${scope}: workspace "${binding.workspaceSlug}", project "${binding.projectIdentifier}". Use it as the Flow default unless the user explicitly selects another target; validate it lazily on the first Flow operation.`;
+  return `Repository binding${scope}: workspace "${binding.workspaceSlug}", project "${binding.projectIdentifier}". Environment: ${binding.environment}. This is ${binding.legacy ? "a legacy unscoped hint" : "a configured hint"}; validate access and identity through the current native MCP connection before use. Never switch environments to make it resolve.`;
 }

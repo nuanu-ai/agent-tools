@@ -1,9 +1,6 @@
 {
-  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "nuanu-flow-worker",
-  "version": "0.3.15",
-  "displayName": "Nuanu Flow Worker",
-  "description": "Run a managed Nuanu Flow coding worker with enrollment, task execution, diagnostics, and session observation.",
+  "description": "Run a remote Nuanu Flow agent worker with enrollment, task execution, diagnostics, and exact-session visibility.",
   "author": {
     "name": "Nuanu",
     "url": "https://flow.nuanu.com"
@@ -16,5 +13,7 @@
     "worker",
     "codex",
     "claude-code"
-  ]
+  ],
+  "version": "0.3.16",
+  "displayName": "Nuanu Flow Worker"
 }

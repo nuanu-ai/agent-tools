@@ -40,6 +40,25 @@ onboarding flags directly, or repeat completed work.
 Pause when a real user choice is required. Stop only when the returned step is
 `complete` and `complete_onboarding` succeeds.
 
+## Optional work-mode preference
+
+Offer a work-mode choice only during explicit setup or onboarding and only when
+`get_work_mode` reports that no saved preference exists. It is optional and is
+not a prerequisite for onboarding completion. Explain that an unset preference
+resolves to Manual, then present the choices in this order:
+
+1. **Balanced (Recommended)** — automatically track substantive, clearly
+   trackable goals while skipping trivial work.
+2. **Manual** — use Flow only when the user explicitly asks or the work depends
+   on a referenced Flow item.
+3. **Strict** — track every substantive project goal before work starts when
+   Flow is available.
+
+If the user skips the choice, persist nothing and continue onboarding. If they
+choose one, confirm that this is their account default, then call
+`set_work_mode` with `scope: "default"`. This choice never selects a repository
+project and never makes Flow availability block their underlying work.
+
 ## Step: profile
 
 Briefly explain that first and last name identify the user's actions and
@@ -125,4 +144,4 @@ the workspace and project identifier are confirmed.
 
 ## Tools Used
 
-`execute_read_tool`, `execute_tool`, `onboarding_next`, `update_onboarding_profile`, `create_workspace`, `list_wiki_pages`, `create_wiki_page`, `update_wiki_page`, `invite_workspace_members`, `update_onboarding_progress`, `complete_onboarding`
+`execute_read_tool`, `execute_tool`, `onboarding_next`, `get_work_mode`, `set_work_mode`, `update_onboarding_profile`, `create_workspace`, `list_wiki_pages`, `create_wiki_page`, `update_wiki_page`, `invite_workspace_members`, `update_onboarding_progress`, `complete_onboarding`

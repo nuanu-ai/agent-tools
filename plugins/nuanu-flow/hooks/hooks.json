@@ -1,5 +1,5 @@
 {
-  "description": "Keep Nuanu Flow available as the session task tracker and resume unfinished onboarding.",
+  "description": "Point sessions at the current scoped Nuanu Flow project context without network or authentication side effects.",
   "hooks": {
     "SessionStart": [
       {
@@ -10,7 +10,7 @@
             "command": "node \"${PLUGIN_ROOT}/hooks/session-start.mjs\"",
             "commandWindows": "node \"%PLUGIN_ROOT%\\hooks\\session-start.mjs\"",
             "timeout": 1,
-            "statusMessage": "Activating Nuanu Flow"
+            "statusMessage": "Loading local Flow context"
           }
         ]
       }

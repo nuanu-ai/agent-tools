@@ -321,14 +321,36 @@ export class RepositoryManager {
     }
     const credential = await this.credential(task);
     await run("git", ["remote", "set-url", "origin", credential.clone_url], { cwd: worktreePath });
-    await withGitCredential(credential, (env) =>
-      run(
-        "git",
-        [...SUPERVISOR_GIT_CONFIG, "push", "--no-verify", credential.clone_url, `HEAD:refs/heads/${branchName}`],
-        { cwd: worktreePath, env }
-      )
-    );
-    const headSha = (await run("git", ["rev-parse", "HEAD"], { cwd: worktreePath })).stdout.trim();
+    let headSha = (await run("git", ["rev-parse", "HEAD"], { cwd: worktreePath })).stdout.trim();
+    await withGitCredential(credential, async (env) => {
+      try {
+        await run(
+          "git",
+          [...SUPERVISOR_GIT_CONFIG, "push", "--no-verify", credential.clone_url, `HEAD:refs/heads/${branchName}`],
+          { cwd: worktreePath, env }
+        );
+      } catch (error) {
+        // An agent or artifact publisher may already have delivered the same
+        // snapshot with a different commit. Accept only identical trees whose
+        // remote history still descends from the admitted branch head.
+        const fetched = await run(
+          "git",
+          [...SUPERVISOR_GIT_CONFIG, "fetch", credential.clone_url, `refs/heads/${branchName}`],
+          { cwd: worktreePath, env, allowFailure: true }
+        );
+        if (fetched.code !== 0) throw error;
+        const remoteAncestry = await run("git", ["merge-base", "--is-ancestor", startSha, "FETCH_HEAD"], {
+          cwd: worktreePath,
+          allowFailure: true,
+        });
+        const sameTree = await run("git", ["diff", "--quiet", "HEAD", "FETCH_HEAD"], {
+          cwd: worktreePath,
+          allowFailure: true,
+        });
+        if (remoteAncestry.code !== 0 || sameTree.code !== 0) throw error;
+        headSha = (await run("git", ["rev-parse", "FETCH_HEAD"], { cwd: worktreePath })).stdout.trim();
+      }
+    });
     return { branch_name: branchName, base_sha: baseSha, head_sha: headSha, cache_reused: state.cacheReused };
   }
 

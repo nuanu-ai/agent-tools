@@ -1,13 +1,10 @@
 {
   "name": "nuanu-flow",
-  "version": "0.3.14",
-  "description": "Install and onboard Nuanu Flow from one prompt, then work with projects, processes, artifacts, decisions, and remote agents.",
+  "description": "Work with Nuanu Flow from a coding agent: the single MCP, product and domain skills, projects, Flow items, BPMN processes, artifacts, decisions, and Agent communication.",
   "author": {
     "name": "Nuanu",
-    "email": "albert@nuanu.com",
     "url": "https://flow.nuanu.com"
   },
-  "homepage": "https://flow.nuanu.com",
   "repository": "https://github.com/nuanu-ai/agent-tools",
   "license": "AGPL-3.0",
   "keywords": [
@@ -16,11 +13,29 @@
     "project-management",
     "bpmn",
     "artifacts",
-    "mcp",
-    "codex"
+    "mcp"
   ],
-  "skills": "./skills",
-  "hooks": "./hooks/hooks.json",
+  "version": "0.3.16",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Nuanu Flow",
+    "longDescription": "Work with Nuanu Flow from a coding agent: the single MCP, product and domain skills, projects, Flow items, BPMN processes, artifacts, decisions, and Agent communication.",
+    "shortDescription": "Project-guided work, knowledge, and artifacts.",
+    "developerName": "Nuanu",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use Nuanu Flow to show what is on my plate this week and what is at risk.",
+      "Turn this spec into Flow items in Nuanu Flow, with estimates."
+    ],
+    "websiteURL": "https://flow.nuanu.com",
+    "privacyPolicyURL": "https://flow.nuanu.com/legals/privacy-policy",
+    "termsOfServiceURL": "https://flow.nuanu.com/legals/terms-and-conditions"
+  },
   "mcpServers": {
     "nuanu-flow": {
       "type": "http",
@@ -38,25 +53,5 @@
       "tool_timeout_sec": 120,
       "default_tools_approval_mode": "writes"
     }
-  },
-  "interface": {
-    "displayName": "Nuanu Flow",
-    "shortDescription": "One-prompt setup, Flow MCP tools, onboarding, and remote Codex workers.",
-    "longDescription": "Install from one versionless prompt, sign in or sign up through OAuth, create a first workspace conversationally, and connect a remote Codex worker through a single-use enrollment token. Advanced environment-token and isolated development profiles remain available.",
-    "developerName": "Nuanu",
-    "category": "Productivity",
-    "capabilities": [
-      "Interactive",
-      "Read",
-      "Write"
-    ],
-    "websiteURL": "https://flow.nuanu.com",
-    "privacyPolicyURL": "https://flow.nuanu.com/legals/privacy-policy",
-    "termsOfServiceURL": "https://flow.nuanu.com/legals/terms-and-conditions",
-    "defaultPrompt": [
-      "Show my Nuanu Flow items and suggest my next action.",
-      "Create a Nuanu Flow item from this bug report.",
-      "Continue Nuanu Flow setup."
-    ]
   }
 }

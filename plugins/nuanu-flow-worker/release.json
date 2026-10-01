@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "plugin": "nuanu-flow-worker",
+  "version": "0.3.16",
+  "environment": "production",
+  "source_commit": "c9eec9944ab00f9ea362914fa39648bff8e15763",
+  "content_sha256": "c187420bb2b81da1c4a123b57664a8f29c844e2ab9d5b34448ff5cc466895c21",
+  "policy_version": 2,
+  "required_capabilities": [
+    "artifact_version_preconditions",
+    "flow_work_policy_v2",
+    "ordinary_state_preconditions",
+    "project_flow_guidance"
+  ]
+}

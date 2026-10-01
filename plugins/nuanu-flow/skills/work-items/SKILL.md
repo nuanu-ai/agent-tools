@@ -109,6 +109,22 @@ see references) for structured queries. Archived/deleted live behind
 `update_issue` (priority/state/assignees) or `assign_issue`. For many at once:
 `bulk_update_issues`, `bulk_archive_issues`, `bulk_delete_issues`.
 
+**Flow expectations**: read `get_project.flow` and the current and destination
+column descriptions. Only a nonempty source `next` or destination `requires`
+configures a check; absent or empty lists have no restrictions. Use
+`check_flow_transition` when expectations are configured. Advisory warnings
+allow the move; enforced mode blocks unmet expectations. Read `warnings`,
+`missing`, and the returned remedies. Do not infer gates from prose, ordering,
+or type, and do not override the mode to bypass a blocked move. See `flows`.
+
+For every ordinary state move, refresh `get_issue` immediately before the
+mutation and pass its current `state_id` as `expected_state_id` plus its current
+`state_entry_sequence` as `expected_state_entry_sequence` to `update_issue`.
+On `stale_state` or `stale_state_entry_sequence`, reread the item and reconcile
+the user's intent; do not retry the old move automatically. This applies after
+gate checks too, since another actor can move the item between the check and
+the update.
+
 **Discuss**: `add_issue_comment` (`comment_html`), `get_issue_comments`,
 `update_issue_comment`, reactions (`add_issue_reaction`,
 `add_comment_reaction`). `get_issue_activity` shows the audit trail.
@@ -127,6 +143,9 @@ on the Flow item, not a separate Plan entity. Use `get_implementation_plan`,
 `set_implementation_plan`, and `update_implementation_plan_item`. Each item is
 `{id, text, checked}`; keep IDs stable and pass `[]` to clear the checklist.
 A plan is valid with or without a Spec, and an ordinary Flow item needs neither.
+Whether the work should produce a Spec, plan Artifact, PR, or other evidence
+comes from the current project's Flow guidance and explicit gates, not from the
+work mode or template name.
 
 **Lifecycle**: `archive_issue` / `restore_issue` / `delete_issue`;
 subscriptions via `subscribe_issue` / `unsubscribe_issue`.
@@ -138,3 +157,40 @@ NUANU_URL + NUANU_TOKEN env); otherwise render a markdown table.
 ## Tools Used
 
 `create_issue`, `bulk_create_issues`, `update_issue`, `delete_issue`, `get_issue`, `list_issues`, `search_issues`, `assign_issue`, `get_implementation_plan`, `set_implementation_plan`, `update_implementation_plan_item`, `bulk_update_issues`, `bulk_archive_issues`, `bulk_delete_issues`, `archive_issue`, `restore_issue`, `list_archived_issues`, `list_deleted_issues`, `get_archived_issue`, `list_sub_issues`, `get_issue_activity`, `add_issue_comment`, `get_issue_comments`, `update_issue_comment`, `delete_issue_comment`, `add_issue_reaction`, `remove_issue_reaction`, `add_comment_reaction`, `remove_comment_reaction`, `create_issue_relation`, `remove_issue_relation`, `list_issue_relations`, `create_issue_link`, `update_issue_link`, `delete_issue_link`, `list_issue_links`, `upload_small_issue_attachment`, `create_issue_attachment_upload`, `complete_issue_attachment_upload`, `list_issue_attachments`, `delete_issue_attachment`, `subscribe_issue`, `unsubscribe_issue`, `get_issue_subscription`, `add_issue_to_cycle`, `create_module`, `add_issue_to_module`, `list_cycles`, `get_cycle`, `list_modules`, `get_module`, `list_states`, `list_labels`, `list_estimates`, `create_estimate`, `list_workspace_members`, `add_issue_label`
+
+## Active execution claims
+
+Assignment means responsibility, not an execution lock. Before independently
+executing a Flow item, use `claim_flow_item`. Existing project permissions still
+apply. A persistent MCP session keeps the private attempt key, renews the
+five-minute lease every minute without LLM calls, and automatically fences
+generic item state writes. Stateless transports cannot own a claim.
+
+Read `execution_claim` on item reads/lists to see the current agent, working or
+waiting status, short activity and deadline. On `claim_busy`, stop and coordinate
+with the holder. On `claim_lost`, stop all state/result writes, discard the old
+execution, and only then acquire with `new_attempt=true`. Never bypass the claim
+through another update tool. Retry a lost acquisition response without
+`new_attempt` to recover the same attempt.
+
+Use `heartbeat_flow_item_claim` to report working/waiting and a brief activity
+summary; the runtime owns periodic renewal. Waiting retains the claim. Release
+explicitly using `release_flow_item_claim` when finished or yielding; completion
+state transitions retire it atomically. Resume released work only by acquiring
+a fresh attempt with `new_attempt=true`. Session shutdown stops renewal, and
+expiry allows another agent to claim without a cleanup job.
+
+Process agent steps use the existing Process task lease; do not add a standalone
+claim. A running/waiting/paused source-linked Process and a standalone claim
+cannot own the same item. A human project member can use the item detail
+**Take over** button to retire the displayed claim before changing its state.
+Comments, planning and attachment uploads remain collaborative.
+
+Recovery: a stopped runtime loses its claim within five minutes of its last
+successful renewal. An open MCP transport alone is not activity: after the
+existing `MCP_SESSION_IDLE_SECONDS` timeout (30 minutes by default) without an
+explicit claim action or read/write of that item, automatic renewal stops too.
+Long external work should report activity before that timeout. A human can use
+**Take over** immediately if the agent is stuck, even while it is still online.
+Comments, info/planning edits, assignments, and uploads stay collaborative;
+the claim guards execution state/control changes, not ordinary collaboration.

@@ -60,14 +60,14 @@ user credentials and the durable worker credential are removed.
 
 ## Important environment variables
 
-| Variable                       | Meaning                                                                 |
-| ------------------------------ | ----------------------------------------------------------------------- |
-| `NUANU_ADAPTER`                | `claude-code` (the default; `claude` remains a compatibility alias).    |
-| `NUANU_CLAUDE_BIN`             | Claude Code binary, defaults to `claude`.                               |
-| `NUANU_CLAUDE_CWD`             | Stable project directory used for task sessions.                       |
-| `NUANU_CLAUDE_PERMISSION_MODE` | Defaults to `dontAsk`.                                                  |
-| `NUANU_CLAUDE_ALLOWED_TOOLS`   | Defaults to the Nuanu Flow plugin MCP tool namespace.                   |
-| `NUANU_CLAUDE_ARGS`            | Defaults to `-p --output-format stream-json --verbose`.                 |
+| Variable                       | Meaning                                                              |
+| ------------------------------ | -------------------------------------------------------------------- |
+| `NUANU_ADAPTER`                | `claude-code` (the default; `claude` remains a compatibility alias). |
+| `NUANU_CLAUDE_BIN`             | Claude Code binary, defaults to `claude`.                            |
+| `NUANU_CLAUDE_CWD`             | Stable project directory used for task sessions.                     |
+| `NUANU_CLAUDE_PERMISSION_MODE` | Defaults to `dontAsk`.                                               |
+| `NUANU_CLAUDE_ALLOWED_TOOLS`   | Defaults to the Nuanu Flow plugin MCP tool namespace.                |
+| `NUANU_CLAUDE_ARGS`            | Defaults to `-p --output-format stream-json --verbose`.              |
 
 Do not use `--dangerously-skip-permissions` unless the user explicitly asks
 for that mode in a controlled environment.

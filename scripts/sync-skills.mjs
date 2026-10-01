@@ -1,379 +1,86 @@
 #!/usr/bin/env node
-
+// Canonical in Nuanu Flow; exported as agent-tools/scripts/sync-skills.mjs.
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-);
-const sourceRoot = path.join(repoRoot, "plugins/nuanu-flow/skills");
-const targetRoot = path.join(repoRoot, "skills");
-const pluginManifestPath = path.join(
-  repoRoot,
-  "plugins/nuanu-flow/.codex-plugin/plugin.json",
-);
-const portableWorkerPath = path.join(
-  repoRoot,
-  "plugins/nuanu-flow/scripts/worker/portable-worker.mjs",
-);
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const output = path.join(root, "skills");
+const plugins = ["nuanu-flow", "nuanu-flow-worker"];
+const expected = new Map();
+const sources = [];
 
-const canonicalSkills = [
-  "artifacts",
-  "bpmn-processes",
-  "claude-code-remote-worker",
-  "codex-remote-worker",
-  "codex-setup",
-  "create-agent",
-  "human-input",
-  "nuanu-flow",
-  "onboarding",
-  "process-refine",
-  "product-help",
-  "project-setup",
-  "remote-worker",
-  "telegram",
-  "wiki",
-  "work-items",
-  "workspace-setup",
-];
-
-const bundledSkills = [
-  "artifacts",
-  "bpmn-processes",
-  "create-agent",
-  "onboarding",
-  "product-help",
-  "project-setup",
-  "remote-worker",
-  "work-items",
-  "workspace-setup",
-];
-
-const bundledSupportingReferences = [
-  {
-    source: "plugins/nuanu-flow/skills/create-agent/references/agent-design.md",
-    target: "create-agent-design.md",
-  },
-  {
-    source: "plugins/nuanu-flow/skills/product-help/references/concepts.md",
-    target: "product-help-concepts.md",
-  },
-  {
-    source: "plugins/nuanu-flow/skills/product-help/references/how-to.md",
-    target: "product-help-how-to.md",
-  },
-  {
-    source: "plugins/nuanu-flow/skills/product-help/references/integrations.md",
-    target: "product-help-integrations.md",
-  },
-  {
-    source: "plugins/nuanu-flow/skills/work-items/references/payloads.md",
-    target: "work-items-payloads.md",
-  },
-];
-
-const supportingReferenceRewrites = new Map([
-  ["references/agent-design.md", "create-agent-design.md"],
-  ["references/concepts.md", "product-help-concepts.md"],
-  ["references/how-to.md", "product-help-how-to.md"],
-  ["references/integrations.md", "product-help-integrations.md"],
-  ["references/payloads.md", "work-items-payloads.md"],
-]);
-
-const portableFallbackSection = `
-## Portable fallback bundle
-
-This standalone skill may be installed without the Nuanu Flow plugin. Agent
-Skills do not provide one universal MCP-registration or OAuth format. Use the
-current agent's native remote-HTTP MCP connection flow for the environment:
-
-- Production MCP: \`https://flow.nuanu.com/mcp-server/mcp\`
-- Local MCP: \`http://localhost:3001/mcp\`
-
-Never substitute production when a localhost URL was requested. If the
-\`nuanu-flow\` MCP server is already available, use it directly. If the agent
-cannot connect remote HTTP MCP with OAuth, stop at authentication and explain
-that limitation; do not request or expose credentials as a workaround.
-
-When a matching peer Nuanu skill is installed, load it normally. Otherwise
-read exactly the relevant bundled reference:
-
-| Job | Bundled reference |
-| --- | --- |
-| Product concepts, UI paths, and integration questions | [product help](references/product-help.md) |
-| First-run account and workspace onboarding | [onboarding](references/onboarding.md) |
-| Existing workspace context, goals, and teammates | [workspace setup](references/workspace-setup.md) |
-| Project scaffolding | [project setup](references/project-setup.md) |
-| Flow items, cycles, relations, and comments | [work items](references/work-items.md) |
-| BPMN process authoring and operation | [BPMN processes](references/bpmn-processes.md) |
-| Versioned files and documents | [artifacts](references/artifacts.md) |
-| Agent design, creation, or connection | [create agent](references/create-agent.md) |
-| Generic remote-worker operation | [remote worker](references/remote-worker.md) |
-
-For a generic remote agent, use the bundled zero-dependency polling worker.
-It has no hooks and does not install a plugin:
-
-\`\`\`bash
-node scripts/worker.mjs enroll --base-url https://flow.nuanu.com/be/api
-node scripts/worker.mjs status
-node scripts/worker.mjs run --command "<non-interactive text-in/text-out command>"
-\`\`\`
-
-Use \`http://localhost:8000/api\` only for a local enrollment prompt. Pass the
-single-use \`nuanu_join_...\` token to \`enroll\` through standard input, never
-as an argument, environment variable, URL, or file. The worker stores the
-durable key outside the project with private permissions and gives spawned
-agent commands only task-scoped credentials.
-`;
-
-async function filesBelow(root) {
-  const files = [];
-  async function visit(directory) {
-    const entries = await fs.readdir(directory, { withFileTypes: true });
-    for (const entry of entries) {
-      const absolute = path.join(directory, entry.name);
-      if (entry.isDirectory()) await visit(absolute);
-      else if (entry.isFile()) files.push(path.relative(root, absolute));
-    }
+async function tree(directory, prefix = "") {
+  const files = new Map();
+  for (const entry of await fs.readdir(path.join(directory, prefix), { withFileTypes: true })) {
+    const name = path.posix.join(prefix, entry.name);
+    if (entry.isDirectory()) for (const [file, content] of await tree(directory, name)) files.set(file, content);
+    else if (entry.isFile()) files.set(name, await fs.readFile(path.join(directory, name)));
+    else throw new Error(`Unsupported skill entry: ${name}`);
   }
-  try {
-    await visit(root);
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
-  return files.sort();
+  return files;
 }
 
-function parseSkill(relativeDirectory, content) {
-  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
-  if (!match) {
-    throw new Error(`${relativeDirectory}/SKILL.md has invalid frontmatter`);
-  }
-  const name = match[1].match(/^name:\s*(\S+)\s*$/m)?.[1];
-  const description = match[1].match(/^description:\s*(.+)\s*$/m)?.[1];
-  if (name !== relativeDirectory) {
-    throw new Error(
-      `${relativeDirectory}/SKILL.md name must match its directory`,
-    );
-  }
-  if (!description) {
-    throw new Error(`${relativeDirectory}/SKILL.md needs a description`);
-  }
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) || name.length > 64) {
-    throw new Error(`${relativeDirectory}/SKILL.md has an invalid name`);
-  }
-  return {
-    frontmatter: match[1],
-    body: match[2],
-  };
-}
-
-function rewriteSupportingReferences(content) {
-  let rewritten = content;
-  for (const [source, target] of supportingReferenceRewrites) {
-    rewritten = rewritten.replaceAll(source, target);
-  }
-  return rewritten;
-}
-
-async function sha256File(filePath) {
-  return createHash("sha256")
-    .update(await fs.readFile(filePath))
-    .digest("hex");
-}
-
-async function sourceRecord(relativePath) {
-  return {
-    path: relativePath,
-    sha256: await sha256File(path.join(repoRoot, relativePath)),
-  };
-}
-
-async function copyCanonicalSkills(outputRoot) {
-  const sourceEntries = await fs.readdir(sourceRoot, { withFileTypes: true });
-  const unexpectedDirectories = sourceEntries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter((name) => !canonicalSkills.includes(name))
-    .sort();
-  if (unexpectedDirectories.length) {
-    throw new Error(
-      `Canonical skill allowlist is missing: ${unexpectedDirectories.join(", ")}`,
-    );
-  }
-
-  for (const skillName of canonicalSkills) {
-    const sourceDirectory = path.join(sourceRoot, skillName);
-    const skillFile = path.join(sourceDirectory, "SKILL.md");
-    parseSkill(skillName, await fs.readFile(skillFile, "utf8"));
-    await fs.cp(sourceDirectory, path.join(outputRoot, skillName), {
-      recursive: true,
-      preserveTimestamps: true,
+for (const plugin of plugins) {
+  const release = JSON.parse(await fs.readFile(path.join(root, "plugins", plugin, "release.json"), "utf8"));
+  if (release.environment !== "production")
+    throw new Error("Standalone distribution skills require a generated production bundle");
+  for (const [file, content] of await tree(path.join(root, "plugins", plugin, "skills"))) {
+    if (file.startsWith("source-command-")) continue;
+    if (expected.has(file)) throw new Error(`Duplicate skill ownership: ${file}`);
+    expected.set(file, content);
+    sources.push({
+      path: `plugins/${plugin}/skills/${file}`,
+      sha256: createHash("sha256").update(content).digest("hex"),
     });
   }
 }
 
-async function compilePortableBundle(outputRoot) {
-  const portableRoot = path.join(outputRoot, "nuanu-flow");
-  const referencesRoot = path.join(portableRoot, "references");
-  const scriptsRoot = path.join(portableRoot, "scripts");
-  await Promise.all([
-    fs.mkdir(referencesRoot, { recursive: true }),
-    fs.mkdir(scriptsRoot, { recursive: true }),
-  ]);
-
-  const routerPath = path.join(sourceRoot, "nuanu-flow/SKILL.md");
-  const router = await fs.readFile(routerPath, "utf8");
-  await fs.writeFile(
-    path.join(portableRoot, "SKILL.md"),
-    `${router.trimEnd()}\n${portableFallbackSection}`,
-    "utf8",
-  );
-
-  const sourcePaths = [
-    "plugins/nuanu-flow/skills/nuanu-flow/SKILL.md",
-  ];
-  for (const skillName of bundledSkills) {
-    const relativePath = `plugins/nuanu-flow/skills/${skillName}/SKILL.md`;
-    const content = await fs.readFile(path.join(repoRoot, relativePath), "utf8");
-    const { body } = parseSkill(skillName, content);
-    await fs.writeFile(
-      path.join(referencesRoot, `${skillName}.md`),
-      rewriteSupportingReferences(body).trimStart(),
-      "utf8",
-    );
-    sourcePaths.push(relativePath);
-  }
-
-  for (const reference of bundledSupportingReferences) {
-    const content = await fs.readFile(
-      path.join(repoRoot, reference.source),
-      "utf8",
-    );
-    await fs.writeFile(
-      path.join(referencesRoot, reference.target),
-      rewriteSupportingReferences(content),
-      "utf8",
-    );
-    sourcePaths.push(reference.source);
-  }
-
-  await fs.copyFile(
-    portableWorkerPath,
-    path.join(scriptsRoot, "worker.mjs"),
-  );
-  await fs.chmod(path.join(scriptsRoot, "worker.mjs"), 0o755);
-  sourcePaths.push(
-    "plugins/nuanu-flow/scripts/worker/portable-worker.mjs",
-  );
-
-  const pluginManifest = JSON.parse(
-    await fs.readFile(pluginManifestPath, "utf8"),
-  );
-  const sources = [];
-  for (const relativePath of [...new Set(sourcePaths)].sort()) {
-    sources.push(await sourceRecord(relativePath));
-  }
-  const bundleSha256 = createHash("sha256")
-    .update(
-      sources
-        .map((source) => `${source.path}\0${source.sha256}\n`)
-        .join(""),
-    )
-    .digest("hex");
-  const manifest = {
-    format_version: 1,
-    plugin_version: pluginManifest.version,
-    bundle_sha256: bundleSha256,
-    sources,
-  };
-  await fs.writeFile(
-    path.join(referencesRoot, "manifest.json"),
-    `${JSON.stringify(manifest, null, 2)}\n`,
-    "utf8",
-  );
+// A standalone root skill must work without peer-skill discovery or hooks.
+// Preserve each reference directory rather than flattening relative links.
+const references = [];
+for (const [file, content] of [...expected]) {
+  const [skill, ...rest] = file.split("/");
+  if (skill === "nuanu-flow") continue;
+  expected.set(`nuanu-flow/references/domains/${skill}/${rest.join("/")}`, content);
+  if (rest.join("/") === "SKILL.md") references.push(`- [${skill}](references/domains/${skill}/SKILL.md)`);
 }
-
-async function build(outputRoot) {
-  await fs.rm(outputRoot, { recursive: true, force: true });
-  await fs.mkdir(outputRoot, { recursive: true });
-  await copyCanonicalSkills(outputRoot);
-  await compilePortableBundle(outputRoot);
-}
-
-async function differences(expectedRoot, actualRoot) {
-  const expectedFiles = await filesBelow(expectedRoot);
-  const actualFiles = await filesBelow(actualRoot);
-  const changed = [];
-  const allFiles = [...new Set([...expectedFiles, ...actualFiles])].sort();
-  for (const relative of allFiles) {
-    if (!expectedFiles.includes(relative)) {
-      changed.push(`extra ${relative}`);
-      continue;
-    }
-    if (!actualFiles.includes(relative)) {
-      changed.push(`missing ${relative}`);
-      continue;
-    }
-    const [expected, actual] = await Promise.all([
-      fs.readFile(path.join(expectedRoot, relative)),
-      fs.readFile(path.join(actualRoot, relative)),
-    ]);
-    if (!expected.equals(actual)) changed.push(`changed ${relative}`);
-  }
-  return changed;
-}
-
-async function main() {
-  const check = process.argv.slice(2).includes("--check");
-  const unknown = process.argv
-    .slice(2)
-    .filter((argument) => argument !== "--check");
-  if (unknown.length) {
-    throw new Error(`Unknown argument: ${unknown[0]}`);
-  }
-  const expectedTarget = path.join(repoRoot, "skills");
-  if (path.resolve(targetRoot) !== expectedTarget) {
-    throw new Error(`Refusing to replace unexpected skills path: ${targetRoot}`);
-  }
-
-  const temporary = path.join(
-    repoRoot,
-    `.skills.tmp-${process.pid}-${Date.now()}`,
-  );
-  try {
-    await build(temporary);
-    if (check) {
-      const changed = await differences(temporary, targetRoot);
-      if (changed.length) {
-        throw new Error(
-          `Standalone skills are out of sync:\n- ${changed.join(
-            "\n- ",
-          )}\nRun npm run sync:skills.`,
-        );
-      }
-      console.log(
-        `Standalone skills and portable fallback are current (${(
-          await filesBelow(targetRoot)
-        ).length} files).`,
-      );
-      return;
-    }
-
-    await fs.rm(targetRoot, { recursive: true, force: true });
-    await fs.rename(temporary, targetRoot);
-    console.log(
-      `Compiled ${canonicalSkills.length} Agent Skills and the portable fallback bundle.`,
+const router = expected.get("nuanu-flow/SKILL.md").toString();
+expected.set(
+  "nuanu-flow/SKILL.md",
+  Buffer.from(
+    `${router.trimEnd()}\n\n## Standalone usage\n\nUse the current host's native MCP connection. No hook or local cache is required.\nRead the current project Flow through MCP before substantive work and handoffs.\nChoose the user's explicit environment; never fall back from localhost to production.\nIf peer skills are not installed, read the relevant bundled domain reference:\n\n${references.sort().join("\n")}\n`
+  )
+);
+const release = JSON.parse(await fs.readFile(path.join(root, "plugins/nuanu-flow/release.json"), "utf8"));
+sources.sort((a, b) => a.path.localeCompare(b.path));
+expected.set(
+  "nuanu-flow/references/manifest.json",
+  Buffer.from(
+    `${JSON.stringify({ format_version: 2, plugin_version: release.version, source_commit: release.source_commit, bundle_sha256: createHash("sha256").update(JSON.stringify(sources)).digest("hex"), sources }, null, 2)}\n`
+  )
+);
+const owned = [...new Set([...expected.keys()].map((file) => file.split("/")[0]))].sort();
+const check = process.argv.slice(2).includes("--check");
+if (process.argv.slice(2).some((arg) => arg !== "--check")) throw new Error("Usage: sync-skills.mjs [--check]");
+if (check) {
+  for (const skill of owned) {
+    const actual = await tree(path.join(output, skill));
+    const desired = new Map(
+      [...expected]
+        .filter(([file]) => file.startsWith(`${skill}/`))
+        .map(([file, content]) => [file.slice(skill.length + 1), content])
     );
-  } finally {
-    await fs.rm(temporary, { recursive: true, force: true });
+    if (actual.size !== desired.size || [...desired].some(([file, content]) => !actual.get(file)?.equals(content)))
+      throw new Error(`Standalone skill is stale: ${skill}`);
+  }
+} else {
+  // Replace only these Nuanu-owned skill directories. Other products survive.
+  for (const skill of owned) await fs.rm(path.join(output, skill), { recursive: true, force: true });
+  for (const [file, content] of expected) {
+    await fs.mkdir(path.dirname(path.join(output, file)), { recursive: true });
+    await fs.writeFile(path.join(output, file), content);
   }
 }
-
-main().catch((error) => {
-  console.error(`[sync-skills] ${error.message}`);
-  process.exit(1);
-});
+console.log(`${check ? "Verified" : "Generated"} ${owned.length} standalone skills and the portable domain bundle.`);

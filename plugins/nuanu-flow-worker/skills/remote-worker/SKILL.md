@@ -54,17 +54,17 @@ verifies an already-enrolled credential without exchanging the token again.
    plaintext `nuanu_flow_…` token is shown **only at creation**.
 3. Env:
 
-| Var                          | Meaning                                                                                                     |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `NUANU_URL`                  | Django API base — **must include `/api`**, e.g. `https://flow.nuanu.com/be/api` or `http://localhost:8000/api` |
-| `NUANU_AGENT_KEY`            | The durable `nuanu_flow_…` key                                                                              |
-| `NUANU_WORKER_ID`            | Optional stable worker name (default `worker-<host>-<pid>`)                                                 |
-| `NUANU_MAX_CONCURRENCY`      | Parallel tasks (default 1)                                                                                  |
-| `NUANU_ADAPTER`              | `claude` (default) \| `codex` \| `command`                                                                  |
-| `NUANU_TRANSPORT`            | `poll` (default) \| `gateway` (WS wake-ups)                                                                 |
-| `NUANU_WORKER_CAPABILITIES`  | Optional comma-separated host-native semantic capabilities, such as `image_generation_v1`                   |
-| `NUANU_BROWSER_QA`           | Set to `1` only when this host has a verified Playwright runtime                                            |
-| `NUANU_QA_PLAYWRIGHT_MODULE` | Exact Playwright module path when it is not resolvable from the worker plugin                               |
+| Var                          | Meaning                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `NUANU_URL`                  | Django API base — **must end in `/api`**, e.g. `https://flow.nuanu.com/be/api` or `http://localhost:8000/api` |
+| `NUANU_AGENT_KEY`            | The durable `nuanu_flow_…` key                                                                                |
+| `NUANU_WORKER_ID`            | Optional stable worker name (default `worker-<host>-<pid>`)                                                   |
+| `NUANU_MAX_CONCURRENCY`      | Parallel tasks (default 1)                                                                                    |
+| `NUANU_ADAPTER`              | `claude` (default) \| `codex` \| `command`                                                                    |
+| `NUANU_TRANSPORT`            | `poll` (default) \| `gateway` (WS wake-ups)                                                                   |
+| `NUANU_WORKER_CAPABILITIES`  | Optional comma-separated host-native semantic capabilities, such as `image_generation_v1`                     |
+| `NUANU_BROWSER_QA`           | Set to `1` only when this host has a verified Playwright runtime                                              |
+| `NUANU_QA_PLAYWRIGHT_MODULE` | Exact Playwright module path when it is not resolvable from the worker plugin                                 |
 
 ## Start the companion daemon
 

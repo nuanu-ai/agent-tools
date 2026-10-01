@@ -1,0 +1,19 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "nuanu-flow-worker",
+  "description": "Run a remote Nuanu Flow agent worker with enrollment, task execution, diagnostics, and exact-session visibility.",
+  "author": {
+    "name": "Nuanu",
+    "url": "https://flow.nuanu.com"
+  },
+  "repository": "https://github.com/nuanu-ai/agent-tools",
+  "license": "AGPL-3.0",
+  "keywords": [
+    "nuanu-flow",
+    "remote-agent",
+    "worker",
+    "codex",
+    "claude-code"
+  ],
+  "version": "0.3.16"
+}

@@ -86,8 +86,8 @@ Codex's `--output-last-message` file.
 | `NUANU_CODEX_CWD`                      | Working directory for task execution, defaults to the OS temp directory.                                         |
 | `NUANU_CODEX_APP_SERVER_ARGS`          | App Server command, defaults to `app-server --stdio`.                                                            |
 | `NUANU_CODEX_APP_SERVER_APPROVAL_MODE` | `deny` by default; set `approve` only in controlled environments.                                                |
-| `NUANU_OWNER_SESSION_ID`               | Optional explicit owner override; Codex normally supplies `CODEX_THREAD_ID`.                                      |
-| `NUANU_ACTIVITY_DATA_DIR`               | Optional private activity-inbox directory, mainly for isolated tests.                                             |
+| `NUANU_OWNER_SESSION_ID`               | Optional explicit owner override; Codex normally supplies `CODEX_THREAD_ID`.                                     |
+| `NUANU_ACTIVITY_DATA_DIR`              | Optional private activity-inbox directory, mainly for isolated tests.                                            |
 
 The worker exposes each task's short-lived `agent_key` as the selected
 mode's agent-key variable inside Codex, so MCP/API writes made while doing the

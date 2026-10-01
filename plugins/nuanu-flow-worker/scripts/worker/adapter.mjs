@@ -91,7 +91,12 @@ export function buildPrompt(task) {
         "Do not clone another copy, switch branches, reset the worktree, or run checks from another repository. " +
         "Before analysis, run git branch --show-current and git rev-parse HEAD in the current directory. " +
         "If either value differs from this contract, return a blocked result with the exact mismatch. " +
-        "Nuanu Flow onboarding is already complete for this task; do not call onboarding_next."
+        "Nuanu Flow onboarding is already complete for this task; do not call onboarding_next. " +
+        "Edit and check files in this worktree. The repository supervisor owns commit and push; " +
+        "do not commit or push through Git or MCP yourself. For a declared git.commit output, return null " +
+        "at its artifact_outputs path; the supervisor supplies the exact delivered head after your result. " +
+        "When the pinned Flow-item snapshot includes accepted_spec, read its structured requirements and " +
+        "acceptance criteria as the accepted Spec for this task."
     );
   }
   if (task._qa_runtime) {

@@ -1,9 +1,6 @@
 #!/usr/bin/env node
 
-import {
-  activityContext,
-  consumeSessionActivity,
-} from "../scripts/activity/remote-worker-activity.mjs";
+import { activityContext, consumeSessionActivity } from "../scripts/activity/remote-worker-activity.mjs";
 
 async function readStdin() {
   let body = "";
@@ -18,10 +15,7 @@ async function main() {
   } catch {
     return;
   }
-  if (
-    payload?.hook_event_name !== "UserPromptSubmit" ||
-    typeof payload?.session_id !== "string"
-  ) {
+  if (payload?.hook_event_name !== "UserPromptSubmit" || typeof payload?.session_id !== "string") {
     return;
   }
   const events = await consumeSessionActivity({
@@ -35,7 +29,7 @@ async function main() {
         hookEventName: "UserPromptSubmit",
         additionalContext,
       },
-    })}\n`,
+    })}\n`
   );
 }
 

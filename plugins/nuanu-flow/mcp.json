@@ -1,0 +1,12 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "nuanu-flow": {
+      "type": "streamable-http",
+      "url": "https://flow.nuanu.com/mcp-server/mcp",
+      "headers": {
+        "X-Agent-Client": "Agent Plugin"
+      }
+    }
+  }
+}

@@ -14,8 +14,17 @@ then print one compact status report at the end.
 - **Proxy agent (default)** — neither is set: the hosted MCP server responds
   with an OAuth challenge and the browser opens Nuanu Flow to authorize;
   the user logs in there, picks a workspace, done. No env needed. If the
-  connection shows as failed/expired, tell the user to run `/mcp` and
-  re-authenticate the `nuanu-flow` server.
+  connection shows as failed/expired, retry OAuth once in the same task with
+  the host's **Connect** or **Authenticate** action (or `/mcp` where that is the
+  host's MCP UI). Keep that action active, use the newly opened browser page
+  rather than an older tab, and complete consent promptly because the host may
+  close its callback before the browser page expires. A browser
+  approval alone is not success: require the host to report a completed
+  callback and token exchange.
+  Only after authentication is confirmed should the user attach **Nuanu Flow**
+  through the `@` picker when its tools are not already present. Never tell the
+  user that selecting the plugin can finish an OAuth attempt whose callback
+  has already timed out.
 
 1. **Check env vars** — run EXACTLY this snippet (POSIX-portable; do not
    rewrite it with shell-specific syntax like zsh `${(P)v}`, and never print
@@ -36,7 +45,7 @@ then print one compact status report at the end.
    ```
 
    Meaning of each:
-   - `NUANU_TOKEN` — optional. Personal API token (`plane_api_…`) for manual
+   - `NUANU_TOKEN` — optional. Personal API token (`nuanu_api_…`) for manual
      mode; leave unset to use the browser OAuth flow instead.
    - `NUANU_AGENT_KEY` — ambient mode only (`nuanu_flow_…`); set
      automatically inside worker-run sessions.
@@ -53,7 +62,7 @@ then print one compact status report at the end.
    - Auth error → the token is missing/invalid; point at step 1.
    - Connection error → the MCP URL is unreachable; if `NUANU_MCP_URL` is set
      to a localhost address, remind the user to start the local server
-     (`pnpm --filter @plane/mcp dev:http`).
+     (`pnpm --filter @nuanu/mcp dev:http`).
 
 3. **Worker env (only if the user wants to run as a remote agent)**: check
    `NUANU_URL` (must end in `/api`) and `NUANU_AGENT_KEY` (`nuanu_flow_…`).

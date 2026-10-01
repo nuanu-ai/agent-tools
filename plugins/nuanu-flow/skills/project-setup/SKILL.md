@@ -15,24 +15,28 @@ a matching cached full descriptor; otherwise make one `search_tools` lookup and
 refine by canonical name or request `detail: "full"` to obtain the schema and
 `schemaDigest`.
 
+## Board definition
+
+Every project uses one canonical Flow definition. Choose a starting template
+with `list_flow_types` and pass `flow_type` to `create_project`, or provide a
+custom `flow_definition`. Kanban and Agentic templates use the same format.
+Include natural-language Flow and column guidance where useful. Gate mode is
+advisory by default; absent or empty `next` and `requires` lists mean no checks.
+See `flows` for the full format and revision-safe editing.
+
 ## 1. Create the project
 
 `create_project` with `name` and `identifier` (short, UPPERCASE, stable —
 it prefixes every flow item: `ENG` → `ENG-42`). Returns the project `id`;
 subsequent calls can also address it by `project_identifier`.
 
-## 2. Workflow states
+## 2. Board columns
 
-Plane auto-creates a default state set (Backlog / Todo / In Progress / Done /
-Cancelled). Adjust only if the team's flow differs:
-
-- `create_state` — requires `name`, `color` (hex), `group` ∈
-  `backlog | unstarted | started | completed | cancelled`.
-- `update_state` / `delete_state` to reshape the defaults.
-- `set_default_state` — the state new flow items land in.
-
-Keep exactly one obvious default in `unstarted` (or `backlog` for
-intake-style projects).
+Read `get_project.flow` for the saved structure. Use `update_project_flow` with
+the current revision to edit its ordered columns, guidance, and expectations.
+Preserve existing column and state IDs. Choose one starting column for a nonempty
+board. Legacy `create_state`, `update_state`, `delete_state`, and `set_default_state`
+update the same definition; they do not maintain a separate workflow.
 
 ## 3. Labels
 
@@ -64,10 +68,13 @@ references).
 - Event rules: `create_automation` (+ `toggle_automation` to enable) for
   things like auto-assign on create.
 
-If the user also wants a project brief, specification, runbook, or notes,
-delegate that documentation to the `wiki` skill and target this project with
-`project_id` or its exact `project_identifier`. Project Wiki is the same Wiki
-entity and tool family, not a separate Pages product.
+If the user also wants a project brief, specification, runbook, notes, or a
+knowledge structure, use the `wiki` skill with this existing project's exact
+scope. Its template workflow reads project context and existing knowledge,
+recommends and customizes a compatible template, and initializes through MCP.
+Pass the confirmed brief and saved Flow guidance; do not generate a separate
+folder scaffold or another project. Knowledge-only requests go directly to
+`wiki`; creating or opening a project does not itself request initialization.
 
 ## 8. Bind the Git repository (recommended)
 

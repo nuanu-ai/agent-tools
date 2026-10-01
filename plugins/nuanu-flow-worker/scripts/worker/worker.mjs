@@ -6,6 +6,14 @@
  * adapter.handle(task) -> complete / fail. Everything agent-specific lives behind
  * the adapter; the loop is agent-agnostic. See docs/REMOTE_AGENTS.md.
  */
+import { runWorkerGateway } from "./gateway_transport.mjs";
+import {
+  taskNeedsFilePublisher,
+  taskMayWriteRepository,
+  terminalDeadline,
+  failureCode,
+  firstContractIssue,
+} from "./task_contract_policy.mjs";
 import { loadConfig } from "./config.mjs";
 import { NuanuClient } from "./client.mjs";
 import { buildCanonicalCompletion, makeAdapter, rewriteInternalMcpHostname } from "./adapter.mjs";
@@ -87,59 +95,6 @@ async function collectStaleTaskWorkspaces() {
   } catch (_error) {
     if (cfg.debug) log("task_workspace_gc=failed");
   }
-}
-
-function taskNeedsFilePublisher(task) {
-  return (
-    Boolean(task?.runtime_binding?.source_work_item_id) ||
-    Object.values(task?.request?.output_definition?.artifacts || {}).some(
-      (artifact) => !["git.commit", "git.branch", "git.pull_request", "external.link"].includes(String(artifact?.kind))
-    )
-  );
-}
-
-function taskMayWriteRepository(task) {
-  return Object.values(task?.request?.output_definition?.artifacts || {}).some((artifact) =>
-    ["git.commit", "git.branch"].includes(String(artifact?.kind))
-  );
-}
-
-function terminalDeadline(task) {
-  const now = Date.now();
-  const candidates = [task?.runtime_binding?.task_deadline_at, task?.task_credential_expires_at]
-    .map((value) => Date.parse(String(value || "")))
-    .filter((value) => Number.isFinite(value) && value > now + 1000);
-  return new Date(Math.min(now + 60_000, ...(candidates.length ? candidates : [now + 30_000]))).toISOString();
-}
-
-function failureCode(error, fallback = "internal_error") {
-  if (error?.code && /^[a-z][a-z0-9_]{1,63}$/.test(String(error.code))) return String(error.code);
-  const message = String(error?.message || error || "");
-  if (/invalid nuanu\.agent-task|artifacts must be an array/i.test(message)) return "invalid_output";
-  if (error?.status === 400) return "invalid_input";
-  if (error?.status === 401) return "authentication_required";
-  if (error?.status === 403) return "permission_denied";
-  if (error?.status === 408) return "timeout";
-  return fallback;
-}
-
-function firstContractIssue(error) {
-  const response = error?.response && typeof error.response === "object" ? error.response : {};
-  const issue = Array.isArray(response.issues) ? response.issues[0] : null;
-  if (issue) {
-    return {
-      code: String(issue.code || "invalid_output"),
-      path: String(issue.path || "$"),
-      message: String(issue.message || "The server rejected the result contract."),
-    };
-  }
-  for (const [field, value] of Object.entries(response)) {
-    const message = Array.isArray(value) ? value[0] : value;
-    if (typeof message === "string" && message.trim()) {
-      return { code: "invalid_output", path: `$.${field}`, message: message.trim() };
-    }
-  }
-  return { code: "invalid_output", path: "$", message: "The server rejected the result contract." };
 }
 
 async function heartbeatLoop() {
@@ -660,72 +615,6 @@ async function pollLoop() {
   }
 }
 
-// Phase-2 transport: dial the WS gateway and fetch on wake. Reconnects with a
-// fixed backoff. Uses Node's built-in WebSocket (no dependency).
-async function gatewayLoop() {
-  if (cfg.transport !== "gateway") return;
-  while (running) {
-    // Mint a fresh single-use ticket over HTTPS (durable key in a header) and put only
-    // that ephemeral ticket in the WS URL — never the durable agent key.
-    let ticket;
-    try {
-      ({ ticket } = await client.wsTicket());
-    } catch (e) {
-      log("ws-ticket failed:", e.message);
-      if (running) await sleep(3000);
-      continue;
-    }
-    await new Promise((resolve) => {
-      let ws;
-      try {
-        ws = new WebSocket(`${cfg.gatewayUrl}?ticket=${encodeURIComponent(ticket)}`);
-      } catch (e) {
-        log("gateway connect error:", e.message);
-        return resolve();
-      }
-      const ping = setInterval(() => {
-        try {
-          ws.send(JSON.stringify({ type: "ping" }));
-        } catch {
-          /* not open */
-        }
-      }, 25000);
-      const done = () => {
-        clearInterval(ping);
-        resolve();
-      };
-      ws.addEventListener("open", () => {
-        log("gateway connected");
-        void pumpOnce();
-        agentBus.routeGatewayMessage({ type: "connected" });
-      });
-      ws.addEventListener("message", (ev) => {
-        let msg;
-        try {
-          msg = JSON.parse(ev.data);
-        } catch {
-          return;
-        }
-        if (msg?.type === "task") void pumpOnce();
-        agentBus.routeGatewayMessage(msg);
-      });
-      ws.addEventListener("close", () => {
-        log("gateway disconnected");
-        done();
-      });
-      ws.addEventListener("error", () => {
-        try {
-          ws.close();
-        } catch {
-          /* noop */
-        }
-        done();
-      });
-    });
-    if (running) await sleep(3000);
-  }
-}
-
 function shutdown(sig) {
   if (!running) return;
   log(`received ${sig}; draining ${inFlight} in-flight task(s)...`);
@@ -763,7 +652,7 @@ const sessionActivityGcTimer = setInterval(
 sessionActivityGcTimer.unref?.();
 heartbeatLoop();
 pollLoop();
-gatewayLoop();
+void runWorkerGateway({ cfg, client, isRunning: () => running, pumpOnce, agentBus, log });
 if (process.env.NUANU_CHAT_DISABLED !== "1") {
   import("./interactive_chat.mjs")
     .then(({ startChatLoop }) => startChatLoop({ client, cfg, isRunning: () => running, log }))

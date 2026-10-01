@@ -1,0 +1,7 @@
+{
+  "environment": "production",
+  "marketplace": "nuanu",
+  "mcp_url": "https://flow.nuanu.com/mcp-server/mcp",
+  "api_url": "https://flow.nuanu.com/api",
+  "credential_prefix": "NUANU"
+}

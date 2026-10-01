@@ -37,8 +37,8 @@ Canonical fields returned by `get_issue` (`state_id`, `assignee_ids`,
 | `parent`                     | uuid \| uuid[]      | direct children of an issue                                              |
 | `subscriber`                 | uuid \| uuid[]      |                                                                          |
 | `sub_issue`                  | boolean             | include sub-issues when `true`                                           |
-| `start_date` / `target_date` | string              | Plane date filter expression, e.g. `2026-01-31;after` (combine with `,`) |
-| `order_by`                   | string              | Plane ordering expression, e.g. `-created_at`, `priority`                |
+| `start_date` / `target_date` | string              | Nuanu Flow date filter expression, e.g. `2026-01-31;after` (combine with `,`) |
+| `order_by`                   | string              | Nuanu Flow ordering expression, e.g. `-created_at`, `priority`                |
 | `cursor` / `per_page`        | string / int ≤ 1000 | pagination                                                               |
 
 ## Relation types (create_issue_relation)

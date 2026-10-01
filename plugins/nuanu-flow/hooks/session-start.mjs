@@ -1,17 +1,11 @@
 #!/usr/bin/env node
 
-import {
-  repositoryContextMessage,
-  resolveRepositoryContext,
-} from "./repository-context.mjs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+
+import { connectionAt, contextPointer } from "../scripts/context/context.mjs";
 
 const VALID_SOURCES = new Set(["startup", "resume", "clear", "compact"]);
-
-const FIRST_TURN_CONTEXT =
-  "Nuanu Flow is this session's task tracker. On the first actual turn, call onboarding_next once unless onboarding is complete. Continue only its incomplete step. If auth is needed, use native Connectors or MCP control, never a shell. Otherwise fail open without retries. Never expose setup internals or credentials.";
-
-const COMPACT_CONTEXT =
-  "Keep Nuanu Flow as this session's task tracker. Preserve established onboarding status and never repeat completed setup. If status remains unknown, call onboarding_next at most once. If the check fails, continue the user's request without retries. Never expose setup internals or credentials.";
 
 async function readStdin() {
   let body = "";
@@ -19,14 +13,31 @@ async function readStdin() {
   return body;
 }
 
-function sessionContext(payload) {
-  if (
-    payload?.hook_event_name !== "SessionStart" ||
-    !VALID_SOURCES.has(payload?.source)
-  ) {
-    return "";
+export function acceptsSession(payload) {
+  if (payload?.hook_event_name !== "SessionStart" || !VALID_SOURCES.has(payload?.source)) {
+    return false;
   }
-  return payload.source === "compact" ? COMPACT_CONTEXT : FIRST_TURN_CONTEXT;
+  return true;
+}
+
+export async function sessionStartOutput(
+  payload,
+  { connection, principal = process.env.NUANU_FLOW_PRINCIPAL_ID } = {}
+) {
+  if (!acceptsSession(payload)) return "";
+  const registeredConnection = connection ?? (await connectionAt());
+  const additionalContext = await contextPointer({
+    cwd: payload.cwd,
+    connection: registeredConnection,
+    principal,
+    session: payload.session_id,
+  });
+  return `${JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: "SessionStart",
+      additionalContext,
+    },
+  })}\n`;
 }
 
 async function main() {
@@ -36,21 +47,12 @@ async function main() {
   } catch {
     return;
   }
-  const baseContext = sessionContext(payload);
-  if (!baseContext) return;
-  const binding = await resolveRepositoryContext(payload.cwd);
-  const bindingContext = repositoryContextMessage(binding);
-  const additionalContext = bindingContext
-    ? `${baseContext} ${bindingContext}`
-    : baseContext;
-  process.stdout.write(
-    `${JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: "SessionStart",
-        additionalContext,
-      },
-    })}\n`,
-  );
+  try {
+    const output = await sessionStartOutput(payload);
+    if (output) process.stdout.write(output);
+  } catch {
+    // Hooks must fail open. The native MCP remains the source of truth.
+  }
 }
 
-await main();
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) await main();

@@ -2,15 +2,7 @@
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-  chmod,
-  mkdir,
-  readFile,
-  realpath,
-  rename,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { chmod, mkdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,12 +28,7 @@ function log(message) {
 }
 
 function isLoopback(hostname) {
-  return (
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "::1" ||
-    hostname === "[::1]"
-  );
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
 }
 
 export function normalizeApiBase(value) {
@@ -52,17 +39,14 @@ export function normalizeApiBase(value) {
     throw new Error("Invalid API base URL");
   }
   if (
-    (url.protocol !== "https:" &&
-      !(url.protocol === "http:" && isLoopback(url.hostname))) ||
+    (url.protocol !== "https:" && !(url.protocol === "http:" && isLoopback(url.hostname))) ||
     url.username ||
     url.password ||
     url.search ||
     url.hash ||
     !url.pathname.replace(/\/+$/, "").endsWith("/api")
   ) {
-    throw new Error(
-      "API base URL must use HTTPS, or loopback HTTP for local development, and end in /api",
-    );
+    throw new Error("API base URL must use HTTPS, or loopback HTTP for local development, and end in /api");
   }
   return url.toString().replace(/\/+$/, "");
 }
@@ -71,25 +55,10 @@ function environmentFor(baseUrl) {
   return isLoopback(new URL(baseUrl).hostname) ? "local" : "production";
 }
 
-export function credentialPathForBase(
-  baseUrl,
-  {
-    env = process.env,
-    homeDirectory = os.homedir(),
-  } = {},
-) {
-  const configRoot =
-    env.XDG_CONFIG_HOME || path.join(homeDirectory, ".config");
-  const originHash = createHash("sha256")
-    .update(normalizeApiBase(baseUrl))
-    .digest("hex")
-    .slice(0, 24);
-  return path.join(
-    configRoot,
-    "nuanu-flow",
-    "portable-workers",
-    `${originHash}.json`,
-  );
+export function credentialPathForBase(baseUrl, { env = process.env, homeDirectory = os.homedir() } = {}) {
+  const configRoot = env.XDG_CONFIG_HOME || path.join(homeDirectory, ".config");
+  const originHash = createHash("sha256").update(normalizeApiBase(baseUrl)).digest("hex").slice(0, 24);
+  return path.join(configRoot, "nuanu-flow", "portable-workers", `${originHash}.json`);
 }
 
 function enrollmentFingerprint(token) {
@@ -145,13 +114,7 @@ async function writeCredential(filePath, record) {
 async function requestJson(
   baseUrl,
   route,
-  {
-    method = "GET",
-    body,
-    agentKey,
-    operation = "Request",
-    retries = 0,
-  } = {},
+  { method = "GET", body, agentKey, operation = "Request", retries = 0 } = {}
 ) {
   let attempt = 0;
   while (true) {
@@ -159,9 +122,7 @@ async function requestJson(
       const response = await fetch(`${baseUrl}${route}`, {
         method,
         headers: {
-          ...(body === undefined
-            ? {}
-            : { "content-type": "application/json" }),
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
           ...(agentKey ? { "X-Agent-Key": agentKey } : {}),
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -175,14 +136,9 @@ async function requestJson(
         // credentials in it.
       }
       if (!response.ok) {
-        const error = new Error(
-          `${operation} failed (HTTP ${response.status})`,
-        );
+        const error = new Error(`${operation} failed (HTTP ${response.status})`);
         error.status = response.status;
-        if (
-          response.status >= 500 &&
-          attempt < retries
-        ) {
+        if (response.status >= 500 && attempt < retries) {
           attempt += 1;
           await sleep(Math.min(250 * 2 ** attempt, 2_000));
           continue;
@@ -191,10 +147,7 @@ async function requestJson(
       }
       return data;
     } catch (error) {
-      if (
-        error?.status === undefined &&
-        attempt < retries
-      ) {
+      if (error?.status === undefined && attempt < retries) {
         attempt += 1;
         await sleep(Math.min(250 * 2 ** attempt, 2_000));
         continue;
@@ -205,15 +158,11 @@ async function requestJson(
 }
 
 async function verifyCredential(record) {
-  const identity = await requestJson(
-    record.baseUrl,
-    "/agent-worker/whoami/",
-    {
-      agentKey: record.agentKey,
-      operation: "Agent verification",
-      retries: 1,
-    },
-  );
+  const identity = await requestJson(record.baseUrl, "/agent-worker/whoami/", {
+    agentKey: record.agentKey,
+    operation: "Agent verification",
+    retries: 1,
+  });
   if (
     identity.agent_id !== record.agent.id ||
     identity.workspace !== record.agent.workspace ||
@@ -228,23 +177,15 @@ async function verifyCredential(record) {
   };
 }
 
-export async function enroll({
-  baseUrl = DEFAULT_API_BASE,
-  enrollmentToken,
-  credentialFile,
-}) {
+export async function enroll({ baseUrl = DEFAULT_API_BASE, enrollmentToken, credentialFile }) {
   if (!ENROLLMENT_TOKEN_PATTERN.test(enrollmentToken ?? "")) {
     throw new Error("Invalid enrollment token");
   }
   const normalizedBase = normalizeApiBase(baseUrl);
-  const filePath =
-    credentialFile || credentialPathForBase(normalizedBase);
+  const filePath = credentialFile || credentialPathForBase(normalizedBase);
   const fingerprint = enrollmentFingerprint(enrollmentToken);
   const existing = await readCredential(filePath);
-  if (
-    existing?.baseUrl === normalizedBase &&
-    existing.enrollmentTokenSha256 === fingerprint
-  ) {
+  if (existing?.baseUrl === normalizedBase && existing.enrollmentTokenSha256 === fingerprint) {
     const agent = await verifyCredential(existing);
     return {
       status: "already_enrolled",
@@ -253,15 +194,11 @@ export async function enroll({
     };
   }
 
-  const data = await requestJson(
-    normalizedBase,
-    "/agent-worker/enroll/",
-    {
-      method: "POST",
-      body: { enrollment_token: enrollmentToken },
-      operation: "Enrollment",
-    },
-  );
+  const data = await requestJson(normalizedBase, "/agent-worker/enroll/", {
+    method: "POST",
+    body: { enrollment_token: enrollmentToken },
+    operation: "Enrollment",
+  });
   if (
     !AGENT_KEY_PATTERN.test(data.agent_key ?? "") ||
     typeof data.agent?.id !== "string" ||
@@ -293,26 +230,16 @@ export async function enroll({
   };
 }
 
-async function resolveCredential({
-  baseUrl,
-  credentialFile,
-  env = process.env,
-}) {
-  const normalizedBase = normalizeApiBase(
-    baseUrl || env.NUANU_URL || DEFAULT_API_BASE,
-  );
+async function resolveCredential({ baseUrl, credentialFile, env = process.env }) {
+  const normalizedBase = normalizeApiBase(baseUrl || env.NUANU_URL || DEFAULT_API_BASE);
   if (env.NUANU_AGENT_KEY) {
     if (!AGENT_KEY_PATTERN.test(env.NUANU_AGENT_KEY)) {
       throw new Error("NUANU_AGENT_KEY has an invalid format");
     }
-    const identity = await requestJson(
-      normalizedBase,
-      "/agent-worker/whoami/",
-      {
-        agentKey: env.NUANU_AGENT_KEY,
-        operation: "Agent verification",
-      },
-    );
+    const identity = await requestJson(normalizedBase, "/agent-worker/whoami/", {
+      agentKey: env.NUANU_AGENT_KEY,
+      operation: "Agent verification",
+    });
     return {
       baseUrl: normalizedBase,
       agentKey: env.NUANU_AGENT_KEY,
@@ -323,13 +250,10 @@ async function resolveCredential({
       },
     };
   }
-  const filePath =
-    credentialFile || credentialPathForBase(normalizedBase, { env });
+  const filePath = credentialFile || credentialPathForBase(normalizedBase, { env });
   const record = await readCredential(filePath);
   if (!record) {
-    throw new Error(
-      "No portable worker credential found; run enroll first",
-    );
+    throw new Error("No portable worker credential found; run enroll first");
   }
   if (record.baseUrl !== normalizedBase) {
     throw new Error("Stored worker credential belongs to another API origin");
@@ -352,14 +276,10 @@ function buildPrompt(task) {
   if (task.system_prompt) parts.push(String(task.system_prompt).trim());
   if (task.instruction) parts.push(String(task.instruction).trim());
   if (task.context && Object.keys(task.context).length) {
-    parts.push(
-      `--- Process context ---\n${JSON.stringify(task.context, null, 2)}`,
-    );
+    parts.push(`--- Process context ---\n${JSON.stringify(task.context, null, 2)}`);
   }
   if (task.output_schema) {
-    parts.push(
-      `Return ONLY a JSON object matching this schema (no prose):\n${JSON.stringify(task.output_schema)}`,
-    );
+    parts.push(`Return ONLY a JSON object matching this schema (no prose):\n${JSON.stringify(task.output_schema)}`);
   }
   return parts.join("\n\n");
 }
@@ -369,25 +289,14 @@ function taskEnvironment(task, source = process.env) {
     throw new Error("Remote task is missing a valid task-scoped agent key");
   }
   const env = { ...source };
-  for (const name of [
-    "NUANU_TOKEN",
-    "NUANU_DEV_TOKEN",
-    "NUANU_AGENT_KEY",
-    "NUANU_DEV_AGENT_KEY",
-  ]) {
+  for (const name of ["NUANU_TOKEN", "NUANU_DEV_TOKEN", "NUANU_AGENT_KEY", "NUANU_DEV_AGENT_KEY"]) {
     delete env[name];
   }
   env.NUANU_AGENT_KEY = task.agent_key;
   return env;
 }
 
-function runCommand(
-  command,
-  task,
-  {
-    timeoutMs = DEFAULT_COMMAND_TIMEOUT_MS,
-  } = {},
-) {
+function runCommand(command, task, { timeoutMs = DEFAULT_COMMAND_TIMEOUT_MS } = {}) {
   return new Promise((resolve) => {
     const child = spawn(command, {
       cwd: process.cwd(),
@@ -457,7 +366,7 @@ async function handleTask(record, workerId, command, task, timeoutMs) {
           error: "Portable agent command returned no output",
           requeue: true,
         },
-        "Task requeue",
+        "Task requeue"
       );
       return "requeued";
     }
@@ -469,7 +378,7 @@ async function handleTask(record, workerId, command, task, timeoutMs) {
         worker_id: workerId,
         output,
       },
-      "Task completion",
+      "Task completion"
     );
     return "completed";
   }
@@ -478,12 +387,10 @@ async function handleTask(record, workerId, command, task, timeoutMs) {
     `/agent-worker/tasks/${task.task_id}/fail/`,
     {
       worker_id: workerId,
-      error: redact(
-        `Portable agent command exited ${result.code}: ${result.stderr}`,
-      ).slice(0, 2_000),
+      error: redact(`Portable agent command exited ${result.code}: ${result.stderr}`).slice(0, 2_000),
       requeue: true,
     },
-    "Task requeue",
+    "Task requeue"
   );
   return "requeued";
 }
@@ -504,9 +411,7 @@ export async function runWorker({
   env = process.env,
 }) {
   if (!command?.trim()) {
-    throw new Error(
-      "run requires --command with a non-interactive text-in/text-out command",
-    );
+    throw new Error("run requires --command with a non-interactive text-in/text-out command");
   }
   const record = await resolveCredential({
     baseUrl,
@@ -514,24 +419,15 @@ export async function runWorker({
     env,
   });
   await verifyCredential(record);
-  const workerId =
-    env.NUANU_WORKER_ID ||
-    `portable-${os.hostname()}-${process.pid}`;
+  const workerId = env.NUANU_WORKER_ID || `portable-${os.hostname()}-${process.pid}`;
   let nextHeartbeatAt = 0;
 
   do {
     const now = Date.now();
     if (now >= nextHeartbeatAt) {
-      await postControl(
-        record,
-        "/agent-worker/heartbeat/",
-        { worker_id: workerId },
-        "Heartbeat",
-      );
+      await postControl(record, "/agent-worker/heartbeat/", { worker_id: workerId }, "Heartbeat");
       nextHeartbeatAt = now + heartbeatIntervalMs;
-      log(
-        `connected to ${environmentFor(record.baseUrl)} as ${record.agent.display_name}`,
-      );
+      log(`connected to ${environmentFor(record.baseUrl)} as ${record.agent.display_name}`);
     }
     const response = await postControl(
       record,
@@ -541,17 +437,11 @@ export async function runWorker({
         max_tasks: 1,
         lock_seconds: lockSeconds,
       },
-      "Task claim",
+      "Task claim"
     );
     const task = Array.isArray(response.tasks) ? response.tasks[0] : null;
     if (task) {
-      const outcome = await handleTask(
-        record,
-        workerId,
-        command,
-        task,
-        commandTimeoutMs,
-      );
+      const outcome = await handleTask(record, workerId, command, task, commandTimeoutMs);
       log(`${outcome} task ${String(task.task_id).slice(0, 12)}`);
     }
     if (!once && running) await sleep(Math.max(500, pollIntervalMs));
@@ -575,9 +465,7 @@ function parseInteger(value, label, minimum) {
 function parseArgs(argv) {
   const commandName = argv[0];
   if (!["enroll", "status", "run"].includes(commandName)) {
-    throw new Error(
-      "Usage: worker.mjs <enroll|status|run> [options]",
-    );
+    throw new Error("Usage: worker.mjs <enroll|status|run> [options]");
   }
   const options = {
     commandName,
@@ -604,35 +492,13 @@ function parseArgs(argv) {
     } else if (argument === "--once" && commandName === "run") {
       options.once = true;
     } else if (argument === "--poll-interval-ms" && commandName === "run") {
-      options.pollIntervalMs = parseInteger(
-        next(),
-        "--poll-interval-ms",
-        500,
-      );
-    } else if (
-      argument === "--heartbeat-interval-ms" &&
-      commandName === "run"
-    ) {
-      options.heartbeatIntervalMs = parseInteger(
-        next(),
-        "--heartbeat-interval-ms",
-        5_000,
-      );
+      options.pollIntervalMs = parseInteger(next(), "--poll-interval-ms", 500);
+    } else if (argument === "--heartbeat-interval-ms" && commandName === "run") {
+      options.heartbeatIntervalMs = parseInteger(next(), "--heartbeat-interval-ms", 5_000);
     } else if (argument === "--lock-seconds" && commandName === "run") {
-      options.lockSeconds = parseInteger(
-        next(),
-        "--lock-seconds",
-        30,
-      );
-    } else if (
-      argument === "--command-timeout-ms" &&
-      commandName === "run"
-    ) {
-      options.commandTimeoutMs = parseInteger(
-        next(),
-        "--command-timeout-ms",
-        10_000,
-      );
+      options.lockSeconds = parseInteger(next(), "--lock-seconds", 30);
+    } else if (argument === "--command-timeout-ms" && commandName === "run") {
+      options.commandTimeoutMs = parseInteger(next(), "--command-timeout-ms", 10_000);
     } else {
       // Do not echo an unknown argument: it may be a mistakenly supplied
       // enrollment token.
@@ -685,10 +551,7 @@ process.once("SIGTERM", () => shutdown("SIGTERM"));
 async function isMainModule() {
   if (!process.argv[1]) return false;
   try {
-    return (
-      (await realpath(process.argv[1])) ===
-      (await realpath(fileURLToPath(import.meta.url)))
-    );
+    return (await realpath(process.argv[1])) === (await realpath(fileURLToPath(import.meta.url)));
   } catch {
     return false;
   }
@@ -696,9 +559,7 @@ async function isMainModule() {
 
 if (await isMainModule()) {
   main().catch((error) => {
-    process.stderr.write(
-      `[nuanu-portable-worker] ${redact(error.message)}\n`,
-    );
+    process.stderr.write(`[nuanu-portable-worker] ${redact(error.message)}\n`);
     process.exitCode = 1;
   });
 }

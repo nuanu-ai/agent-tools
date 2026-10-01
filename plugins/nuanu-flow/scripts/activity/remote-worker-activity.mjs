@@ -32,50 +32,34 @@ const SIGNIFICANT_KINDS = new Set([
 ]);
 
 function validSessionId(value) {
-  return (
-    typeof value === "string" &&
-    value.length >= 3 &&
-    value.length <= 200 &&
-    /^[A-Za-z0-9_-]+$/.test(value)
-  );
+  return typeof value === "string" && value.length >= 3 && value.length <= 200 && /^[A-Za-z0-9_-]+$/.test(value);
 }
 
 function redactedText(value, maxLength) {
   if (typeof value !== "string") return "";
-  return value
-    .replace(/[\u0000-\u001f\u007f]+/g, " ")
-    .replace(/\s+/g, " ")
-    .replace(/nuanu_(?:join|flow)_[A-Za-z0-9_-]{16,}/gi, "[redacted]")
-    .replace(/\b(?:sk|rk|pk)-[A-Za-z0-9_-]{16,}\b/gi, "[redacted]")
-    .replace(
-      /\b(authorization|api[_ -]?key|token|password)\s*[:=]\s*[^\s,;]+/gi,
-      "$1=[redacted]",
-    )
-    .trim()
-    .slice(0, maxLength);
+  return (
+    value
+      // eslint-disable-next-line no-control-regex -- Sanitize ASCII control characters from displayed activity text.
+      .replace(/[\u0000-\u001f\u007f]+/g, " ")
+      .replace(/\s+/g, " ")
+      .replace(/nuanu_(?:join|flow)_[A-Za-z0-9_-]{16,}/gi, "[redacted]")
+      .replace(/\b(?:sk|rk|pk)-[A-Za-z0-9_-]{16,}\b/gi, "[redacted]")
+      .replace(/\b(authorization|api[_ -]?key|token|password)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
+      .trim()
+      .slice(0, maxLength)
+  );
 }
 
 function safeIdentifier(value) {
-  return redactedText(String(value || ""), 100).replace(
-    /[^A-Za-z0-9._:-]/g,
-    "",
-  );
+  return redactedText(String(value || ""), 100).replace(/[^A-Za-z0-9._:-]/g, "");
 }
 
 function safeUrl(value) {
   if (typeof value !== "string" || !value) return "";
   try {
     const url = new URL(value);
-    const isLoopback =
-      url.hostname === "localhost" ||
-      url.hostname === "127.0.0.1" ||
-      url.hostname === "::1";
-    if (
-      url.username ||
-      url.password ||
-      (url.protocol !== "https:" &&
-        !(url.protocol === "http:" && isLoopback))
-    ) {
+    const isLoopback = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1";
+    if (url.username || url.password || (url.protocol !== "https:" && !(url.protocol === "http:" && isLoopback))) {
       return "";
     }
     return url.toString();
@@ -86,20 +70,13 @@ function safeUrl(value) {
 
 function severityForKind(kind) {
   if (kind === "task.attention") return "attention";
-  if (
-    kind === "task.failed" ||
-    kind === "task.requeued" ||
-    kind === "worker.disconnected"
-  ) {
+  if (kind === "task.failed" || kind === "task.requeued" || kind === "worker.disconnected") {
     return "error";
   }
   return "info";
 }
 
-function normalizeEvent(
-  input,
-  { ownerSessionId, now = Date.now, id = randomUUID } = {},
-) {
+function normalizeEvent(input, { ownerSessionId, now = Date.now, id = randomUUID } = {}) {
   const kind = EVENT_KINDS.has(input?.kind) ? input.kind : "";
   if (!validSessionId(ownerSessionId) || !kind) return null;
   const occurredAt = new Date(now()).toISOString();
@@ -118,9 +95,7 @@ function normalizeEvent(
     occurred_at: occurredAt,
     safe_title: redactedText(input.safe_title, 120),
     safe_summary: redactedText(input.safe_summary, 200),
-    ...(Number.isFinite(durationMs) && durationMs >= 0
-      ? { duration_ms: Math.round(durationMs) }
-      : {}),
+    ...(Number.isFinite(durationMs) && durationMs >= 0 ? { duration_ms: Math.round(durationMs) } : {}),
     ...(safeUrl(input.flow_url) ? { flow_url: safeUrl(input.flow_url) } : {}),
   };
 }
@@ -170,10 +145,7 @@ async function pruneEventFiles(eventDirectory, nowMs, retentionMs) {
 }
 
 export function defaultActivityDirectory(env = process.env) {
-  return (
-    env.NUANU_ACTIVITY_DATA_DIR ||
-    path.join(os.homedir(), ".config", "nuanu-flow", "activity")
-  );
+  return env.NUANU_ACTIVITY_DATA_DIR || path.join(os.homedir(), ".config", "nuanu-flow", "activity");
 }
 
 export function createActivityStore({
@@ -184,9 +156,7 @@ export function createActivityStore({
   retentionMs = DEFAULT_RETENTION_MS,
 } = {}) {
   const enabled = validSessionId(ownerSessionId);
-  const root = enabled
-    ? sessionDirectory(activityDirectory, ownerSessionId)
-    : "";
+  const root = enabled ? sessionDirectory(activityDirectory, ownerSessionId) : "";
   const eventDirectory = root ? path.join(root, "events") : "";
   let sequence = 0;
 
@@ -208,10 +178,7 @@ export function createActivityStore({
       const order = String(sequence++).padStart(6, "0");
       const filename = `${timestamp}-${order}-${event.id}.json`;
       const targetPath = path.join(eventDirectory, filename);
-      const temporaryPath = path.join(
-        eventDirectory,
-        `.${filename}.${process.pid}.tmp`,
-      );
+      const temporaryPath = path.join(eventDirectory, `.${filename}.${process.pid}.tmp`);
       const body = `${JSON.stringify(event)}\n`;
       if (Buffer.byteLength(body) > MAX_EVENT_BYTES) {
         throw new Error("Remote-worker activity event exceeds its size limit");
@@ -240,11 +207,7 @@ function readableEvent(value, sessionId, nowMs, retentionMs) {
     return null;
   }
   const occurredAt = Date.parse(value.occurred_at);
-  if (
-    !Number.isFinite(occurredAt) ||
-    occurredAt > nowMs + 60_000 ||
-    nowMs - occurredAt > retentionMs
-  ) {
+  if (!Number.isFinite(occurredAt) || occurredAt > nowMs + 60_000 || nowMs - occurredAt > retentionMs) {
     return null;
   }
   return {
@@ -276,8 +239,7 @@ async function recoverStaleClaims(processingDirectory, eventDirectory, nowMs) {
       const stat = await fs.stat(claimedPath);
       if (nowMs - stat.mtimeMs <= STALE_CLAIM_MS) continue;
       const separator = entry.name.indexOf("__");
-      const originalName =
-        separator === -1 ? entry.name : entry.name.slice(separator + 2);
+      const originalName = separator === -1 ? entry.name : entry.name.slice(separator + 2);
       await fs.rename(claimedPath, path.join(eventDirectory, originalName));
     } catch (error) {
       if (!["ENOENT", "EEXIST"].includes(error?.code)) throw error;
@@ -296,10 +258,7 @@ function significantEvents(events, maxEvents) {
     latestByTask.set(eventTaskKey(event), event);
   }
   return [...latestByTask.values()]
-    .sort(
-      (left, right) =>
-        Date.parse(left.occurred_at) - Date.parse(right.occurred_at),
-    )
+    .sort((left, right) => Date.parse(left.occurred_at) - Date.parse(right.occurred_at))
     .slice(-maxEvents);
 }
 
@@ -325,11 +284,7 @@ export async function consumeSessionActivity({
     }
     if (!initialNames.some((name) => name.endsWith(".json"))) return [];
     await ensurePrivateDirectory(processingDirectory);
-    await recoverStaleClaims(
-      processingDirectory,
-      eventDirectory,
-      nowMs,
-    );
+    await recoverStaleClaims(processingDirectory, eventDirectory, nowMs);
     const names = (await fs.readdir(eventDirectory))
       .filter((name) => name.endsWith(".json"))
       .sort()
@@ -352,12 +307,7 @@ export async function consumeSessionActivity({
       try {
         const body = await fs.readFile(filePath, "utf8");
         if (Buffer.byteLength(body) <= MAX_EVENT_BYTES) {
-          const event = readableEvent(
-            JSON.parse(body),
-            sessionId,
-            nowMs,
-            retentionMs,
-          );
+          const event = readableEvent(JSON.parse(body), sessionId, nowMs, retentionMs);
           if (event) events.push(event);
         }
       } catch {
@@ -400,15 +350,11 @@ function eventSentence(event) {
         event.safe_summary ? `: ${event.safe_summary}` : "."
       }`;
     case "task.completed":
-      return `${subject(event)} completed${title(event)}${durationText(
-        event.duration_ms,
-      )}.`;
+      return `${subject(event)} completed${title(event)}${durationText(event.duration_ms)}.`;
     case "task.failed":
       return `${subject(event)} failed${title(event)}.`;
     case "task.requeued":
-      return `${subject(event)} could not finish${title(
-        event,
-      )}; Flow requeued it.`;
+      return `${subject(event)} could not finish${title(event)}; Flow requeued it.`;
     default:
       return "";
   }
@@ -429,4 +375,3 @@ export const activityInternals = {
   redactedText,
   sessionDirectory,
 };
-
